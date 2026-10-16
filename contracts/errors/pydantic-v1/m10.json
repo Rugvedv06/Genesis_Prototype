@@ -1,0 +1,6 @@
+{
+  "_status": 200,
+  "_note": "Status: 200 — M10: silent drift, NO error body. name moved/renamed to full_name. See contracts/responses/m10.json",
+  "note": "silent_200_drift",
+  "message": "no validation error; response contract changed (see contracts/responses/m10.json)"
+}

@@ -1,0 +1,24 @@
+{
+  "example": {
+    "id": 1042,
+    "ts": 1760607672412,
+    "runId": "r_8f2",
+    "callId": "c_19",
+    "apiId": "demo-users",
+    "tool": "get_user",
+    "type": "patch.proposed",
+    "round": 2,
+    "tier": 1,
+    "ops": [ { "op": "coerce_type", "path": "target.id", "from": "string", "to": "integer" } ],
+    "confidence": 0.95,
+    "evidence": ["value is not a valid integer"],
+    "argKeys": ["user_id"]
+  },
+  "eventTypes": [
+    "call.started", "call.failed", "call.succeeded",
+    "diagnosis.started", "patch.proposed", "patch.committed", "patch.rolledback",
+    "cache.hit", "drift.silent", "halt", "agent.step", "agent.final", "metrics",
+    "api.registered", "api.removed"
+  ],
+  "note": "Flat SSE envelope: event type lives inside data. No `payload` wrapper. Ring buffer (last 500 events), monotonically increasing `id`, replay via `Last-Event-ID` (§4.6, §5.2). `call.started` carries only argKeys/argCount — never raw argument values (§G18)."
+}

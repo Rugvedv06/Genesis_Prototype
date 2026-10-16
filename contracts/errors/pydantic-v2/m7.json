@@ -1,0 +1,16 @@
+{
+  "_status": 422,
+  "_note": "Status: 422 — M7: required region (spec default \"IN\")",
+  "detail": [
+    {
+      "type": "missing",
+      "loc": [
+        "body",
+        "region"
+      ],
+      "msg": "Field required",
+      "input": {},
+      "ctx": {}
+    }
+  ]
+}

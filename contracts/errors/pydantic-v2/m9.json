@@ -1,0 +1,45 @@
+{
+  "_status": 401,
+  "_note": "Status: 401 / 422 — M9: safe halt variants",
+  "variants": {
+    "missingAuth": {
+      "status": 401,
+      "headers": {
+        "WWW-Authenticate": "Bearer"
+      },
+      "body": {
+        "detail": [
+          {
+            "type": "missing",
+            "loc": [
+              "header",
+              "authorization"
+            ],
+            "msg": "Field required",
+            "input": null,
+            "ctx": {}
+          }
+        ]
+      },
+      "note": "no credential provider configured for Authorization -> halt (provenance_violation)"
+    },
+    "approvalCode": {
+      "status": 422,
+      "body": {
+        "detail": [
+          {
+            "type": "missing",
+            "loc": [
+              "body",
+              "approval_code"
+            ],
+            "msg": "Field required",
+            "input": null,
+            "ctx": {}
+          }
+        ]
+      },
+      "note": "required body field with no documented default and no credential source -> halt"
+    }
+  }
+}

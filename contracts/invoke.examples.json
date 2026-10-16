@@ -1,0 +1,20 @@
+{
+  "request": "POST /apis/:apiId/tools/:tool/invoke  body: { \"args\": { \"user_id\": \"123\" } }",
+  "success": {
+    "ok": true,
+    "data": { "id": "123", "name": "Asha Rao", "email": "asha@example.com" },
+    "meta": { "version": 3, "healed": true, "rounds": 3, "tier": 1, "cacheHit": false, "latencyMs": 412, "healMs": 388, "tokens": { "input": 0, "output": 0 } }
+  },
+  "failure": {
+    "ok": false,
+    "error": { "code": "tool_unavailable", "message": "Contract changed and no safe fix found", "retryable": false, "details": { "reason": "provenance_violation", "field": "approval_code" } }
+  },
+  "errorCodes": [
+    "invalid_arguments",
+    "upstream_rejected",
+    "tool_unavailable",
+    "drift_unresolved",
+    "upstream_error"
+  ],
+  "note": "`retryable: false` plus a plain-language message stops the agent from looping — the single most important line of the error contract (§4.4)."
+}

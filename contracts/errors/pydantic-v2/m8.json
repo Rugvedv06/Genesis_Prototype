@@ -1,0 +1,21 @@
+{
+  "_status": 422,
+  "_note": "Status: 422 — M8: enum active/inactive -> ENABLED/DISABLED",
+  "detail": [
+    {
+      "type": "enum",
+      "loc": [
+        "body",
+        "status"
+      ],
+      "msg": "Input should be 'ENABLED' or 'DISABLED'",
+      "input": "active",
+      "ctx": {
+        "allowed_values": [
+          "ENABLED",
+          "DISABLED"
+        ]
+      }
+    }
+  ]
+}

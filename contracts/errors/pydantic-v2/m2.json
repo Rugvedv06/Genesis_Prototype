@@ -1,0 +1,18 @@
+{
+  "_status": 422,
+  "_note": "Status: 422 — M2: user_id must be integer",
+  "detail": [
+    {
+      "type": "is_instance",
+      "loc": [
+        "body",
+        "user_id"
+      ],
+      "msg": "Input should be a valid integer",
+      "input": {
+        "user_id": "123"
+      },
+      "ctx": {}
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "_status": 422,
+  "_note": "Status: 422 — M8: enum active/inactive -> ENABLED/DISABLED",
+  "type": "https://api.example/probs/validation-error",
+  "title": "Unprocessable Entity",
+  "status": 422,
+  "detail": "Body validation failed",
+  "instance": "/api/users/set-status",
+  "errors": [
+    {
+      "loc": [
+        "body",
+        "status"
+      ],
+      "msg": "value is not a valid enumeration member; permitted: ENABLED, DISABLED",
+      "type": "type_error.enum",
+      "allowed": [
+        "ENABLED",
+        "DISABLED"
+      ]
+    }
+  ]
+}

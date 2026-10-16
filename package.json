@@ -1,30 +1,24 @@
 {
-  "name": "grnesis",
+  "name": "healr",
   "private": true,
-  "version": "0.0.0",
   "type": "module",
+  "version": "0.1.0",
+  "description": "healr — PS 01 Self-Healing Tool Registry build plan scaffold (Phase 0)",
+  "workspaces": [
+    "api-server",
+    "api-client",
+    "demo-server-and-client/server",
+    "demo-server-and-client/client"
+  ],
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "lint": "oxlint",
-    "preview": "vite preview"
+    "dev": "node scripts/dev.js",
+    "test": "node --test \"api-server/test/**/*.test.js\" \"demo-server-and-client/server/test/**/*.test.js\"",
+    "verify:p01": "node scripts/verify-phase01.mjs"
+  },
+  "engines": {
+    "node": ">=20"
   },
   "dependencies": {
-    "@tailwindcss/vite": "^4.3.3",
-    "lucide-react": "^1.56.0",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
-    "react-router-dom": "^7.18.4",
-    "recharts": "^3.10.1",
-    "tailwindcss": "^4.3.3"
-  },
-  "devDependencies": {
-    "@types/node": "^24.13.3",
-    "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.7",
-    "@vitejs/plugin-react": "^6.1.1",
-    "oxlint": "^1.81.0",
-    "typescript": "~6.0.2",
-    "vite": "^8.3.0"
+    "ajv": "^8.20.0"
   }
 }

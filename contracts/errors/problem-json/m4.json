@@ -1,0 +1,12 @@
+{
+  "_status": 400,
+  "_note": "Status: 400 — M4: header X-API-Version required",
+  "type": "https://api.example/probs/missing-header",
+  "title": "Bad Request",
+  "status": 400,
+  "detail": "Required header missing",
+  "header": "X-API-Version",
+  "allowed": [
+    "2"
+  ]
+}

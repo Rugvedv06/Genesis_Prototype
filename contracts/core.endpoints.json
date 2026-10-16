@@ -1,0 +1,18 @@
+{
+  "endpoints": [
+    { "method": "GET",    "path": "/apis",                          "description": "List registered APIs and current versions", "status": "live" },
+    { "method": "POST",   "path": "/apis",                          "description": "Register an API (§4.1 payload)", "status": "live" },
+    { "method": "DELETE", "path": "/apis/:apiId",                   "description": "Remove an API (demo reset)", "status": "live" },
+    { "method": "GET",    "path": "/apis/:apiId/tools/:tool/versions","description": "Tool version history", "status": "live" },
+    { "method": "GET",    "path": "/apis/:apiId/tools/:tool/versions/:n","description": "Single version record", "status": "live" },
+    { "method": "POST",   "path": "/apis/:apiId/tools/:tool/rollback","description": "Roll back: appends a NEW version with rollbackOf", "status": "live" },
+    { "method": "POST",   "path": "/apis/:apiId/tools/:tool/invoke", "description": "Core invoke API (§4.4)", "status": "live" },
+    { "method": "POST",   "path": "/tasks",                         "description": "Scripted task runner → runId, progress over SSE", "status": "live" },
+    { "method": "GET",    "path": "/events?since=<id>",             "description": "SSE event stream with Last-Event-ID replay (§4.6)", "status": "live" },
+    { "method": "GET",    "path": "/audit?limit=50",                "description": "Audit records (§4.7)", "status": "planned" },
+    { "method": "GET",    "path": "/audit/verify",                  "description": "Hash-chain verification: { ok, headHash, brokenAt?, reason? }", "status": "planned" },
+    { "method": "GET",    "path": "/metrics",                       "description": "Counters and latency histograms", "status": "planned" },
+    { "method": "POST",   "path": "/dev/tamper {index}",            "description": "Dev only (ENABLE_DEV_ROUTES=1): tamper audit line at index", "status": "planned" },
+    { "method": "GET",    "path": "/health",                        "description": "Health check", "status": "live" }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "_status": 401,
+  "_note": "Status: 401 / 422 — M9: safe halt variants",
+  "variants": {
+    "missingAuth": {
+      "status": 401,
+      "type": "https://api.example/probs/missing-header",
+      "title": "Unauthorized",
+      "header": "Authorization",
+      "scheme": "Bearer",
+      "note": "no credential provider configured for Authorization -> halt (provenance_violation)"
+    },
+    "approvalCode": {
+      "status": 422,
+      "type": "https://api.example/probs/validation-error",
+      "title": "Unprocessable Entity",
+      "errors": [
+        {
+          "loc": [
+            "body",
+            "approval_code"
+          ],
+          "msg": "field required",
+          "type": "value_error.missing"
+        }
+      ],
+      "note": "required body field with no documented default and no credential source -> halt"
+    }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "name": "@healr/api-server",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "description": "healr core healing gateway — port 8000 (PS01_BUILD_PLAN.md section 3)",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "express": "^5.0.1",
+    "cors": "^2.8.5",
+    "ajv": "^8.20.0"
+  }
+}

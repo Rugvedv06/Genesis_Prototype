@@ -1,0 +1,14 @@
+{
+  "_status": 422,
+  "_note": "Status: 422 — M7: new required field region (spec default \"IN\", T0 only)",
+  "detail": [
+    {
+      "loc": [
+        "body",
+        "region"
+      ],
+      "msg": "field required",
+      "type": "value_error.missing"
+    }
+  ]
+}

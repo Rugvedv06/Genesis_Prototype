@@ -1,0 +1,45 @@
+{
+  "_status": 400,
+  "_note": "Status: 400 (header first) then layered 422s — M5",
+  "header": {
+    "error": "missing_header",
+    "header": "X-Tenant"
+  },
+  "body": {
+    "detail": [
+      {
+        "type": "missing",
+        "loc": [
+          "body",
+          "target"
+        ],
+        "msg": "Field required",
+        "input": {},
+        "ctx": {}
+      },
+      {
+        "type": "extra",
+        "loc": [
+          "body",
+          "user_id"
+        ],
+        "msg": "Extra inputs are not permitted",
+        "input": {
+          "user_id": "123"
+        },
+        "ctx": {}
+      },
+      {
+        "type": "missing",
+        "loc": [
+          "body",
+          "target",
+          "id"
+        ],
+        "msg": "Field required",
+        "input": {},
+        "ctx": {}
+      }
+    ]
+  }
+}

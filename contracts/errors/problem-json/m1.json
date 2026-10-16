@@ -1,0 +1,27 @@
+{
+  "_status": 422,
+  "_note": "Status: 422 — M1: user_id renamed to userId (RFC 9457 problem+json)",
+  "type": "https://api.example/probs/validation-error",
+  "title": "Unprocessable Entity",
+  "status": 422,
+  "detail": "Body validation failed",
+  "instance": "/api/users/get",
+  "errors": [
+    {
+      "loc": [
+        "body",
+        "userId"
+      ],
+      "msg": "field required",
+      "type": "value_error.missing"
+    },
+    {
+      "loc": [
+        "body",
+        "user_id"
+      ],
+      "msg": "extra fields not permitted",
+      "type": "value_error.extra"
+    }
+  ]
+}

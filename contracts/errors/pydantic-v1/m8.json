@@ -1,0 +1,20 @@
+{
+  "_status": 422,
+  "_note": "Status: 422 — M8: set-status enum changed active/inactive -> ENABLED/DISABLED",
+  "detail": [
+    {
+      "loc": [
+        "body",
+        "status"
+      ],
+      "msg": "value is not a valid enumeration member; permitted: ENABLED, DISABLED",
+      "type": "type_error.enum",
+      "ctx": {
+        "allowed": [
+          "ENABLED",
+          "DISABLED"
+        ]
+      }
+    }
+  ]
+}

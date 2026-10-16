@@ -1,0 +1,19 @@
+{
+  "_status": 422,
+  "_note": "Status: 422 — M2: user_id must be integer",
+  "type": "https://api.example/probs/validation-error",
+  "title": "Unprocessable Entity",
+  "status": 422,
+  "detail": "Body validation failed",
+  "instance": "/api/users/get",
+  "errors": [
+    {
+      "loc": [
+        "body",
+        "user_id"
+      ],
+      "msg": "value is not a valid integer",
+      "type": "type_error.integer"
+    }
+  ]
+}

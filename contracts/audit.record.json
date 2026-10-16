@@ -1,0 +1,19 @@
+{
+  "index": 7,
+  "ts": "2026-10-16T09:41:12.801Z",
+  "prevHash": "0000000000000000000000000000000000000000000000000000000000000000",
+  "decision": "commit",
+  "apiId": "demo-users",
+  "tool": "get_user",
+  "versionBefore": 2,
+  "versionAfter": 3,
+  "tier": 1,
+  "ops": ["move_field user_id -> target.user_id", "rename_field target.user_id -> target.id", "coerce_type target.id string->integer", "add_header X-Tenant credential:X-Tenant"],
+  "confidence": 0.95,
+  "evidence": ["body.target missing", "body.target.id missing", "not a valid integer", "header X-Tenant required"],
+  "verification": { "status": 200, "ok": true },
+  "latencyMs": 388,
+  "tokens": { "input": 0, "output": 0 },
+  "hash": "…sha256(stableStringify(body))…",
+  "note": "Append-only hash chain. Credentials stored as source refs only (`{type:'credential', ref:'X-Tenant'}`), never values (§4.7, §7.1)."
+}

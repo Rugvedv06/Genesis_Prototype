@@ -1,0 +1,12 @@
+{
+  "_note": "M6 silent drift: HTTP 200, response moved to result.data.profile.*",
+  "result": {
+    "data": {
+      "profile": {
+        "name": "Asha Rao",
+        "email": "asha@example.com",
+        "id": "123"
+      }
+    }
+  }
+}

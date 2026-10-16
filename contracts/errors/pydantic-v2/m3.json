@@ -1,0 +1,28 @@
+{
+  "_status": 422,
+  "_note": "Status: 422 — M3: body nested under target (round 1)",
+  "detail": [
+    {
+      "type": "missing",
+      "loc": [
+        "body",
+        "target"
+      ],
+      "msg": "Field required",
+      "input": {},
+      "ctx": {}
+    },
+    {
+      "type": "extra",
+      "loc": [
+        "body",
+        "user_id"
+      ],
+      "msg": "Extra inputs are not permitted",
+      "input": {
+        "user_id": "123"
+      },
+      "ctx": {}
+    }
+  ]
+}

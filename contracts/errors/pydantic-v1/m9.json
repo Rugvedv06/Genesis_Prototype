@@ -1,0 +1,41 @@
+{
+  "_status": 401,
+  "_note": "Status: 401 (missing Authorization) or 422 (required approval_code, no source) — M9: safe halt, no ops",
+  "variants": {
+    "missingAuth": {
+      "status": 401,
+      "headers": {
+        "WWW-Authenticate": "Bearer"
+      },
+      "body": {
+        "detail": [
+          {
+            "loc": [
+              "header",
+              "authorization"
+            ],
+            "msg": "field required",
+            "type": "value_error.missing"
+          }
+        ]
+      },
+      "note": "no credential provider configured for Authorization -> halt (provenance_violation)"
+    },
+    "approvalCode": {
+      "status": 422,
+      "body": {
+        "detail": [
+          {
+            "loc": [
+              "body",
+              "approval_code"
+            ],
+            "msg": "field required",
+            "type": "value_error.missing"
+          }
+        ]
+      },
+      "note": "required body field with no documented default and no credential source -> halt"
+    }
+  }
+}

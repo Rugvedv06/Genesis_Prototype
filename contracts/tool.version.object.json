@@ -1,0 +1,16 @@
+{
+  "version": 3,
+  "parent": 2,
+  "rollbackOf": null,
+  "tool": "get_user",
+  "createdAt": "2026-10-16T09:41:12.412Z",
+  "adapter": {
+    "request": [
+      { "op": "move_field",  "from": "user_id", "to": "target.user_id", "evidence": {"kind":"error","ref":"body.target missing"} },
+      { "op": "rename_field","path": "target", "from": "user_id", "to": "id", "evidence": {"kind":"error","ref":"body.target.id missing"} },
+      { "op": "coerce_type", "path": "target.id", "from": "string", "to": "integer", "evidence": {"kind":"error","ref":"not a valid integer"} },
+      { "op": "add_header",  "name": "X-Tenant", "source": { "type": "credential", "ref": "X-Tenant" }, "evidence": {"kind":"error","ref":"header X-Tenant required"} }
+    ],
+    "response": { "map": { "id": "result.id", "name": "result.name", "email": "result.email" } }
+  }
+}

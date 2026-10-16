@@ -22,3 +22,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# env & runtime data (plan: data/ is gitignored, .env never committed)
+.env
+.env.local
+.env.*.local
+data/
+.next/
+out/

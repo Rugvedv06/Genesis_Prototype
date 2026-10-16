@@ -1,0 +1,12 @@
+{
+  "_note": "M10 silent drift: HTTP 200, name moved/renamed to full_name",
+  "result": {
+    "data": {
+      "profile": {
+        "full_name": "Asha Rao",
+        "email": "asha@example.com",
+        "id": "123"
+      }
+    }
+  }
+}

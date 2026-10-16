@@ -1,0 +1,19 @@
+{
+  "_status": 422,
+  "_note": "Status: 422 — M7: required region (spec default \"IN\")",
+  "type": "https://api.example/probs/validation-error",
+  "title": "Unprocessable Entity",
+  "status": 422,
+  "detail": "Body validation failed",
+  "instance": "/api/users/get",
+  "errors": [
+    {
+      "loc": [
+        "body",
+        "region"
+      ],
+      "msg": "field required",
+      "type": "value_error.missing"
+    }
+  ]
+}

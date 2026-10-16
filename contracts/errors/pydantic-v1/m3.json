@@ -1,0 +1,22 @@
+{
+  "_status": 422,
+  "_note": "Status: 422 — M3: body nested under target (round 1 of layered validation)",
+  "detail": [
+    {
+      "loc": [
+        "body",
+        "target"
+      ],
+      "msg": "field required",
+      "type": "value_error.missing"
+    },
+    {
+      "loc": [
+        "body",
+        "user_id"
+      ],
+      "msg": "extra fields not permitted",
+      "type": "value_error.extra"
+    }
+  ]
+}

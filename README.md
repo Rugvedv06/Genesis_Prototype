@@ -1,32 +1,97 @@
-# React + TypeScript + Vite
+# Genesis Prototype — PS 01: Self-Healing Tool Registry
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+**Status: Phase 0 + Phase 1 complete.** A middleware between an agent and any HTTP API that, when the API contract drifts, notices, works out the diff from evidence, patches only what the diff requires, verifies by replay, logs every patch, never invents values, and stops instead of looping when it cannot prove a fix.
 
-Currently, two official plugins are available:
+Build plan: `PS01_BUILD_PLAN.md` (frozen contract). Phase exit gates define done.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Phase 1 progress (complete)
 
-## React Compiler
+- Track A: classifier (pydantic-v1/v2/problem-json), Tier 1 rules (wrap, rename, type, header), patch engine, registry `compileAdapter` with provenance guard, executor invoke + heal loop (§5.1-5.3).
+- Track B: versioned registry store with atomic re-register and real version history, events ring bus + SSE `/events`, `POST /apis` registration, scripted `POST /tasks` runner.
+- Track C: data-driven M5 mutation engine (header first, then layered body 422s), write provenance stamping, `/admin/truth`, `/admin/mutations`.
+- Track D: Drift Control stage UI with env-driven URLs, drift-aware event filtering, rounds from meta.rounds, token counters, truth check from `/admin/truth`.
+- Verified: M5 heals in 4 rounds (add_header → move_field → rename_field → coerce_type), commits exactly 4 ops, succeeds in ~150ms (< 3s target); bad input never healed; missing credential halts safely; non-coercible value halts safely; all 30 unit/golden tests pass; end-to-end over HTTP.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Stack
 
-## Expanding the Oxlint configuration
+| Layer | Tech | Port |
+|---|---|---|
+| Core healing gateway | Node.js (plain JS, ESM) + Express | 8000 |
+| Mock API + mutation engine | Node.js (plain JS, ESM) + Express | 5001 |
+| Core dashboard | Next.js (JS) | 3000 |
+| Drift Control stage UI | Next.js (JS) | 3001 |
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+LLM: Gemini via REST `generateContent` (baseline agent, `demo-server-and-client/server/src/baseline-agent/llm.js`). Provider abstraction for healed agent lands in Phase 4. Tests: built-in `node:test`.
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+## Repo layout (plan §3)
+
+```
+root/
+├── package.json             # npm workspaces
+├ .env                       # created from .env.example (never committed)
+├── .env.example             # copy to .env
+├── scripts/dev.js           # boots all 4 apps (loads .env, warns if TENANT_ID missing)
+├── contracts/               # Phase 0: frozen JSON fixtures (§4 + golden error bodies × styles)
+├── api-server/              # CORE (port 8000) — registry, executor, classifier, diagnoser, patch engine, events
+├── api-client/              # CORE DASHBOARD, Next.js (port 3000)
+└── demo-server-and-client/
+    ├── server/              # port 5001 — mock API, mutation engine, baseline agent
+    └── client/              # Drift Control stage UI, Next.js (port 3001)
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+## Dev setup
+
+1. **Copy env** (never commit `.env`):
+   ```bash
+   cp .env.example .env
+   # edit .env: set GEMINI_API_KEY (needed from Phase 4 onward; not required for Phase 0/1),
+   # TENANT_ID (required for Phase 1 heal — X-Tenant header value)
+   ```
+
+2. **Install deps** (npm workspaces, all four apps):
+   ```bash
+   npm install
+   ```
+
+3. **Boot everything** (`node --watch` for the two Node apps, `next dev` for both Next apps):
+   ```bash
+   npm run dev
+   ```
+
+4. **Health checks** (Phase 0 exit gate: all four green):
+   ```bash
+   curl http://localhost:8000/health   # api-server
+   curl http://localhost:5001/health   # demo-server
+   curl http://localhost:3000          # api-client
+   curl http://localhost:3001          # demo-client
+   ```
+
+5. **Tests** (Phase 0 exit gate: `npm test` runs green):
+   ```bash
+   npm test
+   ```
+
+6. **Stop**: `Ctrl+C` in the `npm run dev` terminal (all child processes are killed on SIGINT/SIGTERM).
+
+## Ports & env (fixed by plan, never re-discussed)
+
+- core 8000, mock 5001, dashboards 3000 and 3001
+- Env: `GEMINI_API_KEY`, `AGENT_LLM`, `DIAGNOSER_LLM`, `CORE_URL`, `MOCK_URL`, `TENANT_ID`, `ENABLE_DEV_ROUTES`, `NEXT_PUBLIC_CORE_URL`, `NEXT_PUBLIC_MOCK_URL`, `HEALR_DATA_DIR`, `MAX_HEAL_ROUNDS`, `HEAL_TIMEOUT_MS`
+
+## Phase 0 exit gate (from `PS01_BUILD_PLAN.md` §6)
+
+- [x] `npm run dev` starts 4 processes; all 4 health checks green
+- [x] `/contracts` committed (registration payload, tool version, patch ops, invoke examples, core endpoints, SSE envelope, audit record, mock admin API, golden error bodies M1–M10 × pydantic-v1/v2/problem-json, silent-200 responses M6/M10)
+- [x] `npm test` green (30 tests: paths, classifier goldens × 3 styles, Tier 1 rules, M5 heal loop, mock validator)
+
+## Phase 1 exit gate (from `PS01_BUILD_PLAN.md` §6)
+
+- [x] Healed task < 3s after mutation (M5, ~150ms locally)
+- [x] Baseline visibly fails (iteration cap, red)
+- [x] Patch ops shown and match true diff exactly (4 ops, none extra)
+- [x] Register via `POST /apis` with URL + tool JSON; delete + restart mock + re-register works
+- [x] Golden tests for M5 error bodies feeding Tier 1
+
+## Next steps
+
+Phase 2: Trust layer — safety gate, rollback, audit chain, M9 unrecoverable. See `PS01_BUILD_PLAN.md` §6 and `HEALR_PHASE0_1_GAPS_AND_FIX_PLAN.md`.

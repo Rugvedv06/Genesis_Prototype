@@ -1,0 +1,18 @@
+{
+  "endpoints": [
+    { "method": "POST", "path": "/admin/mutate",   "body": { "id": "M5" }, "description": "Activate a mutation" },
+    { "method": "POST", "path": "/admin/reset",    "body": null,           "description": "Clean contract + reset DB" },
+    { "method": "GET",  "path": "/admin/state",    "body": null,           "description": "{ mutation, errorStyle, specAvailable, writes[] }" },
+    { "method": "POST", "path": "/admin/config",   "body": { "errorStyle": "pydantic-v1|pydantic-v2|problem-json", "specAvailable": true }, "description": "Configure error style" },
+    { "method": "GET",  "path": "/openapi.json",   "body": null,           "description": "Reflects the CURRENT mutation (when specAvailable)" }
+  ],
+  "domain": {
+    "endpoints": [
+      "POST /api/users/get              { \"user_id\": \"123\" }             -> { \"result\": { \"id\",\"name\",\"email\" } }",
+      "POST /api/users/update-email     { \"user_id\": \"123\", \"email\": \"…\" } -> { \"result\": { \"id\",\"email\",\"updated_at\" } }",
+      "POST /api/users/set-status       { \"user_id\": \"123\", \"status\": \"active|inactive\" }",
+      "POST /api/orders/get             { \"order_id\": \"o-9\" }"
+    ]
+  },
+  "note": "RPC-style POST bodies: body-shaped mutations (nesting, renames, types) are the demo; query/path drift is out of scope for 24 hr (§4.8)."
+}

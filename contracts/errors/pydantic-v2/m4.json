@@ -1,0 +1,30 @@
+{
+  "_status": 400,
+  "_note": "Status: 400 — M4: header X-API-Version required",
+  "detail": [
+    {
+      "type": "missing",
+      "loc": [
+        "header",
+        "x-api-version"
+      ],
+      "msg": "Field required",
+      "input": {},
+      "ctx": {}
+    },
+    {
+      "type": "enum",
+      "loc": [
+        "header",
+        "x-api-version"
+      ],
+      "msg": "Input should be '2'",
+      "input": null,
+      "ctx": {
+        "allowed_values": [
+          "2"
+        ]
+      }
+    }
+  ]
+}

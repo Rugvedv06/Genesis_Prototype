@@ -1,0 +1,12 @@
+{
+  "note": "Complete set of typed patch ops (PS01_BUILD_PLAN.md section 4.3). Ops are data; every leaf value in a patched request must carry provenance (arg, arg:coerced, arg:enum_mapped, spec_default, credential).",
+  "ops": [
+    { "op": "rename_field",  "fields": ["path", "from", "to"], "provenance": "value moves with the key, origin preserved", "description": "Rename a key within a parent object (`path` = parent dotted path, '' for root)" },
+    { "op": "move_field",    "fields": ["from", "to"], "provenance": "origin preserved for every leaf under `from`", "description": "Move a subtree to a new dotted path" },
+    { "op": "coerce_type",   "fields": ["path", "from", "to"], "provenance": "allowed only if lossless (round trip); origin `arg:coerced`", "description": "Lossless type coercion of a leaf" },
+    { "op": "add_header",    "fields": ["name", "source"], "provenance": "source.type in credential, spec_default, error_enum", "description": "Add a request header" },
+    { "op": "add_field",     "fields": ["path", "source"], "provenance": "source.type in spec_default, credential; never `llm`", "description": "Add a new required field" },
+    { "op": "set_enum_map",  "fields": ["path", "map"], "provenance": "keys are logical enum values; values appear in an observed allowed list", "description": "Map a logical enum value to an observed wire value" },
+    { "op": "remap_response_path", "fields": ["logical", "to"], "provenance": "read side only, no provenance needed, must pass type check", "description": "Remap a logical response field to a new wire path" }
+  ]
+}

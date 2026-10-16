@@ -1,0 +1,40 @@
+{
+  "_status": 400,
+  "_note": "Status: 400 (header first) then layered 422s — M5",
+  "header": {
+    "error": "missing_header",
+    "header": "X-Tenant"
+  },
+  "body": {
+    "type": "https://api.example/probs/validation-error",
+    "title": "Unprocessable Entity",
+    "status": 422,
+    "errors": [
+      {
+        "loc": [
+          "body",
+          "target"
+        ],
+        "msg": "field required",
+        "type": "value_error.missing"
+      },
+      {
+        "loc": [
+          "body",
+          "user_id"
+        ],
+        "msg": "extra fields not permitted",
+        "type": "value_error.extra"
+      },
+      {
+        "loc": [
+          "body",
+          "target",
+          "id"
+        ],
+        "msg": "field required",
+        "type": "value_error.missing"
+      }
+    ]
+  }
+}

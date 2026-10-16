@@ -1,0 +1,9 @@
+{
+  "_status": 400,
+  "_note": "Status: 400 — M4: header X-API-Version required (mock canonical shape, §11)",
+  "error": "missing_header",
+  "header": "X-API-Version",
+  "allowed": [
+    "2"
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "_status": 400,
+  "_note": "Status: 400 (header first) then layered 422s — M5: target { id: int } + X-Tenant header",
+  "header": {
+    "error": "missing_header",
+    "header": "X-Tenant"
+  },
+  "body": {
+    "detail": [
+      {
+        "loc": [
+          "body",
+          "target"
+        ],
+        "msg": "field required",
+        "type": "value_error.missing"
+      },
+      {
+        "loc": [
+          "body",
+          "user_id"
+        ],
+        "msg": "extra fields not permitted",
+        "type": "value_error.extra"
+      },
+      {
+        "loc": [
+          "body",
+          "target",
+          "id"
+        ],
+        "msg": "field required",
+        "type": "value_error.missing"
+      }
+    ]
+  }
+}

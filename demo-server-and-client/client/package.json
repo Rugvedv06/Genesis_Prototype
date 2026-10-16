@@ -1,0 +1,17 @@
+{
+  "name": "@healr/demo-client",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "description": "healr Drift Control stage UI — Next.js (JS), port 3001 (Track D)",
+  "scripts": {
+    "dev": "next dev -p 3001",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "next": "^15.2.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  }
+}

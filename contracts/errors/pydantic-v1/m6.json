@@ -1,0 +1,6 @@
+{
+  "_status": 200,
+  "_note": "Status: 200 — M6: silent drift, NO error body. Response shape moved to result.data.profile.*. See contracts/responses/m6.json",
+  "note": "silent_200_drift",
+  "message": "no validation error; response contract changed (see contracts/responses/m6.json)"
+}

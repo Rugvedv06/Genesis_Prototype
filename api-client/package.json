@@ -1,0 +1,17 @@
+{
+  "name": "@healr/api-client",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "description": "healr core dashboard — Next.js (JS), port 3000 (Track D)",
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "next": "^15.2.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  }
+}
