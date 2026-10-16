@@ -12,7 +12,7 @@
  * - Strict Separation of HTTP 200 vs Truth Match
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 const CORE = process.env.NEXT_PUBLIC_CORE_URL || 'http://localhost:8000';
 const MOCK = process.env.NEXT_PUBLIC_MOCK_URL || 'http://localhost:5001';
@@ -21,36 +21,27 @@ const TOOL = { name: 'get_user', path: '/api/users/get', method: 'POST' };
 
 // ─── Theme Colors ────────────────────────────────────────────────────────────
 const C = {
-  bg:        '#090a0f',
-  surface:   '#11131a',
-  surfaceHi: '#181b26',
-  border:    '#1e2233',
-  borderHi:  '#2d3450',
-  text:      '#c8cbd9',
-  textDim:   '#5a607a',
-  textMid:   '#8a92b2',
-  green:     '#3dd68c',
-  greenDim:  '#133826',
-  red:       '#f05d6a',
-  redDim:    '#3d181c',
-  amber:     '#f0a832',
-  amberDim:  '#3d2b10',
-  blue:      '#5b8df0',
-  blueDim:   '#162544',
-  teal:      '#45c9c9',
-  tealDim:   '#133333',
-  purple:    '#9b72f0',
-  purpleDim: '#251540',
+  bg: 'var(--background)', surface: 'var(--card)', surfaceHi: 'var(--muted)',
+  border: 'var(--border)', borderHi: 'var(--border-strong)', text: 'var(--foreground)', textDim: 'var(--muted-foreground)', textMid: 'var(--secondary-foreground)',
+  green: 'var(--success)', greenDim: 'var(--success-muted)', red: 'var(--destructive)', redDim: 'var(--destructive-muted)',
+  amber: 'var(--warning)', amberDim: 'var(--warning-muted)', blue: 'var(--info)', blueDim: 'var(--info-muted)',
+  teal: 'var(--primary)', tealDim: 'var(--teal-muted)', slate: 'var(--slate)', slateDim: 'var(--slate-muted)',
 };
+
+const toneSurface = (color) => color === C.blue ? C.blueDim
+  : color === C.green ? C.greenDim
+    : color === C.red ? C.redDim
+      : color === C.amber ? C.amberDim
+        : color === C.slate ? C.slateDim : C.tealDim;
 
 // ─── Visual Pipeline Stages ──────────────────────────────────────────────────
 const PIPELINE_STEPS = [
-  { id: 'request',      label: 'API Request',    icon: '→' },
-  { id: 'drift',        label: 'Drift Detected', icon: '⚠' },
-  { id: 'diagnosis',    label: 'Diagnosis',       icon: '🔍' },
-  { id: 'safety',       label: 'Safety Check',    icon: '🛡' },
-  { id: 'verification', label: 'Verification',    icon: '✔' },
-  { id: 'commit',       label: 'Commit / Halt',   icon: '✦' },
+  { id: 'request',      label: 'Request',       icon: '01' },
+  { id: 'drift',        label: 'Drift',         icon: '02' },
+  { id: 'diagnosis',    label: 'Diagnosis',     icon: '03' },
+  { id: 'safety',       label: 'Safety check',  icon: '04' },
+  { id: 'verification', label: 'Verification',  icon: '05' },
+  { id: 'commit',       label: 'Commit / halt', icon: '06' },
 ];
 
 const EVENT_TO_STEP = {
@@ -192,7 +183,7 @@ function PatchCard({ op, index }) {
     case 'move_field':
       title = 'MOVE FIELD';
       desc = `"${op.from}"  ⟶  "${op.to}"`;
-      accent = C.purple;
+      accent = C.slate;
       break;
     case 'rename_field':
       title = 'RENAME FIELD';
@@ -221,7 +212,7 @@ function PatchCard({ op, index }) {
   return (
     <div style={{
       background: C.surfaceHi,
-      border: `1px solid ${accent}33`,
+      border: `1px solid ${C.border}`,
       borderLeft: `4px solid ${accent}`,
       borderRadius: 8,
       padding: '10px 14px',
@@ -232,7 +223,7 @@ function PatchCard({ op, index }) {
         onClick={() => setExpanded(e => !e)}
       >
         <span style={{
-          background: `${accent}22`,
+          background: toneSurface(accent),
           color: accent,
           borderRadius: 4,
           padding: '2px 8px',
@@ -341,7 +332,7 @@ function WireDiffView({ ops }) {
 
   return (
     <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
-      <div style={{ flex: '1 1 240px', background: C.bg, border: `1px solid ${C.red}40`, borderRadius: 8, padding: 10 }}>
+      <div style={{ flex: '1 1 240px', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: 10 }}>
         <div style={{ fontSize: '0.68rem', fontWeight: 700, color: C.red, textTransform: 'uppercase', marginBottom: 6, display: 'flex', justifyContent: 'space-between' }}>
           <span>Before (Caller Wire Format)</span>
           <span style={{ color: C.textDim, fontWeight: 400 }}>v1 Contract</span>
@@ -351,7 +342,7 @@ function WireDiffView({ ops }) {
         </pre>
       </div>
 
-      <div style={{ flex: '1 1 240px', background: C.bg, border: `1px solid ${C.green}40`, borderRadius: 8, padding: 10 }}>
+      <div style={{ flex: '1 1 240px', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: 10 }}>
         <div style={{ fontSize: '0.68rem', fontWeight: 700, color: C.green, textTransform: 'uppercase', marginBottom: 6, display: 'flex', justifyContent: 'space-between' }}>
           <span>After (Healed Wire Format)</span>
           <span style={{ color: C.teal, fontWeight: 400 }}>v2 Dynamic Adapter</span>
@@ -433,7 +424,7 @@ function HealingPipeline({ events, outcome }) {
   return (
     <div style={{ padding: '10px 16px', background: C.bg, borderBottom: `1px solid ${C.border}` }}>
       <div style={{ fontSize: '0.66rem', color: C.textDim, marginBottom: 8, letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 600 }}>
-        Visual Healing Pipeline
+        Execution trace
       </div>
       <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
         {PIPELINE_STEPS.map((step, i) => {
@@ -490,7 +481,7 @@ function TruthTable({ data, truth }) {
             const actual = flat?.[f];
             const match = String(expected) === String(actual);
             return (
-              <tr key={f} style={{ background: match ? 'transparent' : `${C.redDim}50` }}>
+              <tr key={f} style={{ background: match ? C.surface : C.redDim }}>
                 <td style={{ padding: '5px 8px', color: C.textMid, fontWeight: 600 }}>{f}</td>
                 <td style={{ padding: '5px 8px', color: C.green }}>{JSON.stringify(expected)}</td>
                 <td style={{ padding: '5px 8px', color: match ? C.text : C.red }}>{actual !== undefined ? JSON.stringify(actual) : 'undefined'}</td>
@@ -560,13 +551,12 @@ function ConnPill({ label, state }) {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: 6,
-      background: C.surfaceHi, border: `1px solid ${ok ? C.green : C.red}40`,
+      background: C.surfaceHi, border: `1px solid ${ok ? C.green : C.red}`,
       borderRadius: 20, padding: '4px 12px', fontSize: '0.72rem',
     }}>
       <div style={{
         width: 7, height: 7, borderRadius: '50%',
         background: ok ? C.green : C.red,
-        boxShadow: ok ? `0 0 6px ${C.green}` : 'none',
       }} />
       <span style={{ color: ok ? C.green : C.red, fontWeight: 600 }}>{label}</span>
       <span style={{ color: C.textDim }}>{ok ? 'live' : 'offline'}</span>
@@ -615,29 +605,27 @@ function Pane({
     : error?.code ?? error?.reason ?? (typeof error === 'string' ? error : null);
 
   return (
-    <section style={{
-      flex: 1, minWidth: 340,
+    <section className="demo-pane" style={{
+      flex: 1, minWidth: 0,
       background: C.surface,
-      border: `1px solid ${accentColor}50`,
+      border: `1px solid ${C.border}`,
       borderRadius: 12,
       overflow: 'hidden',
       display: 'flex',
       flexDirection: 'column',
-      boxShadow: `0 0 30px ${accentColor}08`,
     }}>
       {/* Pane Header */}
       <div style={{
-        background: `${accentColor}18`,
-        borderBottom: `1px solid ${accentColor}30`,
+        background: toneSurface(accentColor),
+        borderBottom: `1px solid ${C.border}`,
         padding: '12px 16px',
         display: 'flex', alignItems: 'center', gap: 10,
       }}>
         <div style={{
           width: 8, height: 8, borderRadius: '50%',
           background: accentColor,
-          boxShadow: `0 0 8px ${accentColor}`,
         }} />
-        <span style={{ fontWeight: 700, fontSize: '0.9rem', color: accentColor, letterSpacing: '0.05em' }}>
+        <span className="demo-pane-title" style={{ fontWeight: 700, fontSize: '0.9rem', color: accentColor, letterSpacing: '0.05em' }}>
           {title}
         </span>
         {mode && (
@@ -661,7 +649,7 @@ function Pane({
         ) : (
           <>
             <MetricCard label="Heal Rounds" value={rounds > 0 ? rounds : '—'} color={C.teal} />
-            <MetricCard label="Version" value={version != null ? `v${version}` : '—'} color={C.purple} />
+            <MetricCard label="Version" value={version != null ? `v${version}` : '—'} color={C.slate} />
             <MetricCard label="Patch Ops" value={ops?.length > 0 ? ops.length : '—'} color={C.amber} />
             <MetricCard label="Latency" value={elapsed > 0 ? elapsed : '—'} unit={elapsed > 0 ? 'ms' : ''} />
           </>
@@ -683,7 +671,7 @@ function Pane({
               all: 'unset', cursor: 'pointer',
               padding: '8px 16px', fontSize: '0.74rem', fontWeight: 600,
               color: tab === t ? accentColor : C.textDim,
-              borderBottom: tab === t ? `2px solid ${accentColor}` : '2px solid transparent',
+              borderBottom: `2px solid ${tab === t ? accentColor : C.border}`,
               transition: 'color 0.15s',
               textTransform: 'capitalize',
             }}
@@ -841,19 +829,18 @@ function RawSection({ label, value, isError }) {
 
 // ─── Button ──────────────────────────────────────────────────────────────────
 function Btn({ onClick, disabled, color, outline, children }) {
-  const bg = outline ? 'transparent' : color;
-  const border = color;
-  const fg = outline ? color : '#fff';
+  const bg = disabled || outline ? C.surfaceHi : color;
+  const border = disabled || outline ? C.border : color;
+  const fg = disabled ? C.textDim : outline ? C.text : C.bg;
   return (
     <button
       onClick={onClick}
       disabled={disabled}
       style={{
-        background: bg, border: `1.5px solid ${border}`,
-        color: fg, padding: '7px 18px',
-        borderRadius: 7, cursor: disabled ? 'not-allowed' : 'pointer',
-        fontWeight: 700, fontSize: '0.82rem', letterSpacing: '0.02em',
-        opacity: disabled ? 0.45 : 1, transition: 'opacity 0.15s',
+        background: bg, border: `1px solid ${border}`,
+        color: fg, padding: '8px 13px',
+        borderRadius: 6, cursor: disabled ? 'not-allowed' : 'pointer',
+        fontWeight: 600, fontSize: '0.78rem', letterSpacing: '0.005em',
       }}
     >
       {children}
@@ -863,6 +850,7 @@ function Btn({ onClick, disabled, color, outline, children }) {
 
 // ─── Main DriftControl Component ─────────────────────────────────────────────
 export default function DriftControl() {
+  const [theme, setTheme] = useState('light');
   const [mode, setMode]               = useState('idle');
   const [mutation, setMutation]       = useState(null);
   const [registered, setRegistered]   = useState(false);
@@ -881,6 +869,11 @@ export default function DriftControl() {
 
   // ── Real SSE Listeners ────────────────────────────────────────────────────
   useEffect(() => {
+    const storedTheme = localStorage.getItem('kintsugi-theme');
+    const resolvedTheme = storedTheme || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    setTheme(resolvedTheme);
+    document.documentElement.classList.toggle('dark', resolvedTheme === 'dark');
+
     const coreEs = new EventSource(`${CORE}/events`);
     coreEs.onopen  = () => setCoreConn('connected');
     coreEs.onerror = () => setCoreConn('disconnected');
@@ -1084,11 +1077,17 @@ export default function DriftControl() {
   };
 
   const running = mode === 'running';
+  const toggleTheme = () => {
+    const nextTheme = theme === 'dark' ? 'light' : 'dark';
+    setTheme(nextTheme);
+    localStorage.setItem('kintsugi-theme', nextTheme);
+    document.documentElement.classList.toggle('dark', nextTheme === 'dark');
+  };
 
   return (
-    <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', margin: 0, background: C.bg, color: C.text, minHeight: '100vh' }}>
+    <div style={{ fontFamily: 'Inter, ui-sans-serif, system-ui, -apple-system, sans-serif', margin: 0, background: C.bg, color: C.text, minHeight: '100vh' }}>
       {/* ── Top Navigation Bar ── */}
-      <header style={{
+      <header className="demo-toolbar" style={{
         padding: '0 24px',
         height: 58,
         borderBottom: `1px solid ${C.border}`,
@@ -1104,47 +1103,49 @@ export default function DriftControl() {
         <div style={{
           background: running ? C.blueDim : mode === 'done' ? C.greenDim : C.surfaceHi,
           border: `1px solid ${running ? C.blue : mode === 'done' ? C.green : C.border}`,
-          borderRadius: 20, padding: '3px 12px', fontSize: '0.72rem',
+          borderRadius: 5, padding: '4px 9px', fontSize: '0.7rem',
           color: running ? C.blue : mode === 'done' ? C.green : C.textDim,
           fontWeight: 600,
         }}>
-          {running ? '⟳ Running' : mode === 'done' ? '✔ Completed' : '○ Idle'}
+          {running ? 'Running' : mode === 'done' ? 'Completed' : 'Idle'}
         </div>
-
-        {mutation && (
-          <div style={{
-            background: C.amberDim, border: `1px solid ${C.amber}50`,
-            borderRadius: 6, padding: '3px 10px', fontSize: '0.72rem',
-            color: C.amber, fontWeight: 600,
-          }}>
-            ⚡ Active Mutation: {mutation}
-          </div>
-        )}
 
         <div style={{ flex: 1 }} />
 
         <ConnPill label="core :8000" state={coreConn} />
         <ConnPill label="mock :5001" state={mockConn} />
 
-        <div style={{ display: 'flex', gap: 8, marginLeft: 8 }}>
-          <Btn onClick={reset} disabled={running} color={C.teal} outline>Reset</Btn>
-          <Btn onClick={mutate} disabled={running} color={C.amber} outline>Mutate API (M5)</Btn>
-          <Btn onClick={runBoth} disabled={running} color={C.red}>▶ Run Both</Btn>
-        </div>
+        <button type="button" aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`} title="Toggle color theme" onClick={toggleTheme} style={{ background: C.surfaceHi, color: C.text, border: `1px solid ${C.border}`, borderRadius: 6, padding: '7px 10px', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600 }}>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</button>
       </header>
 
+      <section className="workspace-head">
+        <div className="workspace-copy">
+          <div className="eyebrow">DEVELOPER SANDBOX <span>/</span> RECOVERY TEST</div>
+          <h1>Schema drift recovery</h1>
+          <p>Compare a direct API call with healr’s contract-aware adapter against the same mutated endpoint.</p>
+          <div className="endpoint-line"><span className="method-tag">POST</span><code>{MOCK}{TOOL.path}</code><span className="endpoint-separator">·</span><span>Scenario M5</span></div>
+        </div>
+        <div className="workspace-actions">
+          {mutation && <div className="mutation-label"><span>Active mutation</span><strong>{mutation}</strong></div>}
+          <div className="action-buttons">
+            <Btn onClick={reset} disabled={running} color={C.teal} outline>Reset</Btn>
+            <Btn onClick={mutate} disabled={running} color={C.amber}>Mutate API</Btn>
+            <Btn onClick={runBoth} disabled={running} color={C.teal}>{running ? 'Running…' : 'Run comparison'}</Btn>
+          </div>
+        </div>
+      </section>
+
       {/* ── Summary Overview Cards ── */}
-      {mode !== 'idle' && (
-        <div style={{ padding: '16px 24px', borderBottom: `1px solid ${C.border}`, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+      <div className="demo-summary">
           <SummaryCard
             label="Baseline Outcome"
-            value={baseline.status === 'ok' ? 'OK' : baseline.status === 'fail' ? 'FAILED' : 'RUNNING…'}
+            value={baseline.status === 'idle' ? 'READY' : baseline.status === 'ok' ? 'OK' : baseline.status === 'fail' ? 'FAILED' : 'RUNNING…'}
             sub={baseline.status === 'fail' ? '10 iterations exhausted without fix' : baseline.status === 'ok' ? 'succeeded unadapted' : ''}
             color={baseline.status === 'ok' ? C.green : baseline.status === 'fail' ? C.red : C.textDim}
           />
           <SummaryCard
             label="Healed Outcome"
-            value={healed.status === 'ok' ? 'RECOVERED' : healed.status === 'fail' ? 'HALTED' : 'RUNNING…'}
+            value={healed.status === 'idle' ? 'READY' : healed.status === 'ok' ? 'RECOVERED' : healed.status === 'fail' ? 'HALTED' : 'RUNNING…'}
             sub={healed.status === 'ok' ? `${healed.rounds} heal round(s) · dynamic adapter v${healed.version ?? 2}` : ''}
             color={healed.status === 'ok' ? C.green : healed.status === 'fail' ? C.red : C.textDim}
           />
@@ -1156,14 +1157,14 @@ export default function DriftControl() {
           />
           <SummaryCard
             label="Invariant Truth Check"
-            value={truth === null ? 'Checking…' : truth.error ? 'Unavailable' : (() => {
+            value={mode === 'idle' ? '—' : truth === null ? 'Checking…' : truth.error ? 'Unavailable' : (() => {
               if (!healed.data) return '—';
               const flat = healed.data.id !== undefined ? healed.data : (healed.data.result ?? healed.data);
               if (!flat) return '—';
               const ok = String(flat.id) === String(truth.id) && flat.name === truth.name && flat.email === truth.email;
               return ok ? 'MATCH' : 'MISMATCH';
             })()}
-            sub="Independent DB verification"
+            sub={mode === 'idle' ? 'Verified after the comparison runs' : 'Independent DB verification'}
             color={truth === null ? C.textDim : truth.error ? C.textDim : (() => {
               if (!healed.data || !truth) return C.textDim;
               const flat = healed.data.id !== undefined ? healed.data : (healed.data.result ?? healed.data);
@@ -1172,13 +1173,12 @@ export default function DriftControl() {
             })()}
           />
         </div>
-      )}
 
       {/* ── Main Comparison Panels ── */}
-      <main style={{ padding: '20px 24px', display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+      <main className="demo-main">
         <Pane
           side="baseline"
-          title="BASELINE"
+          title="Direct baseline"
           accentColor={C.red}
           status={baseline.status}
           iterations={baseline.iterations}
@@ -1191,7 +1191,7 @@ export default function DriftControl() {
         />
         <Pane
           side="healed"
-          title="HEALED"
+          title="Self-healing adapter"
           accentColor={C.teal}
           status={healed.status}
           rounds={healed.rounds}
@@ -1206,7 +1206,7 @@ export default function DriftControl() {
       </main>
 
       {/* ── Footer ── */}
-      <footer style={{
+      <footer className="demo-footer" style={{
         padding: '12px 24px',
         borderTop: `1px solid ${C.border}`,
         fontSize: '0.7rem', color: C.textDim,
@@ -1227,7 +1227,7 @@ export default function DriftControl() {
 
 function SummaryCard({ label, value, sub, color }) {
   return (
-    <div style={{
+    <div className="summary-card" style={{
       background: C.surface,
       border: `1px solid ${C.border}`,
       borderRadius: 10,
@@ -1235,13 +1235,13 @@ function SummaryCard({ label, value, sub, color }) {
       minWidth: 150,
       flex: '1 1 150px',
     }}>
-      <div style={{ fontSize: '0.64rem', color: C.textDim, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>
+      <div className="summary-label" style={{ fontSize: '0.64rem', color: C.textDim, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>
         {label}
       </div>
-      <div style={{ fontSize: '1.35rem', fontWeight: 800, color: color ?? C.text, fontFamily: 'monospace', lineHeight: 1 }}>
+      <div className="summary-value" style={{ fontSize: '1.35rem', fontWeight: 800, color: color ?? C.text, fontFamily: 'monospace', lineHeight: 1 }}>
         {value}
       </div>
-      {sub && <div style={{ fontSize: '0.68rem', color: C.textMid, marginTop: 4 }}>{sub}</div>}
+      {sub && <div className="summary-detail" style={{ fontSize: '0.68rem', color: C.textMid, marginTop: 4 }}>{sub}</div>}
     </div>
   );
 }
