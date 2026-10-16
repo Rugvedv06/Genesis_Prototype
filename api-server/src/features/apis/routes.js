@@ -6,6 +6,12 @@ import { append as appendAudit } from '../audit/index.js';
 import { cfg } from '../../config.js';
 import { validateUpstreamUrl } from '../http/url-policy.js';
 
+function publicConfig(config) {
+  const safe = { ...config };
+  delete safe.credentials;
+  return safe;
+}
+
 export function apisRoutes(app) {
   // GET /apis — list registered APIs and current versions
   app.get('/apis', (_req, res) => {
@@ -15,7 +21,7 @@ export function apisRoutes(app) {
   app.get('/apis/:apiId', (req, res) => {
     const api = registryStore.config(req.params.apiId);
     if (!api) return res.status(404).json({ ok: false, error: 'not_found' });
-    res.json({ apiId: req.params.apiId, config: api, tools: registryStore.list().filter((item) => item.apiId === req.params.apiId) });
+    res.json({ apiId: req.params.apiId, config: publicConfig(api), tools: registryStore.list().filter((item) => item.apiId === req.params.apiId) });
   });
 
   app.patch('/apis/:apiId/config', (req, res) => {
@@ -24,8 +30,9 @@ export function apisRoutes(app) {
     if (patch.mode) patch.healing = { ...(patch.healing ?? {}), mode: patch.mode };
     const config = registryStore.setConfig(req.params.apiId, patch);
     if (!config) return res.status(404).json({ ok: false, error: 'not_found' });
-    emit({ type: 'config.changed', apiId: req.params.apiId, config: { ...config, credentials: undefined } });
-    res.json({ ok: true, apiId: req.params.apiId, config });
+    const safeConfig = publicConfig(config);
+    emit({ type: 'config.changed', apiId: req.params.apiId, config: safeConfig });
+    res.json({ ok: true, apiId: req.params.apiId, config: safeConfig });
   });
 
   // POST /apis — register an API (§4.1 payload). Re-registering replaces atomically.

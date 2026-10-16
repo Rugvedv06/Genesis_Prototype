@@ -8,12 +8,17 @@ import { iso } from '../../lib/time.js';
 import { sha256, stableStringify } from '../../lib/hash.js';
 import { compileAdapter } from './compile.js';
 import { cfg } from '../../config.js';
+import { clearNegativeForApi } from '../safety/circuit.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const DEFAULT_DATA_DIR = join(__dirname, '..', '..', '..', 'data');
 const DATA_DIR = cfg.dataDir ?? DEFAULT_DATA_DIR;
 const REGISTRY_FILE = join(DATA_DIR, 'registry.json');
+
+// Registry values are JSON-shaped data. Never let callers retain references to
+// the mutable in-memory history: a mutation must go through commit/rollback.
+const copy = (value) => value == null ? value : structuredClone(value);
 
 function ensureDir() {
   if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
@@ -78,6 +83,8 @@ export class RegistryStore {
   // Register a single tool within an existing or new API. Used internally by
   // registerApi; kept for backward compatibility.
   register(apiId, tool, adapter, risk = 'low', config = {}) {
+    adapter = copy(adapter);
+    config = copy(config);
     ensureDir();
     if (!this._byApi[apiId]) this._byApi[apiId] = { tools: {}, config, epoch: 0 };
     if (!this._byApi[apiId].tools) this._byApi[apiId].tools = {};
@@ -110,12 +117,13 @@ export class RegistryStore {
     }
     this._compile(apiId, tool, version, versionObj);
     this._snapshot();
-    return versionObj;
+    return copy(versionObj);
   }
 
   // Replace an entire API atomically: re-registering resets to clean v1 instead
   // of stacking versions. Bumps the API epoch.
   registerApi(apiId, payload) {
+    payload = copy(payload);
     const { baseUrl, specUrl, credentials, healing, tools } = payload;
     ensureDir();
     const existing = this._byApi[apiId];
@@ -174,6 +182,7 @@ export class RegistryStore {
 
   removeApi(apiId) {
     if (!this._byApi[apiId]) return false;
+    clearNegativeForApi(apiId);
     delete this._byApi[apiId];
     this._snapshot();
     return true;
@@ -181,12 +190,13 @@ export class RegistryStore {
 
   config(apiId) {
     const api = this._byApi[apiId];
-    return api ? api.config : null;
+    return api ? copy(api.config) : null;
   }
 
   setConfig(apiId, patch) {
     const api = this._byApi[apiId];
     if (!api) return null;
+    patch = copy(patch);
     const { mode, confidenceThreshold, maxRounds, tier2, healing, ...rest } = patch;
     api.config = {
       ...api.config,
@@ -197,7 +207,7 @@ export class RegistryStore {
       healing: { ...api.config.healing, ...healing, ...(mode ? { mode } : {}) },
     };
     this._snapshot();
-    return api.config;
+    return copy(api.config);
   }
 
   _compile(apiId, tool, version, versionObj) {
@@ -210,16 +220,24 @@ export class RegistryStore {
     if (!entry) return null;
     const cur = entry.current;
     return {
+      epoch: this._byApi[apiId].epoch ?? 0,
       version: cur.version,
-      versionObj: cur,
-      compiled: this._compiled.get(`${this._key(apiId, tool)}:v${cur.version}`),
+      versionObj: copy(cur),
+      compiled: (() => {
+        const compiled = this._compiled.get(`${this._key(apiId, tool)}:v${cur.version}`);
+        return compiled ? {
+          buildRequest: (...args) => compiled.buildRequest(...args),
+          extract: (...args) => compiled.extract(...args),
+          adapterHash: compiled.adapterHash,
+        } : null;
+      })(),
       versions: entry.versions.map((v) => ({
         version: v.version,
         parent: v.parent,
         rollbackOf: v.rollbackOf,
         createdAt: v.createdAt,
         origin: v.origin,
-        change: v.change,
+        change: copy(v.change),
       })),
     };
   }
@@ -234,9 +252,9 @@ export class RegistryStore {
       tool: v.tool,
       createdAt: v.createdAt,
       origin: v.origin,
-      change: v.change,
+      change: copy(v.change),
       adapterHash: v.adapter ? sha256(stableStringify(v.adapter)) : null,
-      meta: v.meta,
+      meta: copy(v.meta),
     }));
   }
 
@@ -252,11 +270,10 @@ export class RegistryStore {
       tool: v.tool,
       createdAt: v.createdAt,
       origin: v.origin,
-      change: v.change,
+      change: copy(v.change),
       adapterHash: v.adapter ? sha256(stableStringify(v.adapter)) : null,
-      meta: v.meta,
-      adapter: v.adapter,
-      meta: v.meta,
+      meta: copy(v.meta),
+      adapter: copy(v.adapter),
     };
   }
 
@@ -270,14 +287,16 @@ export class RegistryStore {
     const afterOps = after.adapter.request ?? [];
     const same = (a, b) => stableStringify(a) === stableStringify(b);
     return {
-      added: afterOps.filter((op) => !beforeOps.some((old) => same(old, op))),
-      removed: beforeOps.filter((op) => !afterOps.some((next) => same(next, op))),
-      requestBefore: before.adapter,
-      requestAfter: after.adapter,
+      added: copy(afterOps.filter((op) => !beforeOps.some((old) => same(old, op)))),
+      removed: copy(beforeOps.filter((op) => !afterOps.some((next) => same(next, op)))),
+      requestBefore: copy(before.adapter),
+      requestAfter: copy(after.adapter),
     };
   }
 
   commit(apiId, tool, adapter, change, origin = 'heal') {
+    adapter = copy(adapter);
+    change = copy(change);
     const entry = this._toolEntry(apiId, tool);
     if (!entry) throw new Error(`registry.commit: ${apiId}/${tool} not registered`);
     const version = entry.versions.length + 1;
@@ -289,14 +308,14 @@ export class RegistryStore {
       createdAt: iso(),
       adapter,
       origin,
-      meta: entry.current.meta,
+      meta: copy(entry.current.meta),
       change: change ?? null,
     };
     entry.versions.push(versionObj);
     entry.current = versionObj;
     this._compile(apiId, tool, version, versionObj);
     this._snapshot();
-    return versionObj;
+    return copy(versionObj);
   }
 
   rollback(apiId, tool, toVersion) {
@@ -311,16 +330,16 @@ export class RegistryStore {
       rollbackOf: toVersion,
       tool,
       createdAt: iso(),
-      adapter: target.adapter,
+      adapter: copy(target.adapter),
       origin: 'rollback',
-      meta: target.meta,
+      meta: copy(target.meta),
       change: null,
     };
     entry.versions.push(versionObj);
     entry.current = versionObj;
     this._compile(apiId, tool, version, versionObj);
     this._snapshot();
-    return versionObj;
+    return copy(versionObj);
   }
 
   list() {

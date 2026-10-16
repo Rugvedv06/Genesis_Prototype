@@ -5,7 +5,7 @@
 // No Gemini key required (baseline checks the scripted fallback path).
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
-import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -15,6 +15,43 @@ const MOCK_ENTRY = join(ROOT, 'demo-server-and-client/server/src/server.js');
 
 let results = [];
 let failures = 0;
+const children = new Set();
+const servers = new Set();
+const tempDirs = new Set();
+
+function startChild(...args) {
+  const child = spawn(...args);
+  children.add(child);
+  child.once('exit', () => children.delete(child));
+  return child;
+}
+
+async function closeServer(server) {
+  if (!server.listening) { servers.delete(server); return; }
+  await new Promise((resolve) => server.close(resolve));
+  servers.delete(server);
+}
+
+async function cleanup() {
+  for (const server of [...servers]) await closeServer(server).catch(() => {});
+  const active = [...children];
+  for (const child of active) {
+    if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM');
+  }
+  await Promise.all(active.map((child) => new Promise((resolve) => {
+    if (child.exitCode !== null || child.signalCode !== null) return resolve();
+    const timer = setTimeout(() => { child.kill('SIGKILL'); resolve(); }, 2500);
+    child.once('exit', () => { clearTimeout(timer); resolve(); });
+  })));
+  for (const dir of tempDirs) rmSync(dir, { recursive: true, force: true });
+  tempDirs.clear();
+}
+
+for (const [signal, code] of [['SIGINT', 130], ['SIGTERM', 143]]) {
+  process.once(signal, () => {
+    cleanup().finally(() => { process.exitCode = code; });
+  });
+}
 
 function check(name, cond, detail = '') {
   const ok = Boolean(cond);
@@ -24,11 +61,16 @@ function check(name, cond, detail = '') {
 }
 
 async function freePort(exclude = []) {
-  for (let attempt = 0; attempt < 30; attempt += 1) {
+  // Ask the OS for an ephemeral port, release it cleanly, and retry if it
+  // collides with an excluded port or the allocator returns an invalid value.
+  for (let attempt = 0; attempt < 100; attempt += 1) {
     const p = await new Promise((resolve) => {
       const s = createServer();
-      s.listen(0, () => { const port = s.address().port; s.close(() => resolve(port)); });
-      s.on('error', () => resolve(0));
+      s.once('error', () => resolve(0));
+      s.listen({ host: '127.0.0.1', port: 0, exclusive: true }, () => {
+        const port = s.address()?.port ?? 0;
+        s.close((err) => resolve(err ? 0 : port));
+      });
     });
     if (p > 0 && !exclude.includes(p)) return p;
     await new Promise((r) => setTimeout(r, 100));
@@ -59,6 +101,7 @@ async function main() {
   await new Promise((r) => setTimeout(r, 300));
   const mockPort = await freePort([corePort]);
   const dataDir = mkdtempSync(join(tmpdir(), 'healr-verify-'));
+  tempDirs.add(dataDir);
   const env = {
     ...process.env,
     PORT: String(corePort),
@@ -73,8 +116,8 @@ async function main() {
 
   const coreEnv = { ...env, PORT: String(corePort) };
   const mockEnv = { ...env, PORT: String(mockPort) };
-  const core = spawn('node', [CORE_ENTRY], { cwd: join(ROOT, 'api-server'), env: coreEnv, stdio: ['ignore', 'pipe', 'pipe'] });
-  const mock = spawn('node', [MOCK_ENTRY], { cwd: join(ROOT, 'demo-server-and-client/server'), env: mockEnv, stdio: ['ignore', 'pipe', 'pipe'] });
+  const core = startChild('node', [CORE_ENTRY], { cwd: join(ROOT, 'api-server'), env: coreEnv, stdio: ['ignore', 'pipe', 'pipe'] });
+  const mock = startChild('node', [MOCK_ENTRY], { cwd: join(ROOT, 'demo-server-and-client/server'), env: mockEnv, stdio: ['ignore', 'pipe', 'pipe'] });
   core.stdout.on('data', (d) => process.stdout.write(`[core] ${d}`));
   core.stderr.on('data', (d) => process.stderr.write(`[core-err] ${d}`));
   mock.stdout.on('data', (d) => process.stdout.write(`[mock] ${d}`));
@@ -144,7 +187,7 @@ async function main() {
   {
     core.kill('SIGTERM');
     await new Promise((r) => setTimeout(r, 1000));
-    const core2 = spawn('node', [CORE_ENTRY], { cwd: join(ROOT, 'api-server'), env, stdio: ['ignore', 'pipe', 'pipe'] });
+    const core2 = startChild('node', [CORE_ENTRY], { cwd: join(ROOT, 'api-server'), env, stdio: ['ignore', 'pipe', 'pipe'] });
     for (let i = 0; i < 30; i += 1) {
       const h = await http(`${coreUrl}/health`);
       if (h.status === 200) break;
@@ -155,7 +198,7 @@ async function main() {
     core2.kill('SIGTERM');
     await new Promise((r) => setTimeout(r, 500));
     // restart core again for remaining checks
-    const core3 = spawn('node', [CORE_ENTRY], { cwd: join(ROOT, 'api-server'), env, stdio: ['ignore', 'pipe', 'pipe'] });
+    const core3 = startChild('node', [CORE_ENTRY], { cwd: join(ROOT, 'api-server'), env, stdio: ['ignore', 'pipe', 'pipe'] });
     for (let i = 0; i < 30; i += 1) {
       const h = await http(`${coreUrl}/health`);
       if (h.status === 200) break;
@@ -170,7 +213,7 @@ async function main() {
     await new Promise((r) => setTimeout(r, 500));
     await new Promise((r) => setTimeout(r, 300));
     const mockPort2 = await freePort([corePort]);
-    const mock2 = spawn('node', [MOCK_ENTRY], { cwd: join(ROOT, 'demo-server-and-client/server'), env: { ...env, PORT: String(mockPort2), MOCK_URL: `http://localhost:${mockPort2}` }, stdio: ['ignore', 'pipe', 'pipe'] });
+    const mock2 = startChild('node', [MOCK_ENTRY], { cwd: join(ROOT, 'demo-server-and-client/server'), env: { ...env, PORT: String(mockPort2), MOCK_URL: `http://localhost:${mockPort2}` }, stdio: ['ignore', 'pipe', 'pipe'] });
     const mockUrl2 = `http://localhost:${mockPort2}`;
     for (let i = 0; i < 30; i += 1) {
       const h = await http(`${mockUrl2}/health`);
@@ -195,7 +238,7 @@ async function main() {
     await new Promise((r) => setTimeout(r, 500));
     await new Promise((r) => setTimeout(r, 300));
     const mockPort3 = await freePort([corePort]);
-    const mock3 = spawn('node', [MOCK_ENTRY], { cwd: join(ROOT, 'demo-server-and-client/server'), env: { ...env, PORT: String(mockPort3), MOCK_URL: `http://localhost:${mockPort3}` }, stdio: ['ignore', 'pipe', 'pipe'] });
+    const mock3 = startChild('node', [MOCK_ENTRY], { cwd: join(ROOT, 'demo-server-and-client/server'), env: { ...env, PORT: String(mockPort3), MOCK_URL: `http://localhost:${mockPort3}` }, stdio: ['ignore', 'pipe', 'pipe'] });
     activeMockUrl = `http://localhost:${mockPort3}`;
     for (let i = 0; i < 30; i += 1) {
       const h = await http(`${activeMockUrl}/health`);
@@ -226,7 +269,12 @@ async function main() {
     const ownIds = rs.every((r, i) => r.json?.data?.id === ids[i]);
     // Each caller (leader + followers) must report healed with the 4 committed ops
     const allHealed4 = rs.every((r) => r.json?.meta?.healed === true && (r.json?.meta?.ops?.length ?? 0) === 4);
-    check('Concurrency: 3 parallel calls return their own ids, all heal with 4 ops', ownIds && allHealed4, `ids:${rs.map((r) => r.json?.data?.id).join(',')} healed4:${allHealed4} codes:${rs.map((r) => r.json?.error?.code ?? 'ok').join(',')}`);
+    const versions = await http(`${coreUrl}/apis/demo-users/tools/get_user/versions`);
+    const singleCommit = versions.json?.versions?.length === 2
+      && versions.json.versions[1]?.version === 2
+      && versions.json.versions[1]?.origin === 'heal';
+    const sameVersion = rs.every((r) => r.json?.meta?.version === 2);
+    check('Concurrency: 3 parallel calls return their own ids, share one heal commit', ownIds && allHealed4 && singleCommit && sameVersion, `ids:${rs.map((r) => r.json?.data?.id).join(',')} healed4:${allHealed4} version2:${sameVersion} singleCommit:${singleCommit} codes:${rs.map((r) => r.json?.error?.code ?? 'ok').join(',')}`);
   }
 
   // Check 8: Missing credential — restart core without TENANT_ID (registry
@@ -234,7 +282,7 @@ async function main() {
   {
     globalThis._core3?.kill('SIGTERM');
     await new Promise((r) => setTimeout(r, 800));
-    const coreNoCred = spawn('node', [CORE_ENTRY], { cwd: join(ROOT, 'api-server'), env: { ...coreEnv, TENANT_ID: '' }, stdio: ['ignore', 'pipe', 'pipe'] });
+    const coreNoCred = startChild('node', [CORE_ENTRY], { cwd: join(ROOT, 'api-server'), env: { ...coreEnv, TENANT_ID: '' }, stdio: ['ignore', 'pipe', 'pipe'] });
     for (let i = 0; i < 40; i += 1) {
       const h = await http(`${coreUrl}/health`);
       if (h.status === 200) break;
@@ -243,7 +291,7 @@ async function main() {
     const r = await postJSON(`${coreUrl}/apis/demo-users/tools/get_user/invoke`, cleanBody);
     coreNoCred.kill('SIGTERM');
     await new Promise((res) => setTimeout(res, 800));
-    const core4 = spawn('node', [CORE_ENTRY], { cwd: join(ROOT, 'api-server'), env: coreEnv, stdio: ['ignore', 'pipe', 'pipe'] });
+    const core4 = startChild('node', [CORE_ENTRY], { cwd: join(ROOT, 'api-server'), env: coreEnv, stdio: ['ignore', 'pipe', 'pipe'] });
     Object.assign(globalThis, { _core4: core4 });
     for (let i = 0; i < 40; i += 1) {
       const h = await http(`${coreUrl}/health`);
@@ -276,7 +324,11 @@ async function main() {
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end('{}');
     });
-    await new Promise((r) => stub.listen(stubPort, r));
+    servers.add(stub);
+    await new Promise((resolve, reject) => {
+      stub.once('error', reject);
+      stub.listen(stubPort, '127.0.0.1', resolve);
+    });
     const stubUrl = `http://localhost:${stubPort}`;
     const probeTool = (name, path, sideEffects) => ({
       name, method: 'POST', path, risk: 'low', sideEffects,
@@ -290,7 +342,7 @@ async function main() {
     });
     const rr = await postJSON(`${coreUrl}/apis/retry-probe/tools/read_probe/invoke`, { args: { probe_id: 'r1' } });
     const wr = await postJSON(`${coreUrl}/apis/retry-probe/tools/write_probe/invoke`, { args: { probe_id: 'w1' } });
-    stub.close();
+    await closeServer(stub);
     const detail = `readHits:${readHits} writeHits:${writeHits} rCode:${rr.json?.error?.code} wCode:${wr.json?.error?.code}`;
     check('Write/read retry distinction (read retried once, write never retried)', readHits === 2 && writeHits === 1 && rr.json?.error?.code === 'upstream_error' && wr.json?.error?.code === 'upstream_error', detail);
   }
@@ -306,19 +358,24 @@ async function main() {
   // Check 13: No raw args on the SSE stream (G18: call.started emits argKeys/argCount only)
   {
     const sentinel = '777000111222'; // numeric so the v2 adapter's coerce stays lossless
+    const runId = `verify_sse_${Date.now()}`;
     const ctrl = new AbortController();
-    const t0 = Date.now();
     const startedEvents = [];
     let terminal = null; // 'succeeded' | 'failed'
     let connected = false;
+    let invokeResult;
     try {
+      // Complete the request first, then replay the buffered stream. Correlating
+      // by runId avoids races between fetch header delivery and the first event.
+      invokeResult = await postJSON(`${coreUrl}/apis/demo-users/tools/get_user/invoke`, {
+        args: { user_id: sentinel }, runId,
+      });
       const resp = await fetch(`${coreUrl}/events?since=0`, { signal: ctrl.signal });
       connected = resp.ok;
       const reader = resp.body.getReader();
       const dec = new TextDecoder();
-      const invokeP = postJSON(`${coreUrl}/apis/demo-users/tools/get_user/invoke`, { args: { user_id: sentinel } });
       let buf = '';
-      const deadline = Date.now() + 8000;
+      const deadline = Date.now() + 3000;
       while (Date.now() < deadline && !terminal) {
         const { value, done } = await reader.read();
         if (done) break;
@@ -329,18 +386,17 @@ async function main() {
           const line = part.split('\n').find((l) => l.startsWith('data: '));
           if (!line) continue;
           let e; try { e = JSON.parse(line.slice(6)); } catch { continue; }
-          if (!e.ts || e.ts < t0) continue; // ignore replayed history
+          if (e.runId !== runId) continue;
           if (e.type === 'call.started') startedEvents.push(e);
           if (e.type === 'call.succeeded') terminal = 'succeeded';
           if (e.type === 'call.failed') terminal = 'failed';
         }
       }
       ctrl.abort();
-      await invokeP.catch(() => {});
     } catch { /* aborted */ }
     const leak = startedEvents.some((e) => 'args' in e || JSON.stringify(e).includes(sentinel));
-    const detail = `connected:${connected} started:${startedEvents.length} terminal:${terminal} leak:${leak} argKeys:${JSON.stringify(startedEvents[0]?.argKeys)} argCount:${startedEvents[0]?.argCount}`;
-    check('No raw args on SSE stream (call.started has argKeys/argCount only)', connected && startedEvents.length >= 1 && terminal === 'succeeded' && !leak, detail);
+    const detail = `connected:${connected} status:${invokeResult?.status} started:${startedEvents.length} terminal:${terminal} leak:${leak} argKeys:${JSON.stringify(startedEvents[0]?.argKeys)} argCount:${startedEvents[0]?.argCount}`;
+    check('No raw args on SSE stream (call.started has argKeys/argCount only)', connected && invokeResult?.status === 200 && startedEvents.length === 1 && terminal === 'succeeded' && !leak, detail);
   }
 
   // Check 14: Baseline (scripted mode since no real Gemini key)
@@ -385,8 +441,8 @@ async function main() {
     const { execSync } = await import('node:child_process');
     try {
       const out = execSync('node --test "api-server/test/**/*.test.js" "demo-server-and-client/server/test/**/*.test.js"', { cwd: ROOT, encoding: 'utf8', timeout: 30000 });
-      const passMatch = out.match(/# pass (\d+)/);
-      const failMatch = out.match(/# fail (\d+)/);
+      const passMatch = out.match(/(?:#|ℹ)\s*pass\s+(\d+)/);
+      const failMatch = out.match(/(?:#|ℹ)\s*fail\s+(\d+)/);
       const pass = passMatch ? parseInt(passMatch[1], 10) : 0;
       const fail = failMatch ? parseInt(failMatch[1], 10) : 0;
       check('npm test green', pass > 0 && fail === 0, `pass:${pass} fail:${fail}`);
@@ -402,18 +458,10 @@ async function main() {
     for (const r of results) if (!r.ok) process.stdout.write(`  - ${r.name}: ${r.detail}\n`);
   }
 
-  // Cleanup
-  try { globalThis._core3?.kill('SIGTERM'); } catch {}
-  try { globalThis._core4?.kill('SIGTERM'); } catch {}
-  try { globalThis._mock3?.kill('SIGTERM'); } catch {}
-  core.kill('SIGTERM');
-  mock.kill('SIGTERM');
-  rmSync(dataDir, { recursive: true, force: true });
-
-  process.exit(failures > 0 ? 1 : 0);
+  process.exitCode = failures > 0 ? 1 : 0;
 }
 
 main().catch((err) => {
   process.stderr.write(`Acceptance script crashed: ${err.message}\n${err.stack}\n`);
-  process.exit(2);
-});
+  process.exitCode = 2;
+}).finally(cleanup);

@@ -30,17 +30,29 @@ export function recordHalt(apiId, tool) {
 }
 
 export function negativeHit(signature) {
-  const until = negative.get(signature);
-  if (!until) return false;
-  if (until <= Date.now()) {
+  const cached = negative.get(signature);
+  if (!cached) return false;
+  if (cached.until <= Date.now()) {
     negative.delete(signature);
     return false;
   }
   return true;
 }
 
-export function cacheNegative(signature) {
-  negative.set(signature, Date.now() + WINDOW_MS);
+export function negativeResult(signature) {
+  const cached = negative.get(signature);
+  return cached && cached.until > Date.now() ? cached.result : null;
+}
+
+export function cacheNegative(signature, result = { reason: 'unfixable_contract' }) {
+  negative.set(signature, { until: Date.now() + WINDOW_MS, result: structuredClone(result) });
+}
+
+export function clearNegativeForApi(apiId) {
+  const prefix = `${apiId}:`;
+  for (const signature of negative.keys()) {
+    if (signature.startsWith(prefix)) negative.delete(signature);
+  }
 }
 
 export function reset() {
@@ -55,6 +67,6 @@ export function snapshot() {
     open: [...states.entries()]
       .filter(([, state]) => state.until > now)
       .map(([key, state]) => ({ key, until: state.until })),
-    negativeEntries: [...negative.values()].filter((until) => until > now).length,
+    negativeEntries: [...negative.values()].filter(({ until }) => until > now).length,
   };
 }

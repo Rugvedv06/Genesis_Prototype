@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, appendFileSync, writeFileSync, copyFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, appendFileSync, writeFileSync, copyFileSync, unlinkSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { cfg } from '../../config.js';
@@ -22,9 +22,57 @@ function prepare(value, key = '') {
   return value;
 }
 
+function validRecordShape(record) {
+  return record !== null && typeof record === 'object' && !Array.isArray(record)
+    && Number.isInteger(record.index) && record.index >= 0
+    && typeof record.ts === 'string'
+    && (record.prevHash === null || (typeof record.prevHash === 'string' && /^[a-f0-9]{64}$/i.test(record.prevHash)))
+    && typeof record.hash === 'string' && /^[a-f0-9]{64}$/i.test(record.hash)
+    && typeof record.decision === 'string' && record.decision.length > 0;
+}
+
+function parseRecords(text) {
+  const records = [];
+  for (const line of text.split(/\r?\n/).filter(Boolean)) {
+    let record;
+    try {
+      record = JSON.parse(line);
+    } catch {
+      return { records, malformedAt: records.length, malformedReason: 'malformed_json' };
+    }
+    if (!validRecordShape(record)) return { records, malformedAt: records.length, malformedReason: 'malformed_record' };
+    records.push(record);
+  }
+  return { records, malformedAt: undefined, malformedReason: undefined };
+}
+
 function readRecords() {
-  if (!existsSync(FILE)) return [];
-  return readFileSync(FILE, 'utf8').split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
+  if (!existsSync(FILE)) return { records: [], malformedAt: undefined };
+  return parseRecords(readFileSync(FILE, 'utf8'));
+}
+
+function readAnchor() {
+  if (!existsSync(HEAD)) return { anchor: null, malformed: false };
+  try {
+    const anchor = JSON.parse(readFileSync(HEAD, 'utf8'));
+    const valid = anchor && typeof anchor === 'object'
+      && Number.isInteger(anchor.index) && anchor.index >= 0
+      && typeof anchor.hash === 'string' && /^[a-f0-9]{64}$/i.test(anchor.hash);
+    return valid ? { anchor, malformed: false } : { anchor: null, malformed: true };
+  } catch {
+    return { anchor: null, malformed: true };
+  }
+}
+
+function firstBrokenRecord(records) {
+  for (let index = 0; index < records.length; index += 1) {
+    const record = records[index];
+    const expected = sha256(stableStringify(Object.fromEntries(Object.entries(record).filter(([key]) => key !== 'hash'))));
+    if (record.index !== index || record.hash !== expected || record.prevHash !== (index ? records[index - 1].hash : null)) {
+      return index;
+    }
+  }
+  return undefined;
 }
 
 function ensureDir() {
@@ -33,7 +81,10 @@ function ensureDir() {
 
 export function append(input) {
   ensureDir();
-  const records = readRecords();
+  const { records, malformedAt, malformedReason } = readRecords();
+  if (malformedAt !== undefined) throw new Error(`audit_${malformedReason ?? 'malformed_record'} at index ${malformedAt}`);
+  const integrity = verify();
+  if (!integrity.ok) throw new Error(`audit_integrity_error: ${integrity.reason ?? 'invalid_chain'}`);
   const payload = prepare(input);
   const previous = records.at(-1);
   const record = {
@@ -49,24 +100,37 @@ export function append(input) {
 }
 
 export function list({ limit = 50, offset = 0, decision, apiId, tool } = {}) {
-  return readRecords()
+  return readRecords().records
     .filter((record) => (!decision || record.decision === decision) && (!apiId || record.apiId === apiId) && (!tool || record.tool === tool))
     .slice(offset, offset + limit);
 }
 
 export function verify() {
-  const records = readRecords();
-  let brokenAt;
-  for (let index = 0; index < records.length; index += 1) {
-    const record = records[index];
-    const expected = sha256(stableStringify(Object.fromEntries(Object.entries(record).filter(([key]) => key !== 'hash'))));
-    if (record.index !== index || record.hash !== expected || record.prevHash !== (index ? records[index - 1].hash : null)) {
-      brokenAt = index;
-      break;
-    }
-  }
-  const anchor = existsSync(HEAD) ? JSON.parse(readFileSync(HEAD, 'utf8')) : null;
+  const { records, malformedAt, malformedReason } = readRecords();
+  const { anchor, malformed: malformedHead } = readAnchor();
   const tail = records.at(-1);
+  if (malformedAt !== undefined) {
+    return {
+      ok: false,
+      count: records.length,
+      headHash: tail?.hash ?? null,
+      brokenAt: malformedAt,
+      reason: malformedReason ?? 'malformed_record',
+      malformed: true,
+      anchor,
+    };
+  }
+  if (malformedHead) {
+    return {
+      ok: false,
+      count: records.length,
+      headHash: tail?.hash ?? null,
+      reason: 'malformed_head',
+      malformed: true,
+      anchor: null,
+    };
+  }
+  const brokenAt = firstBrokenRecord(records);
   const tailMatches = !anchor || (tail && anchor.index === tail.index && anchor.hash === tail.hash);
   return {
     ok: brokenAt === undefined && tailMatches,
@@ -85,14 +149,19 @@ export function backup() {
 
 export function restore() {
   if (!existsSync(BACKUP)) return false;
-  copyFileSync(BACKUP, FILE);
-  const tail = readRecords().at(-1);
+  const backup = readFileSync(BACKUP, 'utf8');
+  const { records, malformedAt } = parseRecords(backup);
+  if (malformedAt !== undefined || firstBrokenRecord(records) !== undefined) return false;
+  writeFileSync(FILE, backup);
+  const tail = records.at(-1);
   if (tail) writeFileSync(HEAD, JSON.stringify({ index: tail.index, hash: tail.hash }));
-  return true;
+  else if (existsSync(HEAD)) unlinkSync(HEAD);
+  return verify().ok;
 }
 
 export function tamper(index, mode) {
-  const records = readRecords();
+  const { records, malformedAt } = readRecords();
+  if (malformedAt !== undefined) return false;
   if (!Number.isInteger(index) || !records[index] || !['edit', 'delete'].includes(mode)) return false;
   backup();
   if (mode === 'delete') records.splice(index, 1);
@@ -106,7 +175,7 @@ export function exportNdjson() {
 }
 
 export function head() {
-  const records = readRecords();
+  const { records } = readRecords();
   const tail = records.at(-1);
   return { count: records.length, headHash: tail?.hash ?? null, verified: verify().ok };
 }
