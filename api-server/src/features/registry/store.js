@@ -172,6 +172,14 @@ export class RegistryStore {
     return api ? api.config : null;
   }
 
+  setConfig(apiId, patch) {
+    const api = this._byApi[apiId];
+    if (!api) return null;
+    api.config = { ...api.config, ...patch, healing: { ...api.config.healing, ...patch.healing } };
+    this._snapshot();
+    return api.config;
+  }
+
   _compile(apiId, tool, version, versionObj) {
     const compiled = compileAdapter(versionObj.adapter);
     this._compiled.set(`${this._key(apiId, tool)}:v${version}`, compiled);
@@ -225,6 +233,25 @@ export class RegistryStore {
       origin: v.origin,
       change: v.change,
       adapterHash: v.adapter ? sha256(stableStringify(v.adapter)) : null,
+      adapter: v.adapter,
+      meta: v.meta,
+    };
+  }
+
+  diff(apiId, tool, from, to) {
+    const entry = this._toolEntry(apiId, tool);
+    if (!entry) return null;
+    const before = entry.versions.find((v) => v.version === from);
+    const after = entry.versions.find((v) => v.version === to);
+    if (!before || !after) return null;
+    const beforeOps = before.adapter.request ?? [];
+    const afterOps = after.adapter.request ?? [];
+    const same = (a, b) => stableStringify(a) === stableStringify(b);
+    return {
+      added: afterOps.filter((op) => !beforeOps.some((old) => same(old, op))),
+      removed: beforeOps.filter((op) => !afterOps.some((next) => same(next, op))),
+      requestBefore: before.adapter,
+      requestAfter: after.adapter,
     };
   }
 

@@ -9,6 +9,22 @@ export function apisRoutes(app) {
     res.json({ apis: registryStore.list() });
   });
 
+  app.get('/apis/:apiId', (req, res) => {
+    const api = registryStore.config(req.params.apiId);
+    if (!api) return res.status(404).json({ ok: false, error: 'not_found' });
+    res.json({ apiId: req.params.apiId, config: api, tools: registryStore.list().filter((item) => item.apiId === req.params.apiId) });
+  });
+
+  app.patch('/apis/:apiId/config', (req, res) => {
+    const allowed = ['mode', 'confidenceThreshold', 'maxRounds', 'tier2', 'healing'];
+    const patch = Object.fromEntries(Object.entries(req.body ?? {}).filter(([key]) => allowed.includes(key)));
+    if (patch.mode) patch.healing = { ...(patch.healing ?? {}), mode: patch.mode };
+    const config = registryStore.setConfig(req.params.apiId, patch);
+    if (!config) return res.status(404).json({ ok: false, error: 'not_found' });
+    emit({ type: 'config.changed', apiId: req.params.apiId, config: { ...config, credentials: undefined } });
+    res.json({ ok: true, apiId: req.params.apiId, config });
+  });
+
   // POST /apis — register an API (§4.1 payload). Re-registering replaces atomically.
   app.post('/apis', (req, res) => {
     const { apiId, baseUrl, specUrl, credentials, healing, tools } = req.body ?? {};
@@ -49,6 +65,12 @@ export function apisRoutes(app) {
       return res.status(404).json({ ok: false, error: 'not_found', message: `version ${n} not found` });
     }
     res.json(version);
+  });
+
+  app.get('/apis/:apiId/tools/:tool/diff', (req, res) => {
+    const diff = registryStore.diff(req.params.apiId, req.params.tool, Number(req.query.from), Number(req.query.to));
+    if (!diff) return res.status(404).json({ ok: false, error: 'not_found' });
+    res.json(diff);
   });
 
   // POST /apis/:apiId/tools/:tool/rollback — { "toVersion": 2 }

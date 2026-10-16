@@ -10,7 +10,10 @@ export function eventsRoute(app) {
     });
     res.flushHeaders();
     const sinceId = Number(req.get('Last-Event-ID') ?? req.query.since ?? 0);
-    const send = (e) => res.write(`id: ${e.id}\ndata: ${JSON.stringify(e)}\n\n`);
+    const apiId = req.query.apiId;
+    const types = req.query.types ? new Set(String(req.query.types).split(',').filter(Boolean)) : null;
+    const matches = (e) => (!apiId || e.apiId === apiId) && (!types || types.has(e.type));
+    const send = (e) => { if (matches(e)) res.write(`id: ${e.id}\ndata: ${JSON.stringify(e)}\n\n`); };
     bus.since(sinceId).forEach(send);
     const off = bus.on(send);
     const ka = setInterval(() => res.write(': ping\n\n'), 15000);

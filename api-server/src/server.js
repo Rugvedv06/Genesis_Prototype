@@ -10,13 +10,39 @@ import { log } from './lib/log.js';
 import { apisRoutes } from './features/apis/routes.js';
 import { eventsRoute } from './features/events/routes.js';
 import { invoke } from './features/executor/invoke.js';
+import { registryStore } from './features/registry/store.js';
+import { bus } from './features/events/bus.js';
+import { get as getTrace } from './features/events/trace-store.js';
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
 app.get('/health', (_req, res) => {
-  res.json({ ok: true, service: 'api-server', port: cfg.port, time: new Date().toISOString() });
+  res.json({ ok: true, service: 'api-server', port: cfg.port, version: '0.1.0', apis: registryStore.list().length, auditHead: null, time: new Date().toISOString() });
+});
+
+app.get('/state', (_req, res) => {
+  const apis = registryStore.list();
+  const grouped = new Map();
+  for (const item of apis) {
+    if (!grouped.has(item.apiId)) grouped.set(item.apiId, { apiId: item.apiId, baseUrl: registryStore.config(item.apiId)?.baseUrl, mode: registryStore.config(item.apiId)?.healing?.mode ?? 'enforce', tools: [] });
+    const current = registryStore.current(item.apiId, item.tool);
+    grouped.get(item.apiId).tools.push({
+      name: item.tool,
+      version: item.version,
+      status: 'healthy',
+      risk: item.risk,
+      sideEffects: current?.versionObj?.meta?.sideEffects ?? current?.versionObj?.adapter?.sideEffects ?? 'write',
+    });
+  }
+  res.json({ lastEventId: bus.since(0).at(-1)?.id ?? 0, apis: [...grouped.values()], metrics: {}, audit: { count: 0, headHash: null, verified: true }, cache: { entries: 0, hits: 0 }, circuit: [] });
+});
+
+app.get('/traces/:callId', (req, res) => {
+  const trace = getTrace(req.params.callId);
+  if (!trace) return res.status(404).json({ ok: false, error: 'not_found' });
+  res.json(trace);
 });
 
 // §4.5 core endpoints
