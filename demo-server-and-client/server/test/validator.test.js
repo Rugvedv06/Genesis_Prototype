@@ -1,8 +1,8 @@
 // Phase 1 Track C: golden tests for the mock mutation validator (§6 Phase 1).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { validateRequest } from '../src/mutations/validator.js';
-import { get } from '../src/mutations/catalogue.js';
+import { validateRequest, applyResponseMutation } from '../src/mutations/validator.js';
+import { get, ids } from '../src/mutations/catalogue.js';
 
 const M5 = get('M5');
 
@@ -51,4 +51,28 @@ test('M5: non-integer target.id returns type error', () => {
   assert.strictEqual(violated.status, 422);
   const types = violated.body.detail.map((d) => d.type);
   assert.ok(types.includes('type_error.integer'), 'expected type_error.integer');
+});
+
+test('M6 and M10 response mutations move the field while retaining the original truth source', () => {
+  const canonical = { result: { id: '123', name: 'Asha Rao', email: 'asha@example.com' } };
+  const nested = applyResponseMutation(canonical, get('M6').responseOps);
+  const renamed = applyResponseMutation(canonical, get('M10').responseOps);
+  assert.equal(nested.result.data.profile.name, 'Asha Rao');
+  assert.equal(nested.result.name, undefined);
+  assert.equal(renamed.result.full_name, 'Asha Rao');
+  assert.equal(renamed.result.name, undefined);
+  assert.equal(canonical.result.name, 'Asha Rao', 'mutation must not change the canonical truth object');
+  assert.deepEqual(get('M6').expectedOps.map((op) => op.op), ['remap_response_path']);
+  assert.deepEqual(get('M10').expectedOps.map((op) => op.op), ['remap_response_path']);
+});
+
+test('mutation catalogue exposes M6 and M10 response mutation metadata', () => {
+  assert.ok(ids().includes('M6'));
+  assert.ok(ids().includes('M10'));
+  for (const id of ['M6', 'M10']) {
+    const mutation = get(id);
+    assert.equal(mutation.category, 'response');
+    assert.equal(mutation.expected, 'heal');
+    assert.equal(mutation.route.path, '/api/users/get');
+  }
 });

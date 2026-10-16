@@ -7,7 +7,7 @@ loadEnv();
 import express from 'express';
 import cors from 'cors';
 import { get as getMutation, ids as mutationIds } from './mutations/catalogue.js';
-import { validateRequest } from './mutations/validator.js';
+import { validateRequest, applyResponseMutation } from './mutations/validator.js';
 import { eventsRoute } from './events/routes.js';
 import { baselineRoutes } from './baseline-agent/routes.js';
 
@@ -49,7 +49,11 @@ app.get('/admin/mutations', (_req, res) => {
   res.json({
     mutations: mutationIds().map((id) => {
       const m = getMutation(id);
-      return { id, label: m.label, category: m.category ?? 'contract', route: m.route, recoverable: id !== 'M9', expected: m.expected ?? 'heal' };
+      return {
+        id, label: m.label, category: m.category ?? 'contract', route: m.route,
+        recoverable: (m.expected ?? 'heal') !== 'halt', expected: m.expected ?? 'heal',
+        expectedOps: m.expectedOps ?? [],
+      };
     }),
   });
 });
@@ -198,7 +202,10 @@ app.post('/api/users/get', (req, res) => {
     recordRequest(req.path, violated.status, startedAt);
     return res.status(violated.status).json(violated.body);
   }
-  const body = mutation ? mutation.transformResponse(req.body) : { result: { id: req.body.user_id ?? 'unknown', name: 'Asha Rao', email: 'asha@example.com' } };
+  const baseResponse = mutation?.transformResponse
+    ? mutation.transformResponse(req.body)
+    : { result: { id: req.body.user_id ?? 'unknown', name: 'Asha Rao', email: 'asha@example.com' } };
+  const body = applyResponseMutation(baseResponse, mutation?.responseOps);
   recordRequest(req.path, 200, startedAt);
   res.json(body);
 });

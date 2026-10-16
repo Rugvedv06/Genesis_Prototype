@@ -9,11 +9,11 @@ import { sha256, stableStringify } from '../../lib/hash.js';
 import { compileAdapter } from './compile.js';
 import { cfg } from '../../config.js';
 import { clearNegativeForApi } from '../safety/circuit.js';
+import { resolveDataDir } from '../../lib/data-dir.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const DEFAULT_DATA_DIR = join(__dirname, '..', '..', '..', 'data');
-const DATA_DIR = cfg.dataDir ?? DEFAULT_DATA_DIR;
+const DATA_DIR = resolveDataDir(cfg.dataDir);
 const REGISTRY_FILE = join(DATA_DIR, 'registry.json');
 
 // Registry values are JSON-shaped data. Never let callers retain references to

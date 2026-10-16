@@ -26,3 +26,26 @@ export function validateRequest(mutation, body, headers) {
   // 3. All layers pass -> the request matches the mutated contract.
   return null;
 }
+
+export function applyResponseMutation(response, operations = []) {
+  const result = structuredClone(response);
+  for (const operation of operations) {
+    if (operation.op !== 'move' || typeof operation.from !== 'string' || typeof operation.to !== 'string') {
+      throw new Error('unsupported mock response mutation');
+    }
+    const from = operation.from.split('.');
+    const to = operation.to.split('.');
+    let source = result;
+    for (const part of from.slice(0, -1)) source = source?.[part];
+    if (!source || !Object.hasOwn(source, from.at(-1))) continue;
+    const value = source[from.at(-1)];
+    delete source[from.at(-1)];
+    let target = result;
+    for (const part of to.slice(0, -1)) {
+      target[part] ??= {};
+      target = target[part];
+    }
+    target[to.at(-1)] = value;
+  }
+  return result;
+}

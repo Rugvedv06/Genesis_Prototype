@@ -9,6 +9,7 @@ export const M5 = {
   id: 'M5',
   label: 'target nesting + rename + string->integer coerce + tenant header',
   route: { method: 'POST', path: '/api/users/get' },
+  expectedOps: ['add_header', 'move_field', 'rename_field', 'coerce_type'],
   // what the mutated contract expects
   headers: [
     { name: 'X-Tenant', required: true,
@@ -62,6 +63,7 @@ export const M9 = {
   label: 'unconfigured bearer auth + approval code',
   category: 'unrecoverable',
   expected: 'halt',
+  expectedOps: [],
   route: { method: 'POST', path: '/api/users/update-email' },
   headers: [
     { name: 'Authorization', required: true, error: { error: 'missing_auth', scheme: 'Bearer', header: 'Authorization' } },
@@ -75,7 +77,33 @@ export const M9 = {
   },
 };
 
-export const CATALOGUE = { M5, M9 };
+// Response mutations are declarative path operations applied by the shared
+// mock response transformer. Their truth remains the unmutated user record.
+export const M6 = {
+  id: 'M6',
+  label: 'response name moved under result.data.profile',
+  category: 'response',
+  expected: 'heal',
+  route: { method: 'POST', path: '/api/users/get' },
+  headers: [],
+  body: { layers: [] },
+  responseOps: [{ op: 'move', from: 'result.name', to: 'result.data.profile.name' }],
+  expectedOps: [{ op: 'remap_response_path', logical: 'name', from: 'result.name', to: 'result.data.profile.name' }],
+};
+
+export const M10 = {
+  id: 'M10',
+  label: 'response name renamed to full_name',
+  category: 'response',
+  expected: 'heal',
+  route: { method: 'POST', path: '/api/users/get' },
+  headers: [],
+  body: { layers: [] },
+  responseOps: [{ op: 'move', from: 'result.name', to: 'result.full_name' }],
+  expectedOps: [{ op: 'remap_response_path', logical: 'name', from: 'result.name', to: 'result.full_name' }],
+};
+
+export const CATALOGUE = { M5, M9, M6, M10 };
 export function get(id) {
   return CATALOGUE[id];
 }

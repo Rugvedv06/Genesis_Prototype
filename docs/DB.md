@@ -2,11 +2,13 @@
 
 ## Status and goal
 
-This document defines the durable persistence layer for Healr. The repository currently has **file-backed gateway persistence**, not a database: API registry/version snapshots are written to `api-server/data/registry.json`; audit entries and the audit-chain anchor are written to `audit.jsonl` and `audit.head.json`. Calls, events, traces, metrics, circuits, and negative-cache state are otherwise held in process memory. There is no database-backed operational log today, and Redis is not connected to the application.
+This document defines the durable persistence layer for Healr. PostgreSQL and Redis local Compose services are configured. The application now has a PostgreSQL driver, bounded pool, checksummed migration runner, schema through migration 0005, readiness check, transaction helper, initial registry/audit/invocation/event repository functions, and a dry-run file-import preflight. Those repository functions are not yet connected to routes. Runtime authority has **not** been cut over: API registry/version snapshots are still written to `api-server/data/registry.json`; audit entries and the audit-chain anchor are still written to `audit.jsonl` and `audit.head.json`. Calls, events, traces, metrics, circuits, and negative-cache state remain process-local. Redis is not connected to the application. The persistence milestone is therefore in progress, not complete.
 
 The target is PostgreSQL as the durable source of truth for configuration, adapter history, invocation/event history, audit decisions, and verified patch candidates. Redis is an explicitly disposable acceleration and coordination layer. Losing Redis must never lose application history or change whether an adapter is safe to apply.
 
 This plan is part of the completion roadmap. `docs/NEW_PLAN.md` links this design and adds the persistence milestone before feature expansion that depends on durable history, cache state, and metrics.
+
+The implementation work packages, cutover decisions, and edge-case matrix are in [MILESTONE_1_5_PLAN.md](./MILESTONE_1_5_PLAN.md). Use that document for execution order; this document remains the data/operations design reference.
 
 ## Local services
 
@@ -15,6 +17,8 @@ The root [`docker-compose.yml`](../docker-compose.yml) starts PostgreSQL and Red
 ```bash
 docker compose up -d postgres redis
 docker compose ps
+# Apply versioned PostgreSQL schema migrations
+npm run db:migrate
 # After development: docker compose down
 ```
 
@@ -92,7 +96,7 @@ One metadata row per credential alias, not per secret value: `(workspace_id, api
 
 ### `tools`
 
-One current tool record per API tool: `(workspace_id, api_id, tool_name)` primary key; `current_version` positive; `risk` constrained to the supported risk enum; `side_effects` constrained to `read|write`; timestamps. Composite FK to `apis`. Add a deferred composite FK `(workspace_id, api_id, tool_name, current_version)` to the matching version row so the current pointer cannot reference a missing version.
+One current tool record per API tool: `(workspace_id, api_id, tool_name)` primary key; `current_version` positive; `risk` constrained to the supported risk enum; `side_effects` constrained to `read|write|none` (the existing API contract uses `none` for tools with no side effects); timestamps. Composite FK to `apis`. Add a deferred composite FK `(workspace_id, api_id, tool_name, current_version)` to the matching version row so the current pointer cannot reference a missing version.
 
 ### `adapter_versions`
 
@@ -118,7 +122,7 @@ Unique `(workspace_id, api_id, tool_name, version)`. `parent_version` must be le
 
 One durable summary per gateway call, including success, rejection, safe halt, cache hit, timeout, and internal failure.
 
-`call_id` text primary key; `run_id` nullable text; `workspace_id`; nullable `api_id`/`tool_name` snapshots; `started_at`; nullable `finished_at`; `outcome` constrained to `running|succeeded|healed|halted|rejected|failed`; `initial_version` and `final_version`; `http_status`; `error_code`; `halt_reason`; `healing_mode`; `tier`; `rounds`; `duration_ms`; cache-hit boolean; token counts default zero; sanitized summary JSONB.
+`call_id` text primary key; `run_id` nullable text; `workspace_id`; nullable `api_id`/`tool_name` snapshots; `started_at`; nullable `finished_at`; `outcome` constrained to `running|succeeded|healed|halted|rejected|failed|outcome_uncertain`; `initial_version` and `final_version`; `http_status`; `error_code`; `halt_reason`; `healing_mode`; `tier`; `rounds`; `duration_ms`; cache-hit boolean; token counts default zero; sanitized summary JSONB. `outcome_uncertain` means an upstream side effect may have happened but its result could not be durably recorded; it is not safe to retry automatically.
 
 Checks require non-negative duration/rounds/token counts and `finished_at >= started_at`. Index `(workspace_id, started_at DESC)`, `(workspace_id, api_id, tool_name, started_at DESC)`, and `(workspace_id, outcome, started_at DESC)`. Do not FK invocation rows to live API rows in a way that deletes history; retain string snapshots and optionally use `ON DELETE SET NULL` on nullable surrogate references.
 
@@ -130,11 +134,15 @@ Append-only durable event log backing traffic, traces, SSE replay, and operation
 
 The event writer assigns durable IDs/sequence numbers and commits before publishing the event to local SSE listeners. On restart, SSE `Last-Event-ID` resumes from the database; a retention floor must return an explicit reset/resync response instead of silently pretending old events exist. Redis Pub/Sub can notify other core replicas that a committed event is available, but subscribers re-read the durable event row from Postgres.
 
+`gateway_event_cursors` stores a workspace-scoped committed high-water ID and retention floor. This separates actual retention from gaps caused by rolled-back sequence allocations, so SSE does not mistake a harmless ID gap for lost data. Wire cursors are decimal strings to avoid JavaScript `BIGINT` rounding.
+
 ### `audit_entries`
 
 Durable, hash-chained operator and safety decisions.
 
 `workspace_id`; `sequence` BIGINT; `recorded_at`; `decision`; nullable `call_id`; API/tool/version snapshots; `reason`; redacted `details` JSONB; `previous_hash`; `record_hash`; primary key `(workspace_id, sequence)`; unique `(workspace_id, record_hash)`.
+
+Store the complete `canonical_record` JSONB and a positive `hash_format_version` with each row. Query columns are projections for filtering; they are not enough to reconstruct a legacy audit hash.
 
 The canonical record hash retains the current stable JSON hashing contract (or is versioned explicitly if it changes). Append in a transaction that locks the workspace audit-head row, allocates the next sequence, computes `previous_hash` and `record_hash`, inserts the row, and updates the head. Concurrent writers must not create duplicate sequence values or forks. Verify checks sequence continuity, canonical hash, previous-hash linkage, and saved head. Tamper/restore developer routes remain disabled outside explicit development mode. Normal application roles have INSERT/SELECT but no UPDATE/DELETE permission on audit entries; administrative restore is a separate audited operation.
 

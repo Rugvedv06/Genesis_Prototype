@@ -1,11 +1,10 @@
 import { existsSync, mkdirSync, readFileSync, appendFileSync, writeFileSync, copyFileSync, unlinkSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { cfg } from '../../config.js';
 import { sha256, stableStringify } from '../../lib/hash.js';
+import { resolveDataDir } from '../../lib/data-dir.js';
 
-const DEFAULT_DATA_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'data');
-const DATA_DIR = cfg.dataDir ?? DEFAULT_DATA_DIR;
+const DATA_DIR = resolveDataDir(cfg.dataDir);
 const FILE = join(DATA_DIR, 'audit.jsonl');
 const HEAD = join(DATA_DIR, 'audit.head.json');
 const BACKUP = `${FILE}.bak`;

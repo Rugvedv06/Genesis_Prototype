@@ -478,3 +478,53 @@ node --test api-server/test/phase1-follower-delete-halt.test.js
 If an API is removed while a concurrent call waits for the heal leader, that follower now receives `not_registered` with a correlated `call.failed`, `halt`, and terminal `heal.finished` event plus one audit record. The regression passed.
 
 The final full verification after this lifecycle fix passed: `npm test` **85/85**, `npm run verify:p01` **17/17**, and `git diff --check`. M0/M1 remain open for the browser and remaining trust-layer evidence described above.
+# Milestones 2–4 execution log
+
+This section records implementation progress as changes land. A milestone is marked verified only after its exit gate has been run successfully; code presence alone is not completion evidence.
+
+## 2026-10-16 — Starting state and dependency gate
+
+- Read `docs/NEW_PLAN.md`, `docs/MILESTONE_1_5_PLAN.md`, and `docs/DB.md`.
+- Confirmed the PostgreSQL/Redis persistence cutover is still in progress in the working tree: `/ready` and migrations exist, but registry/audit remain file-backed, Redis is not connected, and invocations/events/metrics/traces are not durable. Milestones 2–4 are therefore not yet eligible to be marked complete under the documented dependency order.
+- Confirmed Milestone 2 catalogue currently contains only M5 and M9; the Tier 1 enum/default rules are absent. Milestone 3 detector is a stub; response validation already detects missing logical fields but has no evidence-backed mapping path. Milestone 4 patch cache is a stub and metrics/traces remain process-local.
+- Existing working-tree changes in the database foundation were present before this execution; they are being preserved.
+- Next: implement independently useful M2/M3 slices, log each landed change and verification here, and keep M4 completion gated on the durable repositories/cache required by Milestone 1.5.
+
+## M2 implementation loop — evidence-backed header defaults
+
+- **Reproduction/requirement:** the Tier 1 header rule always requested a configured credential, even when a validator explicitly returned exactly one allowed header value. This prevented the documented M4 case (`X-API-Version: 2`) from being repaired using upstream-provided evidence.
+- **Implementation:** `api-server/src/features/diagnoser/tier1-rules/header.js` now selects `error_enum` only when the error gives a singleton allowed list; multiple/absent values still require a credential source. The proposal retains the allowed values as evidence. This avoids guessing when the server lists alternatives.
+- **Verification:** `node --test api-server/test/tier1.test.js` — 9/9 passed, including singleton allowed-value sourcing and rejection of ambiguous multi-value selection. Existing M5 header proposal shape remains covered.
+- **Status:** this focused behavior is verified; Milestone 2 remains in progress.
+
+## M2 implementation loop — conservative enum normalization
+
+- Added enum normalization as its own Tier 1 rule and normalized validator enum errors with their explicit allowed values. It only maps an input to a unique case-only variant in that list; semantic mappings such as `active` → `ENABLED` remain unresolved and cannot be guessed.
+- Added focused tests for enum error normalization, safe case mapping, and refusal of semantic guessing.
+- Verification: `node --test api-server/test/tier1.test.js` — **10/10 passed**.
+- Status: this rule is verified in isolation. Full mutation catalogue, golden error-style matrix, and end-to-end healing remain open for Milestone 2.
+
+## M3 implementation loop — silent response drift
+
+- Replaced the drift-detector stub with a response-only detector. It compares required logical response fields against the observed payload, accepts only a unique name-compatible path with matching type/format, and refuses ambiguous or incompatible mappings.
+- Wired the detector into invocation handling after a successful HTTP response. It validates the remapped logical object and configured identity echoes against the same response, commits only the response map, emits `drift.silent`/verification/commit events, and never sends a replay request. Inconclusive 200 responses halt with field evidence.
+- Added regression coverage for a unique `name` → `full_name` remap and an inconclusive type mismatch. Both assert exactly one upstream request; the successful case asserts version 2 and correct logical data.
+- Added an identity-echo mismatch case. It proves that a plausible field remap does not commit when the returned entity ID differs from the caller's ID. Response drift halts also emit the terminal failure lifecycle events.
+- Updated the demo timeline and patch card to display `remap_response_path`, the differing logical fields, and the same-response verification/no-replay outcome from the real events.
+- Verification: `node --test api-server/test/response-validation.test.js` — **4/4 passed**; `npm --workspace=@healr/demo-client run build` succeeded; `git diff --check` passed.
+- Status: core server path is verified in isolation. Ground-truth comparison and demo-client display of exact differing fields remain open; Milestone 3 is not yet complete.
+
+## Execution loop and current gate ledger
+
+- Added `docs/MILESTONE_2_4_AGENT_LOOP.md` with a serial reproduction → implementation → review → verification loop, scoped M2–M4 work packages, required safety invariants, commands, and an evidence ledger.
+- The loop records Milestone 1.5 as a prerequisite for durable cache/metrics/traces. Current M1.5 cutover is not verified, so M4 remains gated; no in-memory substitute is presented as durable completion.
+- Current M2/M3 focused items above are in progress; their full milestone gates are still open. M4 is not started pending the database/Redis gate.
+- Latest integration verification after the M2/M3 code changes: `npm test` — **90/90 passed**; `npm run verify:p01` — **17/17 passed**; `git diff --check` passed. Acceptance includes M5's exact four operations, restart persistence in the existing store, concurrency, credentials, retry policy, no-raw-args SSE, and baseline failure. This keeps the M5 regression anchor green; it does not close the M1.5 or M2–M4 gates.
+
+## M3 demo mutation fixtures
+
+- Added mock catalogue entries for M6 (nested response name) and M10 (renamed response field), expressed as response path operations. `/admin/mutations` now returns each mutation's expected operations and derives recoverability from its declared expected outcome.
+- The mock applies response operations through one shared transformer, leaving the truth record unchanged. The core remains independent of mock implementation details.
+- The demo now loads mutation choices from `/admin/mutations`, so M6/M10 can be selected without a duplicated client-side catalogue.
+- Focused mock verification: `npm --workspace=@healr/demo-server test` — **8/8 passed**, including response mutation isolation and catalogue metadata. Full M6/M10 gateway and truth UI acceptance remains pending.
+- Integrated checks after adding M6/M10 selection: elevated `npm test` — **92/92 passed**; `npm --workspace=@healr/demo-client run build` succeeded; elevated `npm run verify:p01` — **17/17 passed**; `git diff --check` passed. Sandboxed runs intermittently cannot bind test ports (`EPERM` / `could not find free port`); elevated reruns pass.

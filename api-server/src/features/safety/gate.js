@@ -2,7 +2,7 @@ import { getPath } from '../../lib/paths.js';
 
 const TIER_OPS = {
   0: new Set(['add_header', 'move_field', 'rename_field', 'coerce_type', 'set_enum_map', 'add_field']),
-  1: new Set(['add_header', 'move_field', 'rename_field', 'coerce_type', 'set_enum_map']),
+  1: new Set(['add_header', 'move_field', 'rename_field', 'coerce_type', 'set_enum_map', 'remap_response_path']),
   2: new Set(['move_field', 'rename_field', 'coerce_type', 'set_enum_map']),
 };
 

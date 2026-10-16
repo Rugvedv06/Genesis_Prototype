@@ -17,7 +17,7 @@ The product is a self-healing tool gateway between agents and HTTP APIs. It shou
 | Phase 0 — foundation | Four npm workspaces, dev launcher, contracts and fixtures, health routes, environment examples, and root test command. Latest `npm test` passes **85/85**; scripted Phase 0/1 acceptance passes **17/17**. | Automated baseline gates pass. Clean-start browser walkthrough across all four services remains open. |
 | Phase 1 — M5 vertical slice | M5 four-round healing, exact four patch operations, golden/unit tests, mock, baseline path, demo UI, registration, versions, and SSE are implemented. | Scripted acceptance freshly verifies M5, restart, re-registration, concurrency, credentials, retry policy, and contracts. Browser-level UI acceptance remains open. |
 | Phase 2 — trust layer | Source includes safety checks, heal lock, file-backed version history/rollback, audit verification/head anchor, tamper routes, M9, circuits/negative caching, and settings/audit/tool-history UI. Focused and full tests cover the main gates. | Partially verified. Remaining evidence includes broader canonical audit-hash vectors, rollback after mock reset with replay of the restored adapter, and browser acceptance. See the M0/M1 ledger. |
-| Persistence and operational logging | Registry snapshots and audit JSONL/head are persisted to local files. Calls, events, traces, metrics, circuit state, and negative cache are process-local; no PostgreSQL or Redis client is wired into the application. | Not complete. Add the `DB.md` PostgreSQL source of truth and Redis cache/coordination layer before building durable metrics and production multi-instance behavior. |
+| Persistence and operational logging | PostgreSQL/Redis Compose services, a PostgreSQL driver, checksummed migrations through v0005, transaction-scoped initial repositories, `/ready`, and a read-only importer preflight are present. Registry snapshots and audit JSONL/head remain file-backed; calls, events, traces, metrics, circuit state, and negative cache remain process-local. Redis is not connected. | Not complete. A live core process is still writing the source files; the importer detects unsafe audit evidence and refuses apply until a redaction/rechain policy is settled. Route cutover, Redis integration, durable event/invocation writes, and operational proof remain. See the execution status and work gates in `MILESTONE_1_5_PLAN.md`. |
 | Phase 3 — coverage and differentiators | Response validation exists; Tier 1 rules cover the M5 path; ambiguous rename has a unit test. | Incomplete. The mock catalogue contains only M5 and M9. Silent-response drift is not safely resolved, and patch cache is still a stub. |
 | Phase 4 — model-powered features | Provider interface and health check exist. | Incomplete. Tier 0 spec discovery, Tier 2 diagnosis, and the core orchestrator remain stubs. No OpenAPI importer is present. |
 | App surfaces | Overview, traffic, APIs, tool detail, drift/heals, audit, playground, and settings pages exist in api-client; demo-client has its stage screen. | Incomplete against the product plan: `/safety`, `/cache`, and `/metrics` are absent, as are their complete backend/data contracts. UI pages need to be connected to final capabilities and checked as an integrated product. |
@@ -78,6 +78,8 @@ Treat this as the first product milestone after baseline. Audit and harden the c
 ### Milestone 1.5 — Add database persistence and Redis cache
 
 This is a required foundation milestone after the current M0/M1 closure work and before Milestone 2 broadens the mutation model. It does not change the existing Phase 0/1 contract; it replaces file/in-process runtime state behind repository interfaces while preserving API and event contracts. Follow the complete schema and rules in [DB.md](./DB.md).
+
+Implement this milestone using the sequenced work packages and edge-case gates in [MILESTONE_1_5_PLAN.md](./MILESTONE_1_5_PLAN.md); freeze its compatibility and import decisions before repository cutover.
 
 **Work**
 
@@ -187,6 +189,7 @@ Preserve the existing visual direction and shell. Build missing workflows and da
 - API-client pages explain the operational consequence of their data; the demo-client communicates baseline failure, safe halt, wrong data, and successful recovery distinctly.
 - Validate responsive behavior and keyboard operation against the existing viewport targets in the Phase 2 handoff.
 
+//////////>>>>>>>>>>>>>>>>>>>>> OUT OF BOUNDS FOR NOW >>>>>>>>>>>>>>>>>>>>>>///////////
 ### Milestone 7 — Reproducible benchmark and end-to-end hardening
 
 **Work**

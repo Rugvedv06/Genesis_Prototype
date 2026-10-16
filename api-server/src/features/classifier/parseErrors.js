@@ -51,7 +51,9 @@ function normalizeDetail(d, rootBody) {
     kind = 'missing';
   } else if (t.includes('extra')) {
     kind = 'extra';
-  } else if (t.includes('integer') || t.includes('int_parsing') || t.includes('is_instance') || t.includes('type_error') || t.includes('enum')) {
+  } else if (t.includes('enum')) {
+    kind = 'enum';
+  } else if (t.includes('integer') || t.includes('int_parsing') || t.includes('is_instance') || t.includes('type_error')) {
     kind = 'type';
   } else if (t.includes('extra_forbidden')) {
     kind = 'extra';
@@ -64,7 +66,7 @@ function normalizeDetail(d, rootBody) {
     path,
     expected: d.ctx?.expected ?? d.ctx?.allowed_values ?? null,
     received: d.input ?? null,
-    allowed: d.ctx?.allowed_values ?? d.ctx?.allowed ?? null,
+    allowed: d.ctx?.allowed_values ?? d.ctx?.allowed ?? d.ctx?.enum_values ?? d.allowed ?? null,
     header: kind === 'missing_header' ? (loc[1] ?? null) : null,
     raw: d,
     class: kind === 'value' ? 'value' : 'structural',

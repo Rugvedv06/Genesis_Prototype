@@ -18,6 +18,7 @@ import { check as safetyCheck, circuit } from '../safety/index.js';
 import { append as appendAudit } from '../audit/index.js';
 import { negativeHit, negativeResult, cacheNegative, recordHalt } from '../safety/circuit.js';
 import { validateUpstreamUrl } from '../http/url-policy.js';
+import { checkResponse } from '../drift-detector/index.js';
 
 const ajv = new Ajv({ allErrors: true, strict: false });
 addFormats(ajv);
@@ -463,6 +464,47 @@ export async function invoke({ apiId, toolName, args, runId }) {
   if (first.ok && matchesLogicalResponse(tool, first)) {
     emitCall('call.succeeded', { version: tool.version, healed: false, data: tool.compiled.extract(first.json ?? {}) });
     return success(tool, first, { healed: false, rounds: 0, tier: 0, latencyMs: Date.now() - t0 });
+  }
+
+  // A 200 response has already happened, so response-only drift is diagnosed
+  // from that payload and is never replayed (especially for writes).
+  if (first.ok) {
+    const responseCheck = validateResponse(tool, first);
+    const proposal = checkResponse({ tool, response: first });
+    const mode = apiConfig.healing?.mode ?? 'enforce';
+    const fields = { callId, runId, apiId, tool: toolName };
+    if (proposal.ok) {
+      const gate = safetyCheck({ proposal: { ...proposal, tier: 1, confidence: 0.9 }, tool, mode, apiCfg: apiConfig });
+      if (gate.ok && mode !== 'log') {
+        const remapped = { ...tool, versionObj: { ...tool.versionObj, adapter: proposal.adapter } };
+        remapped.compiled = compileAdapter(proposal.adapter, resolveCredential);
+        if (matchesLogicalResponse(remapped, first) && matchesIdentity(remapped, args, first)) {
+          const committed = registryStore.commit(apiId, toolName, proposal.adapter, {
+            ops: proposal.ops, tier: 1, confidence: 0.9, evidence: proposal.evidence,
+            rounds: 0, responseOnly: true, verified: true,
+          });
+          emit({ type: 'drift.silent', ...fields, ops: proposal.ops, errors: responseCheck.errors ?? [] });
+          emit({ type: 'patch.verified', ...fields, status: first.status, responseOnly: true });
+          emit({ type: 'patch.committed', ...fields, version: committed.version, ops: proposal.ops, responseOnly: true });
+          appendAudit({ decision: 'commit', apiId, tool: toolName, versionBefore: tool.version, versionAfter: committed.version, tier: 1, ops: proposal.ops, evidence: proposal.evidence, responseOnly: true, callId });
+          emitCall('call.succeeded', { version: committed.version, healed: true, rounds: 0, data: remapped.compiled.extract(first.json) });
+          return success({ ...remapped, version: committed.version }, first, {
+            healed: true, rounds: 0, tier: 1, cacheHit: false, latencyMs: Date.now() - t0,
+            healMs: Date.now() - t0, ops: proposal.ops, version: committed.version,
+          });
+        }
+        emit({ type: 'drift.silent', ...fields, ops: proposal.ops, errors: responseCheck.errors ?? [], outcome: 'identity_or_type_mismatch' });
+      } else if (mode === 'log' && gate.ok) {
+        appendAudit({ decision: 'proposed', apiId, tool: toolName, versionBefore: tool.version, tier: 1, ops: proposal.ops, evidence: proposal.evidence, responseOnly: true, callId });
+      }
+    }
+    const details = { reason: proposal.reason ?? 'response_drift_unresolved', fields: responseCheck.errors ?? [] };
+    emit({ type: 'drift.silent', ...fields, errors: details.fields, outcome: 'halted' });
+    emitCall('call.failed', { code: 'tool_unavailable', reason: details.reason });
+    emit({ type: 'halt', ...fields, reason: details.reason, retryable: false });
+    emit({ type: 'heal.finished', ...fields, healId: callId, outcome: 'halted', rounds: 0, ms: Date.now() - t0, tier: 1, tokens: { input: 0, output: 0 } });
+    appendAudit({ decision: 'halt', apiId, tool: toolName, versionBefore: tool.version, reason: details.reason, responseOnly: true, callId });
+    return halt(details.reason, details);
   }
 
   let errors = parseErrors(first.json ?? first.text, first.status);

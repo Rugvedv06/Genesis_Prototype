@@ -48,6 +48,7 @@ const EVENT_TO_STEP = {
   'call.started':       'request',
   'upstream.request':   'request',
   'drift.detected':     'drift',
+  'drift.silent':       'drift',
   'call.failed':        'drift',
   'diagnosis.started':  'diagnosis',
   'patch.proposed':     'safety',
@@ -96,6 +97,14 @@ function buildTimeline(events) {
         detail = ev.errors?.length ? `${ev.errors.length} validation rule(s) violated` : null;
         kind = 'warn';
         break;
+      case 'drift.silent': {
+        const mappings = (ev.ops ?? []).map((op) => `${op.from ?? '(missing)'} → ${op.to}`).join(', ');
+        const fields = (ev.errors ?? []).map((error) => error.instancePath || error.logical || error.params?.path).filter(Boolean).join(', ');
+        label = ev.outcome === 'halted' ? 'Silent response drift halted' : 'Silent response drift detected';
+        detail = mappings || (fields ? `Differing fields: ${fields}` : 'HTTP 200 response did not match the registered logical contract');
+        kind = ev.outcome === 'halted' ? 'err' : 'warn';
+        break;
+      }
       case 'call.failed':
         if (ev.code === 'drift') {
           label = `Upstream Rejected Wire Format: HTTP 400/422`;
@@ -120,8 +129,8 @@ function buildTimeline(events) {
         kind = 'info';
         break;
       case 'patch.verified':
-        label = `Synthetic Verification Passed (HTTP ${ev.status ?? 200})`;
-        detail = `Transformed payload matches schema & downstream invariant`;
+        label = ev.responseOnly ? `Same-response Verification Passed (HTTP ${ev.status ?? 200})` : `Synthetic Verification Passed (HTTP ${ev.status ?? 200})`;
+        detail = ev.responseOnly ? 'Original response matches logical type and identity checks; no replay was sent' : `Transformed payload matches schema & downstream invariant`;
         kind = 'ok';
         break;
       case 'patch.committed':
@@ -195,9 +204,10 @@ function PatchCard({ op, index }) {
       desc = `"${op.path}": ${op.from}  ⟶  ${op.to}`;
       accent = C.green;
       break;
+    case 'remap_response_path':
     case 'remap_response':
       title = 'REMAP RESPONSE';
-      desc = `"${op.from}"  ⟶  "${op.to}"`;
+      desc = `"${op.from ?? '(missing)'}"  ⟶  "${op.to}"`;
       accent = C.teal;
       break;
     case 'add_field':
@@ -853,6 +863,8 @@ export default function DriftControl() {
   const [theme, setTheme] = useState('light');
   const [mode, setMode]               = useState('idle');
   const [mutation, setMutation]       = useState(null);
+  const [mutationCatalogue, setMutationCatalogue] = useState([]);
+  const [selectedMutation, setSelectedMutation] = useState('M5');
   const [registered, setRegistered]   = useState(false);
   const [coreConn, setCoreConn]       = useState('disconnected');
   const [mockConn, setMockConn]       = useState('disconnected');
@@ -866,6 +878,15 @@ export default function DriftControl() {
     events: [], data: null, error: null, ops: [], version: null,
   });
   const [truth, setTruth] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    fetch(`${MOCK}/admin/mutations`)
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error('mutation catalogue unavailable')))
+      .then((payload) => { if (active) setMutationCatalogue(payload.mutations ?? []); })
+      .catch(() => { if (active) setMutationCatalogue([]); });
+    return () => { active = false; };
+  }, []);
 
   // ── Real SSE Listeners ────────────────────────────────────────────────────
   useEffect(() => {
@@ -955,7 +976,7 @@ export default function DriftControl() {
     const r = await fetch(`${MOCK}/admin/mutate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: 'M5' }),
+      body: JSON.stringify({ id: selectedMutation }),
     });
     const j = await r.json();
     setMutation(j.mutation);
@@ -1123,12 +1144,18 @@ export default function DriftControl() {
           <div className="eyebrow">DEVELOPER SANDBOX <span>/</span> RECOVERY TEST</div>
           <h1>Schema drift recovery</h1>
           <p>Compare a direct API call with healr’s contract-aware adapter against the same mutated endpoint.</p>
-          <div className="endpoint-line"><span className="method-tag">POST</span><code>{MOCK}{TOOL.path}</code><span className="endpoint-separator">·</span><span>Scenario M5</span></div>
+          <div className="endpoint-line"><span className="method-tag">POST</span><code>{MOCK}{TOOL.path}</code><span className="endpoint-separator">·</span><span>Scenario {mutation ?? selectedMutation}</span></div>
         </div>
         <div className="workspace-actions">
           {mutation && <div className="mutation-label"><span>Active mutation</span><strong>{mutation}</strong></div>}
           <div className="action-buttons">
             <Btn onClick={reset} disabled={running} color={C.teal} outline>Reset</Btn>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: C.textDim, fontSize: '0.72rem' }}>
+              Mutation
+              <select value={selectedMutation} onChange={(event) => setSelectedMutation(event.target.value)} disabled={running || !mutationCatalogue.length} aria-label="Select API mutation">
+                {mutationCatalogue.map((item) => <option key={item.id} value={item.id}>{item.id} · {item.label}</option>)}
+              </select>
+            </label>
             <Btn onClick={mutate} disabled={running} color={C.amber}>Mutate API</Btn>
             <Btn onClick={runBoth} disabled={running} color={C.teal}>{running ? 'Running…' : 'Run comparison'}</Btn>
           </div>
