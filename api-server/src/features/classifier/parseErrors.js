@@ -53,6 +53,8 @@ function normalizeDetail(d, rootBody) {
     kind = 'extra';
   } else if (t.includes('integer') || t.includes('is_instance') || t.includes('type_error') || t.includes('enum')) {
     kind = 'type';
+  } else if (t.includes('regex') || t.includes('pattern') || t.includes('email') || t.includes('length') || t.includes('range') || t.includes('greater') || t.includes('less') || t === 'value_error') {
+    kind = 'value';
   }
 
   return {
@@ -63,6 +65,7 @@ function normalizeDetail(d, rootBody) {
     allowed: d.ctx?.allowed_values ?? d.ctx?.allowed ?? null,
     header: kind === 'missing_header' ? (loc[1] ?? null) : null,
     raw: d,
+    class: kind === 'value' ? 'value' : 'structural',
     _root: rootBody,
   };
 }
@@ -79,6 +82,7 @@ export function classify(errors, status) {
     return status >= 500 ? 'transient' : 'other4xx';
   }
   if (errors.some((e) => e.kind === 'auth')) return 'auth4xx';
+  if (errors.some((e) => e.class === 'value')) return 'value_rejected';
   if (errors.some((e) => e.kind === 'missing_header')) return 'header4xx';
   if (status === 401) return 'auth4xx';
   if (status >= 400 && status < 500) return 'validation4xx';

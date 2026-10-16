@@ -13,6 +13,7 @@ import { iso } from '../../lib/time.js';
 import { sha256 } from '../../lib/hash.js';
 import Ajv from 'ajv';
 import { cfg } from '../../config.js';
+import { check as safetyCheck, circuit } from '../safety/index.js';
 
 const ajv = new Ajv({ allErrors: true, strict: false });
 const validatorCache = new Map(); // key: `${apiId}:${tool}:v${version}` -> compiled ajv validator
@@ -107,7 +108,14 @@ function matchesLogicalResponse(tool, response) {
   for (const [logical, path] of Object.entries(fields)) {
     if (getPath(json, path) === undefined) return false;
   }
+
   return true;
+}
+
+function matchesIdentity(tool, args, response) {
+  const identity = tool.versionObj?.meta?.identity ?? {};
+  const extracted = tool.compiled.extract(response.json ?? {});
+  return Object.entries(identity).every(([arg, field]) => String(extracted[field]) === String(args?.[arg]));
 }
 
 function errorSignature(toolName, res) {
@@ -234,6 +242,8 @@ async function healAndRetry({ tool, args, first, kind, callId, runId, t0, resolv
 
     const proposal = await diagnose({ tool: draft, args, failure, kind });
     if (!proposal) return halt('no_diagnosis', { kind });
+    const gate = safetyCheck({ proposal, tool: draft, mode: healing.mode ?? 'enforce', apiCfg: apiConfig });
+    if (!gate.ok) return halt(gate.reason, gate.details);
 
     const newAdapter = applyPatch(draft.versionObj.adapter, proposal.ops);
     const newCompiled = compileAdapter(newAdapter, resolveCredential);
@@ -253,7 +263,7 @@ async function healAndRetry({ tool, args, first, kind, callId, runId, t0, resolv
       return mapDomainError(err, nextDraft, args, first);
     }
 
-    if (r.ok && matchesLogicalResponse(nextDraft, r)) {
+    if (r.ok && matchesLogicalResponse(nextDraft, r) && matchesIdentity(nextDraft, args, r)) {
       const commitOps = applied.concat(proposal.ops);
       const committed = registryStore.commit(tool.apiId, tool.name, newAdapter, {
         ops: commitOps,
@@ -270,6 +280,7 @@ async function healAndRetry({ tool, args, first, kind, callId, runId, t0, resolv
         ops: commitOps, version: committed.version,
       });
     }
+    if (r.ok && matchesLogicalResponse(nextDraft, r)) return halt('verification_mismatch');
     failure = r;
     draft = nextDraft;
     applied.push(...proposal.ops);
@@ -344,9 +355,15 @@ export async function invoke({ apiId, toolName, args, runId }) {
     emitCall('call.failed', { code: 'upstream_rejected' });
     return failure('upstream_rejected', first.json ?? first.text, false);
   }
+  if (kind === 'value_rejected') {
+    emitCall('call.failed', { code: 'upstream_rejected' });
+    return failure('upstream_rejected', first.json ?? first.text, false);
+  }
 
   emitCall('call.failed', { code: 'drift', kind });
 
+  const circuitState = circuit.check(apiId, toolName);
+  if (!circuitState.ok) return failure('tool_unavailable', 'Healing circuit is open', false, { reason: circuitState.reason, until: circuitState.until });
   const healResult = await withHealLock(apiId, toolName, () =>
     healAndRetry({ tool, args, first, kind, callId, runId, t0, resolveCredential }), args
   );
