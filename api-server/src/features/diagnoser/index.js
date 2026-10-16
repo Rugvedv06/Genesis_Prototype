@@ -2,9 +2,9 @@
 // T0 (spec diff) lands Phase 4; T2 (LLM) lands Phase 4. Here T1 rules run first.
 // Returns { tier, confidence, ops, evidence } or null when no diagnosis.
 import { parseErrors } from '../classifier/index.js';
-import { wrapRule, renameRule, typeRule, headerRule, RULE_ORDER } from './tier1-rules/index.js';
+import { wrapRule, renameRule, typeRule, headerRule, enumRule, RULE_ORDER } from './tier1-rules/index.js';
 
-const RULES = { wrap: wrapRule, rename: renameRule, type: typeRule, header: headerRule };
+const RULES = { wrap: wrapRule, rename: renameRule, type: typeRule, header: headerRule, enum: enumRule };
 
 export async function run({ tool, args, failure, kind }) {
   const errors = failure.errors ?? parseErrors(failure?.json ?? failure?.text, failure?.status);

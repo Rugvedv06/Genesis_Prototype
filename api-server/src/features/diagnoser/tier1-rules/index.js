@@ -4,5 +4,6 @@ export { wrapRule } from './wrap.js';
 export { renameRule, nameScore } from './rename.js';
 export { typeRule } from './type.js';
 export { headerRule } from './header.js';
+export { enumRule } from './enum.js';
 
-export const RULE_ORDER = ['wrap', 'rename', 'type', 'header'];
+export const RULE_ORDER = ['wrap', 'rename', 'type', 'header', 'enum'];

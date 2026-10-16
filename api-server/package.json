@@ -8,11 +8,14 @@
   "scripts": {
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
+    "db:migrate": "node src/db/migrate-cli.js",
     "test": "node --test"
   },
   "dependencies": {
-    "express": "^5.0.1",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
     "cors": "^2.8.5",
-    "ajv": "^8.20.0"
+    "express": "^5.0.1",
+    "pg": "^8.23.1"
   }
 }

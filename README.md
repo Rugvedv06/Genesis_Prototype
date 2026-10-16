@@ -94,4 +94,4 @@ root/
 
 ## Next steps
 
-Phase 2: Trust layer — safety gate, rollback, audit chain, M9 unrecoverable. See `PS01_BUILD_PLAN.md` §6 and `HEALR_PHASE0_1_GAPS_AND_FIX_PLAN.md`.
+Phase 2: Trust layer — safety gate, rollback, audit chain, M9 unrecoverable. See `HEALR_PHASE2_TO_FINAL_PLAN.md` (authoritative) and `PS01_BUILD_PLAN.md` for algorithms.

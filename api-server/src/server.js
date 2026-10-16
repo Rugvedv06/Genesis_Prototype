@@ -10,18 +10,79 @@ import { log } from './lib/log.js';
 import { apisRoutes } from './features/apis/routes.js';
 import { eventsRoute } from './features/events/routes.js';
 import { invoke } from './features/executor/invoke.js';
+import { registryStore } from './features/registry/store.js';
+import { bus } from './features/events/bus.js';
+import { get as getTrace } from './features/events/trace-store.js';
+import { auditRoutes } from './features/audit/routes.js';
+import { snapshot as metricsSnapshot, timeseries as metricsTimeseries } from './features/metrics/index.js';
+import { head as auditHead } from './features/audit/index.js';
+import { snapshot as circuitSnapshot } from './features/safety/circuit.js';
+import { getProvider } from './features/llm/provider.js';
+import { closePool, databaseStatus } from './db/pool.js';
+import { migrationStatus } from './db/migrate.js';
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
 app.get('/health', (_req, res) => {
-  res.json({ ok: true, service: 'api-server', port: cfg.port, time: new Date().toISOString() });
+  res.json({ ok: true, service: 'api-server', port: cfg.port, version: '0.1.0', apis: registryStore.list().length, auditHead: auditHead(), time: new Date().toISOString() });
+});
+
+app.get('/ready', async (_req, res) => {
+  if (!process.env.DATABASE_URL) return res.json({ ok: true, database: { configured: false, required: false } });
+  const database = await databaseStatus();
+  if (!database.ok) return res.status(503).json({ ok: false, database });
+  try {
+    const migrations = await migrationStatus();
+    const ok = migrations.ok;
+    return res.status(ok ? 200 : 503).json({ ok, database: { configured: true, ok: true }, migrations });
+  } catch {
+    return res.status(503).json({ ok: false, database: { configured: true, ok: true }, migrations: { ok: false, code: 'migration_state_unavailable' } });
+  }
+});
+
+app.get('/state', (_req, res) => {
+  const apis = registryStore.list();
+  const safety = circuitSnapshot();
+  const grouped = new Map();
+  for (const item of apis) {
+    if (!grouped.has(item.apiId)) grouped.set(item.apiId, { apiId: item.apiId, baseUrl: registryStore.config(item.apiId)?.baseUrl, mode: registryStore.config(item.apiId)?.healing?.mode ?? 'enforce', tools: [] });
+    const current = registryStore.current(item.apiId, item.tool);
+    grouped.get(item.apiId).tools.push({
+      name: item.tool,
+      version: item.version,
+      status: 'healthy',
+      risk: item.risk,
+      sideEffects: current?.versionObj?.meta?.sideEffects ?? current?.versionObj?.adapter?.sideEffects ?? 'write',
+    });
+  }
+  res.json({ lastEventId: bus.since(0).at(-1)?.id ?? 0, apis: [...grouped.values()], metrics: metricsSnapshot(), audit: auditHead(), cache: { entries: safety.negativeEntries, hits: 0 }, circuit: safety.open });
+});
+
+app.get('/metrics', (_req, res) => res.json(metricsSnapshot()));
+app.get('/metrics/timeseries', (req, res) => res.json({ series: metricsTimeseries(Number(req.query.window ?? 300), Number(req.query.step ?? 5)) }));
+
+app.get('/provider/health', async (_req, res) => {
+  try {
+    const provider = getProvider('diagnoser');
+    const result = await provider.health();
+    res.status(result.ok ? 200 : 503).json(result);
+  } catch (error) {
+    res.status(503).json({ ok: false, code: 'provider_configuration_error', message: error.message });
+  }
+});
+
+app.get('/traces/:callId', (req, res) => {
+  const trace = getTrace(req.params.callId);
+  if (!trace) return res.status(404).json({ ok: false, error: 'not_found' });
+  res.json(trace);
 });
 
 // §4.5 core endpoints
 apisRoutes(app);
 eventsRoute(app);
+auditRoutes(app);
 
 app.post('/apis/:apiId/tools/:tool/invoke', async (req, res) => {
   const { apiId, tool } = req.params;
@@ -46,5 +107,30 @@ app.use((err, _req, res, _next) => {
 const server = app.listen(cfg.port, () => {
   log({ level: 'info', service: 'api-server', port: cfg.port, msg: 'listening' });
 });
+
+let shutdownPromise;
+async function shutdown(signal) {
+  if (shutdownPromise) return shutdownPromise;
+  shutdownPromise = (async () => {
+    log({ level: 'info', service: 'api-server', code: 'shutdown_started', signal });
+    const httpClosed = new Promise((resolve) => {
+      server.close((error) => {
+        if (error) log({ level: 'error', service: 'api-server', code: 'http_shutdown_error' });
+        resolve();
+      });
+    });
+    const forceCloseTimer = setTimeout(() => server.closeAllConnections?.(), 10_000);
+    forceCloseTimer.unref();
+    await httpClosed;
+    clearTimeout(forceCloseTimer);
+    try { await closePool(); }
+    catch { log({ level: 'error', service: 'api-server', code: 'postgres_pool_shutdown_error' }); }
+    log({ level: 'info', service: 'api-server', code: 'shutdown_complete' });
+  })();
+  return shutdownPromise;
+}
+
+process.once('SIGTERM', () => { void shutdown('SIGTERM'); });
+process.once('SIGINT', () => { void shutdown('SIGINT'); });
 
 export { server, app, cfg };

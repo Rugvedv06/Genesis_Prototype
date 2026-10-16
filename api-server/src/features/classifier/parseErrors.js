@@ -51,8 +51,14 @@ function normalizeDetail(d, rootBody) {
     kind = 'missing';
   } else if (t.includes('extra')) {
     kind = 'extra';
-  } else if (t.includes('integer') || t.includes('is_instance') || t.includes('type_error') || t.includes('enum')) {
+  } else if (t.includes('enum')) {
+    kind = 'enum';
+  } else if (t.includes('integer') || t.includes('int_parsing') || t.includes('is_instance') || t.includes('type_error')) {
     kind = 'type';
+  } else if (t.includes('extra_forbidden')) {
+    kind = 'extra';
+  } else if (t.includes('regex') || t.includes('pattern') || t.includes('email') || t.includes('length') || t.includes('range') || t.includes('greater') || t.includes('less') || t === 'value_error') {
+    kind = 'value';
   }
 
   return {
@@ -60,9 +66,10 @@ function normalizeDetail(d, rootBody) {
     path,
     expected: d.ctx?.expected ?? d.ctx?.allowed_values ?? null,
     received: d.input ?? null,
-    allowed: d.ctx?.allowed_values ?? d.ctx?.allowed ?? null,
+    allowed: d.ctx?.allowed_values ?? d.ctx?.allowed ?? d.ctx?.enum_values ?? d.allowed ?? null,
     header: kind === 'missing_header' ? (loc[1] ?? null) : null,
     raw: d,
+    class: kind === 'value' ? 'value' : 'structural',
     _root: rootBody,
   };
 }
@@ -79,6 +86,7 @@ export function classify(errors, status) {
     return status >= 500 ? 'transient' : 'other4xx';
   }
   if (errors.some((e) => e.kind === 'auth')) return 'auth4xx';
+  if (errors.some((e) => e.class === 'value')) return 'value_rejected';
   if (errors.some((e) => e.kind === 'missing_header')) return 'header4xx';
   if (status === 401) return 'auth4xx';
   if (status >= 400 && status < 500) return 'validation4xx';

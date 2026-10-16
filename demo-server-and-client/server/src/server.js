@@ -7,7 +7,7 @@ loadEnv();
 import express from 'express';
 import cors from 'cors';
 import { get as getMutation, ids as mutationIds } from './mutations/catalogue.js';
-import { validateRequest } from './mutations/validator.js';
+import { validateRequest, applyResponseMutation } from './mutations/validator.js';
 import { eventsRoute } from './events/routes.js';
 import { baselineRoutes } from './baseline-agent/routes.js';
 
@@ -26,6 +26,7 @@ let state = {
   errorStyle: 'pydantic-v1',
   specAvailable: true,
   writes: [],
+  lastRequests: [],
   taskValues: new Set(),
 };
 
@@ -39,6 +40,7 @@ app.get('/admin/state', (_req, res) => {
     errorStyle: state.errorStyle,
     specAvailable: state.specAvailable,
     writes: state.writes,
+    lastRequests: state.lastRequests,
     corruptedWrites: state.writes.filter((w) => w.provenance === 'foreign').length,
   });
 });
@@ -47,7 +49,11 @@ app.get('/admin/mutations', (_req, res) => {
   res.json({
     mutations: mutationIds().map((id) => {
       const m = getMutation(id);
-      return { id, label: m.label, route: m.route, recoverable: id !== 'M9' };
+      return {
+        id, label: m.label, category: m.category ?? 'contract', route: m.route,
+        recoverable: (m.expected ?? 'heal') !== 'halt', expected: m.expected ?? 'heal',
+        expectedOps: m.expectedOps ?? [],
+      };
     }),
   });
 });
@@ -63,7 +69,7 @@ app.post('/admin/mutate', (req, res) => {
 });
 
 app.post('/admin/reset', (_req, res) => {
-  state = { mutation: null, errorStyle: 'pydantic-v1', specAvailable: true, writes: [], taskValues: new Set() };
+  state = { mutation: null, errorStyle: 'pydantic-v1', specAvailable: true, writes: [], lastRequests: [], taskValues: new Set() };
   log({ admin: 'reset' });
   res.json({ ok: true });
 });
@@ -181,23 +187,36 @@ function mutationForRoute(path) {
   return null;
 }
 
+function recordRequest(route, status, startedAt) {
+  state.lastRequests.push({ route, status, ms: Date.now() - startedAt });
+  if (state.lastRequests.length > 50) state.lastRequests.shift();
+}
+
 // POST /api/users/get — subject to active mutation
 app.post('/api/users/get', (req, res) => {
+  const startedAt = Date.now();
   const mutation = mutationForRoute(req.path);
   const violated = mutation ? validateRequest(mutation, req.body, req.headers) : null;
   if (violated) {
     log({ route: '/api/users/get', mutation: state.mutation, status: violated.status });
+    recordRequest(req.path, violated.status, startedAt);
     return res.status(violated.status).json(violated.body);
   }
-  const body = mutation ? mutation.transformResponse(req.body) : { result: { id: req.body.user_id ?? 'unknown', name: 'Asha Rao', email: 'asha@example.com' } };
+  const baseResponse = mutation?.transformResponse
+    ? mutation.transformResponse(req.body)
+    : { result: { id: req.body.user_id ?? 'unknown', name: 'Asha Rao', email: 'asha@example.com' } };
+  const body = applyResponseMutation(baseResponse, mutation?.responseOps);
+  recordRequest(req.path, 200, startedAt);
   res.json(body);
 });
 
 // POST /api/users/update-email — write, recorded with provenance
 app.post('/api/users/update-email', (req, res) => {
+  const startedAt = Date.now();
   const mutation = mutationForRoute(req.path);
   const violated = mutation ? validateRequest(mutation, req.body, req.headers) : null;
   if (violated) {
+    recordRequest(req.path, violated.status, startedAt);
     return res.status(violated.status).json(violated.body);
   }
   const args = req.body ?? {};
@@ -212,6 +231,7 @@ app.post('/api/users/update-email', (req, res) => {
   };
   state.writes.push(write);
   log({ admin: 'write', write });
+  recordRequest(req.path, 200, startedAt);
   res.json({ result: { id: args.user_id, email: args.email, updated_at: new Date().toISOString() } });
 });
 

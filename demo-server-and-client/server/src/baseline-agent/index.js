@@ -37,7 +37,12 @@ export async function runTask({ apiId, tool, args, baseUrl, runId }) {
   const iterations = [];
   let totalTokens = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
   let lastResult = null;
-  const llm = createGemini(process.env.AGENT_LLM ?? 'gemini:gemini-1.5-flash');
+  const baselineMode = process.env.BASELINE_MODE ?? 'scripted';
+  const llm = createGemini(
+    baselineMode === 'gemini'
+      ? (process.env.AGENT_LLM ?? 'gemini:gemini-2.5-flash')
+      : 'scripted',
+  );
 
   // Build the logical tool schema description for the prompt.
   const toolSchema = JSON.stringify({

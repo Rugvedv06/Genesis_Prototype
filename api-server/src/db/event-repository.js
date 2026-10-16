@@ -1,0 +1,139 @@
+import { getLocalWorkspaceId } from './workspace.js';
+
+const EVENT_APPEND_LOCK_KEY = 741903212;
+const MAX_CURSOR = 9_223_372_036_854_775_807n;
+const DROP_KEYS = new Set([
+  'args', 'arguments', 'data', 'request', 'requestbody', 'response', 'responsebody', 'body',
+  'prompt', 'evidence', 'errors', 'error', 'message', 'headers', 'cookies', 'authorization',
+  'credential', 'credentials', 'password', 'secret', 'token', 'apikey', 'accesstoken', 'refreshtoken',
+  'url', 'baseurl', 'specurl', 'details',
+]);
+
+function normalizedKey(key) {
+  return key.replace(/[^a-z0-9]/gi, '').toLowerCase();
+}
+
+function safeEventValue(value, key = '') {
+  const normalized = normalizedKey(key);
+  if (DROP_KEYS.has(normalized) || normalized.includes('authorization') || normalized.includes('password')
+    || normalized.includes('secret') || normalized.includes('credential') || normalized.includes('cookie')
+    || normalized.includes('apikey') || normalized.includes('accesstoken') || normalized.includes('refreshtoken')) return undefined;
+  if (key === 'ops' && Array.isArray(value)) {
+    return value.map((operation) => {
+      if (!operation || typeof operation !== 'object' || Array.isArray(operation)) return { op: 'unknown' };
+      const safe = {};
+      for (const field of ['op', 'path', 'from', 'to', 'type', 'name']) {
+        if (typeof operation[field] === 'string') safe[field] = operation[field];
+      }
+      if (operation.source && typeof operation.source === 'object') {
+        safe.source = Object.fromEntries(['type', 'ref'].filter((field) => typeof operation.source[field] === 'string').map((field) => [field, operation.source[field]]));
+      }
+      return safe;
+    });
+  }
+  if (Array.isArray(value)) return value.map((item) => safeEventValue(item)).filter((item) => item !== undefined);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value)
+      .map(([childKey, child]) => [childKey, safeEventValue(child, childKey)])
+      .filter(([, child]) => child !== undefined));
+  }
+  if (['string', 'number', 'boolean'].includes(typeof value) || value === null) return value;
+  return undefined;
+}
+
+function parseCursor(cursor = '0') {
+  if (typeof cursor === 'number') {
+    if (!Number.isSafeInteger(cursor) || cursor < 0) throw new TypeError('event cursor must be a non-negative safe integer or decimal string');
+    return BigInt(cursor);
+  }
+  if (typeof cursor !== 'string' || !/^\d{1,19}$/.test(cursor)) throw new TypeError('event cursor must be a non-negative decimal string');
+  const value = BigInt(cursor);
+  if (value > MAX_CURSOR) throw new TypeError('event cursor exceeds PostgreSQL BIGINT range');
+  return value;
+}
+
+function eventTimestamp(value) {
+  if (value === undefined || value === null) return new Date();
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) throw new TypeError('event timestamp is invalid');
+  return date;
+}
+
+/** Insert into PostgreSQL before publishing to SSE. Call inside the domain UoW. */
+export async function appendGatewayEventInTransaction(client, event) {
+  if (!event || typeof event !== 'object' || Array.isArray(event) || typeof event.type !== 'string' || !event.type) {
+    throw new TypeError('event type is required');
+  }
+  const workspaceId = await getLocalWorkspaceId(client);
+  if (event.callId != null) {
+    const { rows } = await client.query('SELECT call_id FROM invocations WHERE workspace_id = $1 AND call_id = $2 FOR UPDATE', [workspaceId, event.callId]);
+    if (!rows[0]) throw new Error('Call events require a durable invocation row');
+  }
+  // A transaction-scoped lock makes committed cursor IDs monotonic in commit
+  // order; sequence allocation alone can otherwise let a late commit fall
+  // behind a cursor already sent to a client.
+  await client.query('SELECT pg_advisory_xact_lock($1)', [EVENT_APPEND_LOCK_KEY]);
+  let sequenceInCall = null;
+  if (event.callId != null) {
+    const { rows } = await client.query(
+      'SELECT COALESCE(MAX(sequence_in_call), -1) + 1 AS next_sequence FROM gateway_events WHERE call_id = $1',
+      [event.callId],
+    );
+    sequenceInCall = rows[0].next_sequence;
+  }
+  const { rows: idRows } = await client.query("SELECT nextval(pg_get_serial_sequence('gateway_events', 'id')) AS id");
+  const id = String(idRows[0].id);
+  const ts = event.ts ?? Date.now();
+  const occurredAt = eventTimestamp(ts);
+  const payload = safeEventValue({ ...event, id, ts }) ?? {};
+  payload.id = id;
+  payload.ts = ts;
+  await client.query(
+    `INSERT INTO gateway_events
+     (id, event_id, call_id, run_id, workspace_id, api_id, tool_name, event_type, occurred_at, sequence_in_call, payload)
+     OVERRIDING SYSTEM VALUE
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb)`,
+    [id, id, event.callId ?? null, event.runId ?? null, workspaceId, event.apiId ?? null,
+      event.tool ?? null, event.type, occurredAt, sequenceInCall, JSON.stringify(payload)],
+  );
+  await client.query(
+    `INSERT INTO gateway_event_cursors(workspace_id, last_committed_id)
+     VALUES ($1, $2) ON CONFLICT (workspace_id) DO UPDATE SET
+       last_committed_id = GREATEST(gateway_event_cursors.last_committed_id, EXCLUDED.last_committed_id),
+       updated_at = now()`,
+    [workspaceId, id],
+  );
+  return payload;
+}
+
+export async function readEventsAfter(queryable, cursor = '0', { apiId, types, limit = 500 } = {}) {
+  const cursorValue = parseCursor(cursor);
+  const safeLimit = Number.isInteger(limit) ? Math.max(1, Math.min(limit, 1000)) : 500;
+  const workspaceId = await getLocalWorkspaceId(queryable);
+  const eventTypes = types ? [...types].filter((type) => typeof type === 'string' && type.length <= 128) : null;
+  const { rows } = await queryable.query(
+    `WITH cursor_state AS (
+       SELECT retention_floor::text, last_committed_id::text
+       FROM gateway_event_cursors WHERE workspace_id = $1
+     ), event_page AS (
+       SELECT id::text AS id, payload FROM gateway_events
+       WHERE workspace_id = $1 AND id > $2::bigint
+         AND ($3::text IS NULL OR api_id = $3)
+         AND ($4::text[] IS NULL OR event_type = ANY($4::text[]))
+       ORDER BY id LIMIT $5
+     )
+     SELECT cursor_state.retention_floor, cursor_state.last_committed_id, event_page.id, event_page.payload
+     FROM cursor_state LEFT JOIN event_page ON true ORDER BY event_page.id`,
+    [workspaceId, cursorValue.toString(), apiId ?? null, eventTypes, safeLimit],
+  );
+  if (!rows.length) throw new Error('Durable event cursor state is missing for the workspace');
+  const retentionFloor = BigInt(rows[0].retention_floor);
+  const highWater = BigInt(rows[0].last_committed_id);
+  const resetReason = cursorValue < retentionFloor ? 'cursor_expired' : (cursorValue > highWater ? 'cursor_ahead' : null);
+  return {
+    events: resetReason ? [] : rows.filter((row) => row.id !== null).map((row) => row.payload),
+    highWaterId: highWater.toString(),
+    retentionFloor: retentionFloor.toString(),
+    resetReason,
+  };
+}

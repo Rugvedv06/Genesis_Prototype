@@ -8,15 +8,22 @@ export function headerRule({ errors, request, resolveCredential }) {
   const name = err.header;
   if (!name) return null;
 
-  const allowed = err.allowed;
-  const source = { type: 'credential', ref: name };
+  const allowed = Array.isArray(err.allowed) ? err.allowed : null;
+  // A validator's explicit singleton allowed value is evidence-backed. Never
+  // choose arbitrarily from a multi-value set; use a configured credential.
+  const source = allowed?.length === 1
+    ? { type: 'error_enum', value: allowed[0] }
+    : { type: 'credential', ref: name };
 
   // If an error_enum is present we could validate the credential value against it,
   // but the value itself is resolved at call time via resolveCredential.
   return {
     tier: 1,
     confidence: 0.95,
-    ops: [{ op: 'add_header', name, source, evidence: { kind: 'error', ref: `header ${name} required` } }],
+    ops: [{
+      op: 'add_header', name, source,
+      evidence: { kind: 'error', ref: `header ${name} required`, ...(allowed ? { allowed } : {}) },
+    }],
     evidence: [err.raw],
   };
 }

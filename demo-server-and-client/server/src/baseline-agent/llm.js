@@ -4,6 +4,7 @@
 // Verify current model names and endpoint in Google docs before changing.
 
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta';
+const DEFAULT_MODEL = 'gemini-2.5-flash';
 
 const PLACEHOLDER_KEYS = new Set(['', 'your_gemini_api_key_here', 'changeme', 'xxx']);
 
@@ -13,10 +14,12 @@ function hasRealKey(apiKey) {
 
 export function createGemini(model) {
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!hasRealKey(apiKey)) {
+  if (model === 'scripted' || !hasRealKey(apiKey)) {
     // Scripted fallback: always propose the tool call for the task, so the raw
     // (unhealed) executor retries against the mutated mock until the cap —
     // producing a visible failure after MAX_ITERATIONS.
+    const selectedModel = model?.startsWith('gemini:') ? model.slice('gemini:'.length) : model;
+    const resolvedModel = !selectedModel || selectedModel === 'default' ? DEFAULT_MODEL : selectedModel;
     return {
       mode: 'scripted',
       async generate({ messages = [] } = {}) {
@@ -52,7 +55,7 @@ export function createGemini(model) {
         generationConfig: { temperature },
       };
 
-      const resp = await fetch(`${GEMINI_BASE}/models/${model}:generateContent?key=${apiKey}`, {
+      const resp = await fetch(`${GEMINI_BASE}/models/${encodeURIComponent(resolvedModel)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),

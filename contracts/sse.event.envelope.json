@@ -16,9 +16,10 @@
   },
   "eventTypes": [
     "call.started", "call.failed", "call.succeeded",
-    "diagnosis.started", "patch.proposed", "patch.committed", "patch.rolledback",
+    "diagnosis.started", "diagnosis.finished", "upstream.request", "heal.started", "heal.finished",
+    "patch.proposed", "patch.verified", "patch.committed", "patch.rolledback",
     "cache.hit", "drift.silent", "halt", "agent.step", "agent.final", "metrics",
-    "api.registered", "api.removed"
+    "audit.appended", "circuit.opened", "circuit.closed", "api.registered", "api.removed", "config.changed"
   ],
   "note": "Flat SSE envelope: event type lives inside data. No `payload` wrapper. Ring buffer (last 500 events), monotonically increasing `id`, replay via `Last-Event-ID` (§4.6, §5.2). `call.started` carries only argKeys/argCount — never raw argument values (§G18)."
 }
