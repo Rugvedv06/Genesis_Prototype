@@ -2,6 +2,7 @@
 // Registration payload: { apiId, baseUrl, specUrl, credentials, healing, tools[] }.
 import { registryStore } from '../registry/store.js';
 import { emit } from '../events/bus.js';
+import { append as appendAudit } from '../audit/index.js';
 
 export function apisRoutes(app) {
   // GET /apis — list registered APIs and current versions
@@ -82,6 +83,8 @@ export function apisRoutes(app) {
     }
     try {
       const committed = registryStore.rollback(apiId, tool, toVersion);
+      appendAudit({ decision: 'rollback', apiId, tool, versionBefore: committed.parent, versionAfter: committed.version, rollbackOf: committed.rollbackOf });
+      emit({ type: 'registry.rollback', apiId, tool, version: committed.version, rollbackOf: committed.rollbackOf });
       res.json({ ok: true, version: committed.version, rollbackOf: committed.rollbackOf });
     } catch (err) {
       res.status(400).json({ ok: false, error: err.message });

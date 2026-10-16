@@ -14,8 +14,9 @@
     { "method": "GET",    "path": "/events?since=<id>",             "description": "SSE event stream with Last-Event-ID replay (§4.6)", "status": "live" },
     { "method": "GET",    "path": "/state",                        "description": "Dashboard bootstrap state", "status": "live" },
     { "method": "GET",    "path": "/traces/:callId",                "description": "Request trace spans", "status": "live" },
-    { "method": "GET",    "path": "/audit?limit=50",                "description": "Audit records (§4.7)", "status": "planned" },
-    { "method": "GET",    "path": "/audit/verify",                  "description": "Hash-chain verification: { ok, headHash, brokenAt?, reason? }", "status": "planned" },
+    { "method": "GET",    "path": "/audit?limit=50",                "description": "Audit records (§4.7)", "status": "live" },
+    { "method": "GET",    "path": "/audit/verify",                  "description": "Hash-chain verification: { ok, headHash, brokenAt?, reason? }", "status": "live" },
+    { "method": "GET",    "path": "/audit/export",                  "description": "Export audit records as NDJSON", "status": "live" },
     { "method": "GET",    "path": "/metrics",                       "description": "Counters and latency histograms", "status": "planned" },
     { "method": "POST",   "path": "/dev/tamper {index}",            "description": "Dev only (ENABLE_DEV_ROUTES=1): tamper audit line at index", "status": "planned" },
     { "method": "GET",    "path": "/health",                        "description": "Health check", "status": "live" }

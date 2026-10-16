@@ -13,6 +13,7 @@ import { invoke } from './features/executor/invoke.js';
 import { registryStore } from './features/registry/store.js';
 import { bus } from './features/events/bus.js';
 import { get as getTrace } from './features/events/trace-store.js';
+import { auditRoutes } from './features/audit/routes.js';
 
 const app = express();
 app.use(cors());
@@ -48,6 +49,7 @@ app.get('/traces/:callId', (req, res) => {
 // §4.5 core endpoints
 apisRoutes(app);
 eventsRoute(app);
+auditRoutes(app);
 
 app.post('/apis/:apiId/tools/:tool/invoke', async (req, res) => {
   const { apiId, tool } = req.params;

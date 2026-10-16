@@ -14,6 +14,7 @@ import { sha256 } from '../../lib/hash.js';
 import Ajv from 'ajv';
 import { cfg } from '../../config.js';
 import { check as safetyCheck, circuit } from '../safety/index.js';
+import { append as appendAudit } from '../audit/index.js';
 
 const ajv = new Ajv({ allErrors: true, strict: false });
 const validatorCache = new Map(); // key: `${apiId}:${tool}:v${version}` -> compiled ajv validator
@@ -274,6 +275,13 @@ async function healAndRetry({ tool, args, first, kind, callId, runId, t0, resolv
         latencyMs: Date.now() - t0,
       });
       emit({ type: 'patch.committed', callId, runId, apiId: tool.apiId, tool: tool.name, version: committed.version, ops: commitOps });
+      appendAudit({
+        decision: 'commit', apiId: tool.apiId, tool: tool.name,
+        versionBefore: tool.version, versionAfter: committed.version,
+        tier: proposal.tier, ops: commitOps, confidence: proposal.confidence,
+        evidence: proposal.evidence, healId: callId, callId,
+        latencyMs: Date.now() - t0,
+      });
       return success(nextDraft, r, {
         healed: true, rounds, tier: proposal.tier, cacheHit: false,
         latencyMs: Date.now() - t0, healMs: Date.now() - t0, tokens: { input: 0, output: 0 },
@@ -373,6 +381,9 @@ export async function invoke({ apiId, toolName, args, runId }) {
     emitCall('call.succeeded', { version: result.meta.version, healed: true, rounds: result.meta.rounds, data: result.data });
   } else {
     emitCall('call.failed', { code: result.error.code, reason: result.error.details?.reason });
+    if (result.error.code === 'tool_unavailable') {
+      appendAudit({ decision: 'halt', apiId, tool: toolName, versionBefore: tool.version, reason: result.error.details?.reason, callId });
+    }
   }
   return result;
 }
