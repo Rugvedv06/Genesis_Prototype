@@ -51,8 +51,10 @@ function normalizeDetail(d, rootBody) {
     kind = 'missing';
   } else if (t.includes('extra')) {
     kind = 'extra';
-  } else if (t.includes('integer') || t.includes('is_instance') || t.includes('type_error') || t.includes('enum')) {
+  } else if (t.includes('integer') || t.includes('int_parsing') || t.includes('is_instance') || t.includes('type_error') || t.includes('enum')) {
     kind = 'type';
+  } else if (t.includes('extra_forbidden')) {
+    kind = 'extra';
   } else if (t.includes('regex') || t.includes('pattern') || t.includes('email') || t.includes('length') || t.includes('range') || t.includes('greater') || t.includes('less') || t === 'value_error') {
     kind = 'value';
   }

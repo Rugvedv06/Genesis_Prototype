@@ -175,7 +175,15 @@ export class RegistryStore {
   setConfig(apiId, patch) {
     const api = this._byApi[apiId];
     if (!api) return null;
-    api.config = { ...api.config, ...patch, healing: { ...api.config.healing, ...patch.healing } };
+    const { mode, confidenceThreshold, maxRounds, tier2, healing, ...rest } = patch;
+    api.config = {
+      ...api.config,
+      ...rest,
+      confidenceThreshold: confidenceThreshold ?? api.config.confidenceThreshold,
+      maxRounds: maxRounds ?? api.config.maxRounds,
+      tier2: tier2 ?? api.config.tier2,
+      healing: { ...api.config.healing, ...healing, ...(mode ? { mode } : {}) },
+    };
     this._snapshot();
     return api.config;
   }
@@ -257,7 +265,7 @@ export class RegistryStore {
     };
   }
 
-  commit(apiId, tool, adapter, change) {
+  commit(apiId, tool, adapter, change, origin = 'heal') {
     const entry = this._toolEntry(apiId, tool);
     if (!entry) throw new Error(`registry.commit: ${apiId}/${tool} not registered`);
     const version = entry.versions.length + 1;
@@ -268,7 +276,7 @@ export class RegistryStore {
       tool,
       createdAt: iso(),
       adapter,
-      origin: 'heal',
+      origin,
       meta: entry.current.meta,
       change: change ?? null,
     };

@@ -3,6 +3,7 @@
 import { registryStore } from '../registry/store.js';
 import { emit } from '../events/bus.js';
 import { append as appendAudit } from '../audit/index.js';
+import { cfg } from '../../config.js';
 
 export function apisRoutes(app) {
   // GET /apis — list registered APIs and current versions
@@ -33,7 +34,7 @@ export function apisRoutes(app) {
       return res.status(400).json({ ok: false, error: 'invalid_arguments', message: 'apiId, baseUrl and tools[] are required' });
     }
     const result = registryStore.registerApi(apiId, { apiId, baseUrl, specUrl, credentials, healing, tools });
-    emit({ type: 'api.registered', apiId, baseUrl, specUrl, credentials, healing, toolCount: tools.length, epoch: result.epoch });
+    emit({ type: 'api.registered', apiId, baseUrl, specUrl, healing, toolCount: tools.length, epoch: result.epoch });
     res.json({ ok: true, apiId, tools: result.tools, epoch: result.epoch });
   });
 
@@ -89,6 +90,20 @@ export function apisRoutes(app) {
     } catch (err) {
       res.status(400).json({ ok: false, error: err.message });
     }
+  });
+
+  app.post('/dev/force-bad-commit', (req, res) => {
+    if (!cfg.enableDevRoutes) return res.status(404).json({ ok: false, error: 'not_found' });
+    const { apiId, tool } = req.body ?? {};
+    const current = registryStore.current(apiId, tool);
+    if (!current) return res.status(404).json({ ok: false, error: 'not_found' });
+    const adapter = {
+      ...current.versionObj.adapter,
+      request: [...(current.versionObj.adapter.request ?? []), { op: 'rename_field', from: '__healr_bad_field__', to: '__healr_bad_field__' }],
+    };
+    const committed = registryStore.commit(apiId, tool, adapter, { ops: adapter.request.slice(-1), tier: 1, confidence: 1, evidence: ['developer forced bad commit'] }, 'dev');
+    emit({ type: 'patch.committed', apiId, tool, version: committed.version, ops: committed.change.ops, dev: true });
+    res.json({ ok: true, version: committed.version });
   });
 
   // POST /tasks — scripted (non-LLM) task runner (§6 Phase 1 Track B)

@@ -22,7 +22,11 @@ export function recordHalt(apiId, tool) {
   const recent = (failures.get(k) ?? []).filter((ts) => now - ts < WINDOW_MS);
   recent.push(now);
   failures.set(k, recent);
-  if (recent.length >= 3) states.set(k, { until: now + OPEN_MS });
+  if (recent.length >= 3) {
+    states.set(k, { until: now + OPEN_MS });
+    return now + OPEN_MS;
+  }
+  return null;
 }
 
 export function negativeHit(signature) {

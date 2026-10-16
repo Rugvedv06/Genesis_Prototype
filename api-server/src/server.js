@@ -15,13 +15,14 @@ import { bus } from './features/events/bus.js';
 import { get as getTrace } from './features/events/trace-store.js';
 import { auditRoutes } from './features/audit/routes.js';
 import { snapshot as metricsSnapshot, timeseries as metricsTimeseries } from './features/metrics/index.js';
+import { head as auditHead } from './features/audit/index.js';
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
 app.get('/health', (_req, res) => {
-  res.json({ ok: true, service: 'api-server', port: cfg.port, version: '0.1.0', apis: registryStore.list().length, auditHead: null, time: new Date().toISOString() });
+  res.json({ ok: true, service: 'api-server', port: cfg.port, version: '0.1.0', apis: registryStore.list().length, auditHead: auditHead(), time: new Date().toISOString() });
 });
 
 app.get('/state', (_req, res) => {
@@ -38,7 +39,7 @@ app.get('/state', (_req, res) => {
       sideEffects: current?.versionObj?.meta?.sideEffects ?? current?.versionObj?.adapter?.sideEffects ?? 'write',
     });
   }
-  res.json({ lastEventId: bus.since(0).at(-1)?.id ?? 0, apis: [...grouped.values()], metrics: metricsSnapshot(), audit: { count: 0, headHash: null, verified: true }, cache: { entries: 0, hits: 0 }, circuit: [] });
+  res.json({ lastEventId: bus.since(0).at(-1)?.id ?? 0, apis: [...grouped.values()], metrics: metricsSnapshot(), audit: auditHead(), cache: { entries: 0, hits: 0 }, circuit: [] });
 });
 
 app.get('/metrics', (_req, res) => res.json(metricsSnapshot()));

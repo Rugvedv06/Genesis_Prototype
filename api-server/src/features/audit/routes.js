@@ -10,7 +10,7 @@ export function auditRoutes(app) {
       apiId: req.query.apiId,
       tool: req.query.tool,
     });
-    res.json({ records });
+    res.json({ records, ...audit.head() });
   });
   app.get('/audit/verify', (_req, res) => res.json(audit.verify()));
   app.get('/audit/export', (_req, res) => {

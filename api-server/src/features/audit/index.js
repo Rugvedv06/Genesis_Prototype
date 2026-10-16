@@ -12,7 +12,7 @@ const BACKUP = `${FILE}.bak`;
 
 function prepare(value, key = '') {
   if (value === undefined) return undefined;
-  if (/(credential|secret|token|password|authorization)/i.test(key)) return '[redacted]';
+  if (/(credential|secret|password|authorization)/i.test(key)) return '[redacted]';
   if (Array.isArray(value)) return value.map((item) => prepare(item)).filter((item) => item !== undefined);
   if (value && typeof value === 'object') {
     return Object.fromEntries(Object.entries(value)
@@ -103,4 +103,10 @@ export function tamper(index, mode) {
 
 export function exportNdjson() {
   return existsSync(FILE) ? readFileSync(FILE, 'utf8') : '';
+}
+
+export function head() {
+  const records = readRecords();
+  const tail = records.at(-1);
+  return { count: records.length, headHash: tail?.hash ?? null, verified: verify().ok };
 }

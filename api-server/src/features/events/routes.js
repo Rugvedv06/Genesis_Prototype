@@ -14,8 +14,8 @@ export function eventsRoute(app) {
     const types = req.query.types ? new Set(String(req.query.types).split(',').filter(Boolean)) : null;
     const matches = (e) => (!apiId || e.apiId === apiId) && (!types || types.has(e.type));
     const send = (e) => { if (matches(e)) res.write(`id: ${e.id}\ndata: ${JSON.stringify(e)}\n\n`); };
-    bus.since(sinceId).forEach(send);
     const off = bus.on(send);
+    bus.since(sinceId).forEach(send);
     const ka = setInterval(() => res.write(': ping\n\n'), 15000);
     req.on('close', () => {
       off();
