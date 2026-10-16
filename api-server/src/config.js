@@ -13,6 +13,7 @@ export function config(env = process.env) {
     healTimeoutMs: Number(env.HEAL_TIMEOUT_MS ?? 5000),
     confidenceThreshold: Number(env.CONFIDENCE_THRESHOLD ?? 0.85),
     dataDir: env.HEALR_DATA_DIR,
+    allowLocalUpstreams: env.ALLOW_LOCAL_UPSTREAMS !== '0',
   };
 }
 

@@ -3,7 +3,7 @@
     { "method": "GET",    "path": "/apis",                          "description": "List registered APIs and current versions", "status": "live" },
     { "method": "GET",    "path": "/apis/:apiId",                   "description": "API detail and configuration", "status": "live" },
     { "method": "PATCH",  "path": "/apis/:apiId/config",             "description": "Update healing configuration", "status": "live" },
-    { "method": "POST",   "path": "/apis",                          "description": "Register an API (§4.1 payload)", "status": "live" },
+    { "method": "POST",   "path": "/apis",                          "description": "Register an API with validated HTTP(S) upstream (§4.1 payload)", "status": "live" },
     { "method": "DELETE", "path": "/apis/:apiId",                   "description": "Remove an API (demo reset)", "status": "live" },
     { "method": "GET",    "path": "/apis/:apiId/tools/:tool/versions","description": "Tool version history", "status": "live" },
     { "method": "GET",    "path": "/apis/:apiId/tools/:tool/versions/:n","description": "Single version record", "status": "live" },

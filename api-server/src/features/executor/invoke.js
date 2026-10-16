@@ -17,6 +17,7 @@ import { cfg } from '../../config.js';
 import { check as safetyCheck, circuit } from '../safety/index.js';
 import { append as appendAudit } from '../audit/index.js';
 import { negativeHit, cacheNegative, recordHalt } from '../safety/circuit.js';
+import { validateUpstreamUrl } from '../http/url-policy.js';
 
 const ajv = new Ajv({ allErrors: true, strict: false });
 addFormats(ajv);
@@ -91,7 +92,8 @@ async function send(tool, args, resolveCredential) {
     delete pathValues[key];
     return encodeURIComponent(String(args[key]));
   });
-  const url = new URL(resolvedPath, baseUrl);
+  const upstream = validateUpstreamUrl(baseUrl, { allowLocal: cfg.allowLocalUpstreams });
+  const url = new URL(resolvedPath, upstream);
   if (method.toUpperCase() === 'GET') {
     for (const [key, value] of Object.entries(pathValues)) {
       if (value !== undefined) url.searchParams.set(key, String(value));

@@ -4,6 +4,7 @@ import { registryStore } from '../registry/store.js';
 import { emit } from '../events/bus.js';
 import { append as appendAudit } from '../audit/index.js';
 import { cfg } from '../../config.js';
+import { validateUpstreamUrl } from '../http/url-policy.js';
 
 export function apisRoutes(app) {
   // GET /apis — list registered APIs and current versions
@@ -32,6 +33,12 @@ export function apisRoutes(app) {
     const { apiId, baseUrl, specUrl, credentials, healing, tools } = req.body ?? {};
     if (!apiId || !baseUrl || !Array.isArray(tools) || tools.length === 0) {
       return res.status(400).json({ ok: false, error: 'invalid_arguments', message: 'apiId, baseUrl and tools[] are required' });
+    }
+    try {
+      validateUpstreamUrl(baseUrl, { allowLocal: cfg.allowLocalUpstreams });
+      if (specUrl) validateUpstreamUrl(specUrl, { allowLocal: cfg.allowLocalUpstreams });
+    } catch (error) {
+      return res.status(400).json({ ok: false, error: 'invalid_upstream_url', message: error.message });
     }
     const result = registryStore.registerApi(apiId, { apiId, baseUrl, specUrl, credentials, healing, tools });
     emit({ type: 'api.registered', apiId, baseUrl, specUrl, healing, toolCount: tools.length, epoch: result.epoch });

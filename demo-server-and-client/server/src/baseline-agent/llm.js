@@ -14,7 +14,7 @@ function hasRealKey(apiKey) {
 
 export function createGemini(model) {
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!hasRealKey(apiKey)) {
+  if (model === 'scripted' || !hasRealKey(apiKey)) {
     // Scripted fallback: always propose the tool call for the task, so the raw
     // (unhealed) executor retries against the mutated mock until the cap —
     // producing a visible failure after MAX_ITERATIONS.
