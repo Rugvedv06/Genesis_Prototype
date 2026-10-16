@@ -51,6 +51,10 @@ export const api = {
     const q = new URLSearchParams({ limit, offset, ...(decision && { decision }), ...(apiId && { apiId }), ...(tool && { tool }) });
     return strict(CORE, `/audit?${q}`);
   },
+  auditRecent: async (limit = 100) => {
+    const head = await api.audit({ limit: 1 });
+    return api.audit({ limit, offset: Math.max(0, (head.count ?? 0) - limit) });
+  },
   auditVerify: () => strict(CORE, '/audit/verify'),
   auditExportUrl: `${CORE}/audit/export`,
   trace: (callId) => strict(CORE, `/traces/${e(callId)}`),

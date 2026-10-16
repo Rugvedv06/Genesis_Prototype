@@ -25,7 +25,7 @@ export function PageHeader({ title, purpose, actions }) {
   return (
     <header className="page-head">
       <div className="grow"><h1>{title}</h1>{purpose && <p>{purpose}</p>}</div>
-      {actions && <div className="flex items-center gap-2">{actions}</div>}
+      {actions && <div className="page-actions flex min-w-0 flex-wrap items-center gap-2">{actions}</div>}
     </header>
   );
 }
@@ -68,6 +68,22 @@ export function EmptyState({ icon: Icon, title, children, action }) {
       {action && <div className="flex flex-wrap items-center justify-center gap-2">{action}</div>}
     </div>
   );
+}
+
+export function PageLoading({ label = 'Loading data' }) {
+  return <div className="page-state" role="status"><span className="state-indicator state-pending" />{label}</div>;
+}
+
+export function PageError({ error, onRetry, label = 'Could not load this page' }) {
+  return <div className="page-error" role="alert"><div><strong>{label}</strong><p>{error?.message ?? 'The core service could not be reached.'}</p></div>{onRetry && <Button variant="outline" size="sm" onClick={onRetry}>Retry</Button>}</div>;
+}
+
+export function CodeBlock({ value, label }) {
+  return <pre className="code" aria-label={label}>{typeof value === 'string' ? value : JSON.stringify(value ?? null, null, 2)}</pre>;
+}
+
+export function Field({ label, hint, children }) {
+  return <label className="form-field"><span>{label}</span>{children}{hint && <small>{hint}</small>}</label>;
 }
 
 export const Skeleton = ({ h = 14, w = '100%' }) => <ShadSkeleton className="block" style={{ height: h, width: w }} />;

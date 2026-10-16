@@ -32,7 +32,12 @@ export function foldEvent(call, e) {
   return c;
 }
 
-export const durationMs = (c) => (c.endedAt ? c.endedAt - c.startedAt : null);
+export const durationMs = (c) => {
+  if (!c.endedAt || !c.startedAt) return null;
+  const start = typeof c.startedAt === 'number' ? c.startedAt : Date.parse(c.startedAt);
+  const end = typeof c.endedAt === 'number' ? c.endedAt : Date.parse(c.endedAt);
+  return Number.isFinite(start) && Number.isFinite(end) ? Math.max(0, end - start) : null;
+};
 
 // Tool health from calls + registry. /state.status is hardcoded "healthy" (G1), so ignore it.
 export function toolHealth(apis, calls) {

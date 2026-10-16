@@ -18,6 +18,7 @@ export function useAsync(fn, deps = []) {
 
 export function usePolling(fn, ms, deps = []) {
   const [st, setSt] = useState({ data: null, error: null, loading: true });
+  const [n, setN] = useState(0);
   const fnRef = useRef(fn); fnRef.current = fn;
   useEffect(() => {
     let live = true; let timer;
@@ -31,8 +32,8 @@ export function usePolling(fn, ms, deps = []) {
     tick();
     return () => { live = false; clearTimeout(timer); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
-  return st;
+  }, [...deps, n]);
+  return { ...st, reload: useCallback(() => setN((x) => x + 1), []) };
 }
 
 // Re-render every second so "5s ago" labels stay honest.
