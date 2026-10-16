@@ -17,6 +17,7 @@ import { auditRoutes } from './features/audit/routes.js';
 import { snapshot as metricsSnapshot, timeseries as metricsTimeseries } from './features/metrics/index.js';
 import { head as auditHead } from './features/audit/index.js';
 import { snapshot as circuitSnapshot } from './features/safety/circuit.js';
+import { getProvider } from './features/llm/provider.js';
 
 const app = express();
 app.use(cors());
@@ -46,6 +47,16 @@ app.get('/state', (_req, res) => {
 
 app.get('/metrics', (_req, res) => res.json(metricsSnapshot()));
 app.get('/metrics/timeseries', (req, res) => res.json({ series: metricsTimeseries(Number(req.query.window ?? 300), Number(req.query.step ?? 5)) }));
+
+app.get('/provider/health', async (_req, res) => {
+  try {
+    const provider = getProvider('diagnoser');
+    const result = await provider.health();
+    res.status(result.ok ? 200 : 503).json(result);
+  } catch (error) {
+    res.status(503).json({ ok: false, code: 'provider_configuration_error', message: error.message });
+  }
+});
 
 app.get('/traces/:callId', (req, res) => {
   const trace = getTrace(req.params.callId);

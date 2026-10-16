@@ -19,6 +19,7 @@
     { "method": "GET",    "path": "/audit/export",                  "description": "Export audit records as NDJSON", "status": "live" },
     { "method": "GET",    "path": "/metrics",                       "description": "Counters and latency histograms", "status": "live" },
     { "method": "GET",    "path": "/metrics/timeseries",             "description": "Bucketed metrics series", "status": "live" },
+    { "method": "GET",    "path": "/provider/health",                "description": "Server-side configured LLM provider health", "status": "live" },
     { "method": "POST",   "path": "/dev/tamper {index}",            "description": "Dev only (ENABLE_DEV_ROUTES=1): tamper audit line at index", "status": "planned" },
     { "method": "GET",    "path": "/health",                        "description": "Health check", "status": "live" }
   ]
