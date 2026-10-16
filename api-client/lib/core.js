@@ -37,8 +37,15 @@ async function strict(base, path, opts) {
 const e = encodeURIComponent;
 export const api = {
   state: () => strict(CORE, '/state'),
+  metrics: () => strict(CORE, '/metrics'),
   recentEvents: (limit = 5000) => strict(CORE, `/events/recent?limit=${limit}`),
   series: (windowSec = 300, step = 5) => strict(CORE, `/metrics/timeseries?window=${windowSec}&step=${step}`),
+  cache: ({ limit = 100, cursor } = {}) => {
+    const query = new URLSearchParams({ limit: String(limit), ...(cursor && { cursor }) });
+    return strict(CORE, `/cache?${query}`);
+  },
+  invalidateCacheKey: (cacheKey) => strict(CORE, `/cache/${e(cacheKey)}`, { method: 'DELETE' }),
+  clearCache: () => strict(CORE, '/cache', { method: 'DELETE' }),
   apiDetail: (id) => strict(CORE, `/apis/${e(id)}`),
   versions: (id, tool) => strict(CORE, `/apis/${e(id)}/tools/${e(tool)}/versions`),
   diff: (id, tool, from, to) => strict(CORE, `/apis/${e(id)}/tools/${e(tool)}/diff?from=${from}&to=${to}`),
@@ -58,7 +65,7 @@ export const api = {
   },
   auditVerify: () => strict(CORE, '/audit/verify'),
   auditExportUrl: `${CORE}/audit/export`,
-  trace: (callId) => strict(CORE, `/traces/${e(callId)}`),
+  trace: (callId, { cursor = 0, limit = 100 } = {}) => strict(CORE, `/traces/${e(callId)}?${new URLSearchParams({ cursor: String(cursor), limit: String(limit) })}`),
   providerHealth: async () => (await raw(CORE, '/provider/health')).data,
   tamper: (index, mode) => strict(CORE, '/dev/tamper', { method: 'POST', body: { index, mode } }),
   tamperRestore: () => strict(CORE, '/dev/tamper/restore', { method: 'POST' }),

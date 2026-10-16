@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
+import { createIsolatedDatabase } from './helpers/isolated-database.js';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const CORE_ENTRY = join(ROOT, 'api-server/src/server.js');
@@ -102,14 +103,28 @@ async function waitForHealth(url, children) {
   throw new Error(`Timed out waiting for ${url}/health`);
 }
 
-test('M5 policy modes enforce, log, and disable adapter changes with auditable outcomes', async (t) => {
-  const dataDir = mkdtempSync(join(tmpdir(), 'healr-policy-modes-'));
+test('M5 policy modes enforce, log, and disable adapter changes with auditable outcomes', {
+  skip: !process.env.HEALR_TEST_DATABASE_URL && 'set HEALR_TEST_DATABASE_URL to run isolated PostgreSQL runtime coverage',
+}, async (t) => {
+  const isolatedDb = await createIsolatedDatabase('policy');
+  let dataDir;
+  let core;
+  let mock;
+  t.after(async () => {
+    await Promise.all([stop(core), stop(mock)]);
+    if (dataDir) rmSync(dataDir, { recursive: true, force: true });
+    assert.deepEqual(await isolatedDb.drop(), { dropped: true, databaseExists: false }, 'isolated policy database is dropped');
+  });
+  dataDir = mkdtempSync(join(tmpdir(), 'healr-policy-modes-'));
   const corePort = await freePort();
   const mockPort = await freePort([corePort]);
   const coreUrl = `http://127.0.0.1:${corePort}`;
   const mockUrl = `http://127.0.0.1:${mockPort}`;
   const env = {
     ...process.env,
+    DATABASE_URL: isolatedDb.url,
+    REDIS_URL: '',
+    HEALR_TEST_DATABASE_URL: '',
     PORT: String(corePort),
     CORE_URL: coreUrl,
     MOCK_URL: mockUrl,
@@ -119,12 +134,8 @@ test('M5 policy modes enforce, log, and disable adapter changes with auditable o
     MAX_HEAL_ROUNDS: '5',
     HEAL_TIMEOUT_MS: '3000',
   };
-  const core = start(CORE_ENTRY, join(ROOT, 'api-server'), env);
-  const mock = start(MOCK_ENTRY, join(ROOT, 'demo-server-and-client/server'), { ...env, PORT: String(mockPort) });
-  t.after(async () => {
-    await Promise.all([stop(core), stop(mock)]);
-    rmSync(dataDir, { recursive: true, force: true });
-  });
+  core = start(CORE_ENTRY, join(ROOT, 'api-server'), env);
+  mock = start(MOCK_ENTRY, join(ROOT, 'demo-server-and-client/server'), { ...env, PORT: String(mockPort) });
 
   await Promise.all([waitForHealth(coreUrl, [core]), waitForHealth(mockUrl, [mock])]);
 
@@ -206,11 +217,16 @@ test('M5 policy modes enforce, log, and disable adapter changes with auditable o
       assert.ok(records.some((record) => record.decision === 'halt' && record.reason === 'healing_disabled'));
       assert.equal(records.some((record) => record.decision === 'proposed' || record.decision === 'commit'), false);
     } else if (mode === 'enforce' && risk === 'low') {
-      assert.equal(invocation.body.ok, true);
+      assert.equal(invocation.body.ok, true, JSON.stringify(invocation.body));
       assert.equal(invocation.body.meta.healed, true);
       assert.equal(invocation.body.meta.version, 2);
       assert.equal(versions.body.versions.length, 2);
       assert.equal(versions.body.versions[1].origin, 'heal');
+      const persistedHeaderOp = versions.body.versions[1].adapter.request.find((operation) => operation.op === 'add_header');
+      assert.ok(persistedHeaderOp, 'enforce mode persists the validated header adapter operation');
+      assert.equal(Object.hasOwn(persistedHeaderOp, 'evidence'), false, 'evidence must not be stored in the executable adapter');
+      const commitAudit = records.find((record) => record.decision === 'commit');
+      assert.ok(commitAudit?.evidenceCount > 0, 'proposal evidence remains in durable provenance');
       assert.ok(mockState.body.lastRequests.length > 1, 'enforce should replay after each verified patch');
       assert.equal(mockState.body.lastRequests.at(-1).status, 200);
       assert.ok(records.some((record) => record.decision === 'commit' && record.versionAfter === 2));

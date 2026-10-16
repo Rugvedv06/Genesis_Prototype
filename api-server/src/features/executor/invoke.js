@@ -22,7 +22,8 @@ import { appendAuditInTransaction } from '../../db/audit-repository.js';
 import { appendGatewayEventInTransaction } from '../../db/event-repository.js';
 import { startInvocationInTransaction, finishInvocationInTransaction } from '../../db/invocation-repository.js';
 import { commitFromCache, rollbackFromCache } from '../../db/registry-service.js';
-import { findVerifiedPatchCandidate, invalidateVerifiedPatchCandidate, saveVerifiedPatchCandidate } from '../../db/registry-service.js';
+import { getApiRevisions } from '../../db/registry-repository.js';
+import { find as findVerifiedPatchCandidate, invalidate as invalidateVerifiedPatchCandidate, learn as saveVerifiedPatchCandidate } from '../patch-cache/index.js';
 import { flushDurableEvents } from '../events/bus.js';
 import { negativeHit, negativeResult, cacheNegative, recordHalt, negativeHitAsync, negativeResultAsync, cacheNegativeAsync, recordHaltAsync } from '../safety/circuit.js';
 import { validateUpstreamUrl } from '../http/url-policy.js';
@@ -34,6 +35,7 @@ addFormats(ajv);
 const validatorCache = new Map(); // schema-fingerprinted key -> compiled ajv validator
 const MAX_CACHED_VALIDATORS = 256;
 const reportedDomainHalts = new WeakSet();
+const CONVENTION_OPS = new Set(['rename_field', 'move_field', 'coerce_type']);
 
 async function appendAudit(input) {
   if (!process.env.DATABASE_URL) return appendFileAudit(input);
@@ -133,17 +135,23 @@ async function send(tool, args, resolveCredential) {
   const meta = tool.versionObj?.meta ?? {};
   const reqPath = meta.path ?? adapter._path;
   const method = meta.method ?? adapter._method ?? 'POST';
-  const pathValues = { ...args };
+  const pathValues = { ...body };
   const resolvedPath = String(reqPath).replace(/\{([^}]+)\}/g, (_, key) => {
     if (pathValues[key] === undefined) throw new ConfigError(`missing path argument ${key}`);
     delete pathValues[key];
-    return encodeURIComponent(String(args[key]));
+    return encodeURIComponent(String(body[key]));
   });
   const upstream = validateUpstreamUrl(baseUrl, { allowLocal: cfg.allowLocalUpstreams });
   const url = new URL(resolvedPath, upstream);
   if (method.toUpperCase() === 'GET') {
+    const query = pathValues.query && typeof pathValues.query === 'object' && !Array.isArray(pathValues.query)
+      ? pathValues.query : {};
+    delete pathValues.query;
     for (const [key, value] of Object.entries(pathValues)) {
-      if (value !== undefined) url.searchParams.set(key, String(value));
+      if (value !== undefined && (value === null || typeof value !== 'object')) url.searchParams.set(key, String(value));
+    }
+    for (const [key, value] of Object.entries(query)) {
+      if (value !== undefined && (value === null || typeof value !== 'object')) url.searchParams.set(key, String(value));
     }
   }
   const ctrl = new AbortController();
@@ -174,7 +182,13 @@ function matchesLogicalResponse(tool, response) {
 function matchesIdentity(tool, args, response) {
   const identity = tool.versionObj?.meta?.identity ?? {};
   const extracted = tool.compiled.extract(response.json ?? {});
-  return Object.entries(identity).every(([arg, field]) => String(extracted[field]) === String(args?.[arg]));
+  return Object.entries(identity).every(([arg, field]) => {
+    const expected = args?.[arg];
+    const actual = extracted[field];
+    const scalar = (value) => value !== null && value !== undefined
+      && ['string', 'number', 'boolean'].includes(typeof value);
+    return scalar(expected) && scalar(actual) && String(actual) === String(expected);
+  });
 }
 
 function errorSignature(toolName, res) {
@@ -321,22 +335,104 @@ function candidateIdentity(tool, signature) {
   const schemaFingerprint = sha256(stableStringify(logicalSchema));
   const cacheKey = sha256(stableStringify({
     scope: 'exact', apiId: tool.apiId, tool: tool.name, apiEpoch: tool.epoch, configRevision: tool.configRevision,
+    credentialRevision: tool.credentialRevision,
     adapterFingerprint, schemaFingerprint, signature,
   }));
   return { cacheKey, adapterFingerprint, schemaFingerprint };
 }
 
-async function replayVerifiedCandidate({ tool, args, signature, resolveCredential, apiConfig, callId, runId, t0 }) {
+function conventionCandidateIdentity(tool, response) {
+  const method = String(tool.versionObj.meta?.method ?? 'POST').toUpperCase();
+  const sideEffects = tool.versionObj.meta?.sideEffects ?? tool.versionObj.adapter?.sideEffects ?? 'write';
+  if (!['GET', 'HEAD'].includes(method) || !['read', 'none'].includes(sideEffects)) return null;
+  const identity = tool.versionObj.meta?.identity;
+  if (!identity || typeof identity !== 'object' || Array.isArray(identity)
+    || Object.keys(identity).length === 0
+    || Object.entries(identity).some(([arg, field]) => !/^[A-Za-z_$][A-Za-z0-9_$-]{0,127}$/.test(arg)
+      || typeof field !== 'string' || !/^[A-Za-z_$][A-Za-z0-9_$.\[\]-]{0,255}$/.test(field))) return null;
+  const errors = parseErrors(response?.json, response?.status);
+  if (classify(errors, response?.status) !== 'validation4xx' || errors.length === 0
+    || errors.length > 16
+    || errors.some((error) => !['missing', 'extra', 'type'].includes(error.kind))) return null;
+
+  const structuralErrors = errors.map((error) => ({
+    kind: error.kind,
+    validatorType: typeof error.raw?.type === 'string' && error.raw.type.length <= 128
+      && /^[A-Za-z0-9_.-]+$/.test(error.raw.type) ? error.raw.type : null,
+    expected: normalizeValidatorContractValue(error.expected),
+    allowed: normalizeValidatorContractValue(error.allowed),
+    path: Array.isArray(error.path) && error.path.length <= 16
+      ? error.path.map((part) => typeof part === 'string' && part.length <= 128
+        && /^[A-Za-z_$][A-Za-z0-9_$-]*$/.test(part) ? part : null)
+      : null,
+  }));
+  if (structuralErrors.some((error) => error.validatorType === null || error.expected === undefined
+    || error.allowed === undefined || error.path === null || error.path.some((part) => part === null))) return null;
+  structuralErrors.sort((left, right) => stableStringify(left).localeCompare(stableStringify(right)));
+
+  const adapterFingerprint = sha256(stableStringify(tool.versionObj.adapter));
+  const logicalSchema = tool.versionObj.meta?.logicalSchema ?? {};
+  const schemaFingerprint = sha256(stableStringify(logicalSchema));
+  const responseContractFingerprint = sha256(stableStringify({
+    responseSchema: tool.versionObj.meta?.responseSchema ?? null,
+    responseMap: tool.versionObj.adapter?.response?.map ?? {},
+    identity: tool.versionObj.meta?.identity ?? {},
+  }));
+  const cacheKey = sha256(stableStringify({
+    version: 1, scope: 'convention', method, sideEffects, schemaFingerprint,
+    responseContractFingerprint, adapterFingerprint, errors: structuralErrors,
+  }));
+  return { cacheKey, adapterFingerprint, schemaFingerprint };
+}
+
+function normalizeValidatorContractValue(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value))) return value;
+  if (typeof value === 'string') return value.length <= 128 ? value : undefined;
+  if (Array.isArray(value) && value.length <= 32
+    && value.every((item) => typeof item === 'string' && item.length <= 128)) return [...value].sort();
+  return undefined;
+}
+
+function conventionOpsApplyToArgs(ops, args) {
+  if (!Array.isArray(ops) || ops.length === 0 || ops.some((operation) => !CONVENTION_OPS.has(operation?.op))) return false;
+  const occupied = new Set();
+  for (const operation of ops) {
+    if (operation.op === 'rename_field' || operation.op === 'move_field') {
+      const from = operation.op === 'rename_field' && operation.path
+        ? `${operation.path}.${operation.from}` : operation.from;
+      const to = operation.op === 'rename_field' && operation.path
+        ? `${operation.path}.${operation.to}` : operation.to;
+      if (getPath(args, from) === undefined || getPath(args, to) !== undefined || occupied.has(to)) return false;
+      occupied.add(from);
+      occupied.add(to);
+    } else if (operation.op === 'coerce_type') {
+      const value = getPath(args, operation.path);
+      if ((operation.from === 'string' && typeof value !== 'string')
+        || (operation.from === 'integer' && !Number.isSafeInteger(value))) return false;
+    }
+  }
+  return true;
+}
+
+async function replayVerifiedCandidate({ tool, args, signature, failure, resolveCredential, apiConfig, callId, runId, t0 }) {
   const method = String(tool.versionObj.meta?.method ?? 'POST').toUpperCase();
   // Replays can cause duplicate side effects. Candidate reuse is restricted to
   // methods that are safe to retry after the original request failed.
   const sideEffects = tool.versionObj.meta?.sideEffects ?? tool.versionObj.adapter?.sideEffects ?? 'write';
   if (!['GET', 'HEAD'].includes(method) || !['read', 'none'].includes(sideEffects)) return null;
   const identity = candidateIdentity(tool, signature);
-  const candidate = await findVerifiedPatchCandidate({
-    ...identity,
-  });
+  let candidate = await findVerifiedPatchCandidate(identity);
+  if (!candidate) {
+    const conventionIdentity = conventionCandidateIdentity(tool, failure);
+    if (conventionIdentity) candidate = await findVerifiedPatchCandidate(conventionIdentity);
+  }
   if (!candidate) return null;
+  const startingRevisions = await getApiRevisions(getPool(), tool.apiId);
+  const revisionsMatchTool = (revisions) => Boolean(revisions && revisions.epoch === tool.epoch
+    && revisions.config_revision === tool.configRevision
+    && revisions.credential_revision === tool.credentialRevision);
+  if (!revisionsMatchTool(startingRevisions)) return null;
   const tier = Number(candidate.evidence_summary?.tier);
   const confidence = Number(candidate.evidence_summary?.confidence);
   const ops = candidate.operations;
@@ -355,23 +451,27 @@ async function replayVerifiedCandidate({ tool, args, signature, resolveCredentia
         && /^[A-Za-z0-9_$.[\]{}\/-]+$/.test(operation[key]) && !/\d{4,}/.test(operation[key])
         && !/(secret|token|password|credential|apikey|authorization|cookie)/i.test(operation[key]))));
   if (!Number.isInteger(tier) || !Number.isFinite(confidence) || !Array.isArray(ops) || ops.length === 0
-    || !cacheSafeOps || candidate.scope !== 'exact' || candidate.source_api_id !== tool.apiId
-    || candidate.source_tool_name !== tool.name || candidate.evidence_class !== `tier${tier}`
+    || !cacheSafeOps || !['exact', 'convention'].includes(candidate.scope)
+    || (candidate.scope === 'exact' && (candidate.source_api_id !== tool.apiId
+      || candidate.source_tool_name !== tool.name))
+    || (candidate.scope === 'convention' && !conventionOpsApplyToArgs(ops, args))
+    || candidate.evidence_class !== `tier${tier}`
     || candidate.evidence_summary?.replayVerified !== true
     || candidate.operation_signature !== sha256(stableStringify(ops))) {
-    await invalidateVerifiedPatchCandidate(identity.cacheKey);
+    await invalidateVerifiedPatchCandidate(candidate.cache_key);
     return null;
   }
   const requirements = candidate.provenance_requirements;
   const sourceRequirement = Array.isArray(requirements) ? requirements.find((item) => item?.method === method) : null;
-  if (!sourceRequirement || sourceRequirement.apiEpoch !== tool.epoch
-    || sourceRequirement.configRevision !== tool.configRevision) {
-    await invalidateVerifiedPatchCandidate(identity.cacheKey);
+  if (!sourceRequirement || (candidate.scope === 'exact' && (sourceRequirement.apiEpoch !== tool.epoch
+    || sourceRequirement.configRevision !== tool.configRevision
+    || sourceRequirement.credentialRevision !== tool.credentialRevision))) {
+    if (candidate.scope === 'exact') await invalidateVerifiedPatchCandidate(candidate.cache_key);
     return null;
   }
   const gate = safetyCheck({ proposal, tool, mode: apiConfig.healing?.mode ?? 'enforce', apiCfg: apiConfig });
   if (!gate.ok || apiConfig.healing?.mode === 'log') {
-    await invalidateVerifiedPatchCandidate(identity.cacheKey);
+    if (candidate.scope === 'exact') await invalidateVerifiedPatchCandidate(candidate.cache_key);
     return null;
   }
   let adapter;
@@ -380,29 +480,48 @@ async function replayVerifiedCandidate({ tool, args, signature, resolveCredentia
     adapter = applyPatch(tool.versionObj.adapter, ops);
     compiled = compileAdapter(adapter, resolveCredential);
   } catch {
-    await invalidateVerifiedPatchCandidate(identity.cacheKey);
+    if (candidate.scope === 'exact') await invalidateVerifiedPatchCandidate(candidate.cache_key);
     return null;
   }
   const candidateTool = { ...tool, versionObj: { ...tool.versionObj, adapter }, compiled };
   let replay;
   try { replay = await send(candidateTool, args, resolveCredential); }
   catch {
-    await invalidateVerifiedPatchCandidate(identity.cacheKey);
+    if (candidate.scope === 'exact') await invalidateVerifiedPatchCandidate(candidate.cache_key);
     return null;
   }
   if (!replay.ok || !matchesLogicalResponse(candidateTool, replay) || !matchesIdentity(candidateTool, args, replay)) {
-    await invalidateVerifiedPatchCandidate(identity.cacheKey);
+    if (candidate.scope === 'exact') await invalidateVerifiedPatchCandidate(candidate.cache_key);
     return null;
   }
-  const change = { ops, tier, confidence, evidence: [], rounds: 1, cacheHit: true, callId, runId };
-  const committed = process.env.DATABASE_URL
-    ? (await commitFromCache({ apiId: tool.apiId, toolName: tool.name, adapter, change, origin: 'heal', current: tool })).value
-    : registryStore.commit(tool.apiId, tool.name, adapter, change);
+  const verifiedRevisions = await getApiRevisions(getPool(), tool.apiId);
+  const currentTool = registryStore.current(tool.apiId, tool.name);
+  if (!revisionsMatchTool(verifiedRevisions) || !currentTool || currentTool.version !== tool.version
+    || currentTool.epoch !== tool.epoch) {
+    return reportDomainHalt({
+      tool, callId, runId, t0,
+      result: halt('stale_cache_candidate', { revisionChanged: true }),
+    });
+  }
+  const change = { ops, tier, confidence, evidence: [], rounds: 0, cacheHit: true, callId, runId };
+  let committed;
+  try {
+    committed = process.env.DATABASE_URL
+      ? (await commitFromCache({ apiId: tool.apiId, toolName: tool.name, adapter, change, origin: 'heal', current: tool })).value
+      : registryStore.commit(tool.apiId, tool.name, adapter, change);
+  } catch (error) {
+    if (error.code !== 'stale_adapter_version') throw error;
+    return reportDomainHalt({
+      tool, callId, runId, t0,
+      result: halt('stale_cache_candidate', { revisionChanged: true }),
+    });
+  }
+  emit({ type: 'cache.hit', callId, runId, apiId: tool.apiId, tool: tool.name, scope: candidate.scope, sourceApiId: candidate.source_api_id });
   emit({ type: 'patch.verified', callId, runId, apiId: tool.apiId, tool: tool.name, status: replay.status, cacheHit: true });
   emit({ type: 'patch.committed', callId, runId, apiId: tool.apiId, tool: tool.name, version: committed.version, ops, cacheHit: true });
-  emit({ type: 'heal.finished', callId, runId, healId: callId, apiId: tool.apiId, tool: tool.name, outcome: 'committed', rounds: 1, tier, ms: Date.now() - t0, tokens: { input: 0, output: 0 }, cacheHit: true });
+  emit({ type: 'heal.finished', callId, runId, healId: callId, apiId: tool.apiId, tool: tool.name, outcome: 'committed', rounds: 0, tier, ms: Date.now() - t0, tokens: { input: 0, output: 0 }, cacheHit: true });
   return success({ ...candidateTool, version: committed.version }, replay, {
-    healed: true, rounds: 1, tier, cacheHit: true, latencyMs: Date.now() - t0,
+    healed: true, rounds: 0, tier, cacheHit: true, latencyMs: Date.now() - t0,
     healMs: Date.now() - t0, tokens: { input: 0, output: 0 }, ops, version: committed.version,
   });
 }
@@ -426,12 +545,12 @@ async function healAndRetry({ tool, args, first, kind, callId, runId, t0, resolv
     if (seen.has(sig)) return finishHealHalt({ tool, callId, runId, reason: 'loop_detected', details: { sig }, t0, rounds });
     seen.add(sig);
 
-    emit({ type: 'diagnosis.started', callId, runId, apiId: tool.apiId, tool: tool.name, round: rounds, kind });
-
     if (process.env.DATABASE_URL && rounds === 1 && !applied.length) {
-      const cached = await replayVerifiedCandidate({ tool, args, signature: sig, resolveCredential, apiConfig, callId, runId, t0 });
+      const cached = await replayVerifiedCandidate({ tool, args, signature: sig, failure, resolveCredential, apiConfig, callId, runId, t0 });
       if (cached) return cached;
     }
+
+    emit({ type: 'diagnosis.started', callId, runId, apiId: tool.apiId, tool: tool.name, round: rounds, kind });
 
     const proposal = await diagnose({ tool: draft, args, failure, kind });
     if (!proposal) {
@@ -491,13 +610,27 @@ async function healAndRetry({ tool, args, first, kind, callId, runId, t0, resolv
         const method = String(tool.versionObj.meta?.method ?? 'POST').toUpperCase();
         const identity = candidateIdentity(tool, sig);
         try {
-          await saveVerifiedPatchCandidate({
+          const candidate = {
             ...identity, scope: 'exact', sourceApiId: tool.apiId, sourceToolName: tool.name,
             sourceVersion: tool.version, operationSignature: sha256(stableStringify(commitOps)),
             operations: commitOps, evidenceClass: `tier${proposal.tier}`,
             evidenceSummary: { tier: proposal.tier, confidence: proposal.confidence, kind, replayVerified: true },
-            provenanceRequirements: [{ apiEpoch: tool.epoch, configRevision: tool.configRevision, method }],
-          });
+            provenanceRequirements: [{
+              apiEpoch: tool.epoch, configRevision: tool.configRevision,
+              credentialRevision: tool.credentialRevision, method,
+            }],
+          };
+          await saveVerifiedPatchCandidate(candidate);
+          if (commitOps.every((operation) => CONVENTION_OPS.has(operation.op))) {
+            const conventionIdentity = conventionCandidateIdentity(tool, first);
+            if (conventionIdentity) await saveVerifiedPatchCandidate({
+              ...conventionIdentity, scope: 'convention', sourceApiId: tool.apiId,
+              sourceToolName: tool.name, sourceVersion: tool.version,
+              operationSignature: candidate.operationSignature, operations: commitOps,
+              evidenceClass: candidate.evidenceClass, evidenceSummary: candidate.evidenceSummary,
+              provenanceRequirements: candidate.provenanceRequirements,
+            });
+          }
         } catch (error) {
           log({ level: 'warn', code: 'patch_candidate_persist_failed', apiId: tool.apiId, tool: tool.name, errorClass: error.name ?? 'Error' });
         }
@@ -595,6 +728,16 @@ async function invokeCore({ apiId, toolName, args, runId, callId = newId('c') })
   }
 
   if (first.ok && matchesLogicalResponse(tool, first)) {
+    if (!matchesIdentity(tool, args, first)) {
+      const reason = 'response_identity_mismatch';
+      const details = { reason, fields: [] };
+      emit({ type: 'drift.silent', callId, runId, apiId, tool: toolName, outcome: 'identity_mismatch', errors: [] });
+      emitCall('call.failed', { code: 'tool_unavailable', reason });
+      emit({ type: 'halt', callId, runId, apiId, tool: toolName, reason, retryable: false });
+      emit({ type: 'heal.finished', callId, runId, healId: callId, apiId, tool: toolName, outcome: 'halted', rounds: 0, ms: Date.now() - t0, tier: 1, tokens: { input: 0, output: 0 } });
+      await appendAudit({ decision: 'halt', apiId, tool: toolName, versionBefore: tool.version, reason, responseOnly: true, callId });
+      return halt(reason, details);
+    }
     emitCall('call.succeeded', { version: tool.version, healed: false, data: tool.compiled.extract(first.json ?? {}) });
     return success(tool, first, { healed: false, rounds: 0, tier: 0, latencyMs: Date.now() - t0 });
   }
@@ -783,7 +926,10 @@ export async function invoke({ apiId, toolName, args, runId }) {
   let result;
   let thrown;
   try { result = await invokeCore({ apiId, toolName, args, runId, callId }); }
-  catch (error) { thrown = error; }
+  catch (error) {
+    thrown = error;
+    log({ level: 'error', code: 'invoke_internal_error', apiId, tool: toolName, errorClass: error.name ?? 'Error' });
+  }
   let intermediateEventFailure;
   try { await flushDurableEvents(); }
   catch (error) { intermediateEventFailure = error; }

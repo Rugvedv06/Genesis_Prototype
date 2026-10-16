@@ -8,6 +8,28 @@ function styledValidationFailure(failure, style) {
   if (!ERROR_STYLES.has(style)) throw new TypeError(`unsupported mock error style: ${style}`);
   if (style === 'pydantic-v1') return failure;
 
+  if (failure.body?.error === 'missing_auth') {
+    const auth = {
+      error: failure.body?.error ?? 'missing_auth',
+      scheme: failure.body?.scheme ?? 'Bearer',
+      header: failure.body?.header ?? 'Authorization',
+    };
+    if (style === 'pydantic-v2') {
+      return { ...failure, body: { detail: 'Not authenticated', ...auth } };
+    }
+    return {
+      ...failure,
+      body: {
+        type: 'https://api.example/problems/authentication-error',
+        title: 'Unauthorized',
+        status: 401,
+        detail: 'Authentication required',
+        errors: [],
+        ...auth,
+      },
+    };
+  }
+
   const canonical = failure.body?.error === 'missing_header'
     ? [{
         loc: ['header', failure.body.header.toLowerCase()],

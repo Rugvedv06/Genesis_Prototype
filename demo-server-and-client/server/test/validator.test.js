@@ -144,3 +144,137 @@ test('request mutations retain their semantic classification across all error fo
     }
   }
 });
+
+test('M1-M5, M7-M9 error-stage goldens are style-specific but canonically equivalent', () => {
+  const privacyValue = 'private-golden-value-7f9c';
+  const privateTenantCredential = 'private-x-tenant-sentinel-481a';
+  const privateAuthCredential = 'Bearer private-auth-sentinel-92bd';
+  const scenarios = [
+    { id: 'M1', body: { user_id: privacyValue }, headers: {}, status: 422, errors: [
+      { loc: ['body', 'userId'], msg: 'field required', type: 'value_error.missing' },
+      { loc: ['body', 'user_id'], msg: 'extra fields not permitted', type: 'value_error.extra' },
+    ] },
+    { id: 'M2', body: { user_id: privacyValue }, headers: {}, status: 422, errors: [
+      { loc: ['body', 'user_id'], msg: 'value is not a valid integer', type: 'type_error.integer' },
+    ] },
+    { id: 'M3', body: { user_id: privacyValue }, headers: {}, status: 422, errors: [
+      { loc: ['body', 'target'], msg: 'field required', type: 'value_error.missing' },
+      { loc: ['body', 'user_id'], msg: 'extra fields not permitted', type: 'value_error.extra' },
+    ] },
+    { id: 'M4', body: { user_id: privacyValue }, headers: {}, status: 400, header: 'X-API-Version', allowed: ['2'] },
+    { id: 'M5', body: { user_id: privacyValue }, headers: {}, status: 400, header: 'X-Tenant' },
+    { id: 'M5', body: { user_id: privacyValue }, headers: { 'x-tenant': privateTenantCredential }, status: 422, errors: [
+      { loc: ['body', 'target'], msg: 'field required', type: 'value_error.missing' },
+      { loc: ['body', 'user_id'], msg: 'extra fields not permitted', type: 'value_error.extra' },
+    ] },
+    { id: 'M5', body: { target: { user_id: privacyValue } }, headers: { 'x-tenant': privateTenantCredential }, status: 422, errors: [
+      { loc: ['body', 'target', 'id'], msg: 'field required', type: 'value_error.missing' },
+      { loc: ['body', 'target', 'user_id'], msg: 'extra fields not permitted', type: 'value_error.extra' },
+    ] },
+    { id: 'M5', body: { target: { id: privacyValue } }, headers: { 'x-tenant': privateTenantCredential }, status: 422, errors: [
+      { loc: ['body', 'target', 'id'], msg: 'value is not a valid integer', type: 'type_error.integer' },
+    ] },
+    { id: 'M7', body: { user_id: privacyValue }, headers: {}, status: 422, errors: [
+      { loc: ['body', 'region'], msg: 'field required', type: 'value_error.missing' },
+    ] },
+    { id: 'M8', body: { user_id: privacyValue, status: 'active' }, headers: {}, status: 422, errors: [
+      { loc: ['body', 'status'], msg: 'Input should be ENABLED or DISABLED', type: 'type_error.enum', ctx: { enum_values: ['ENABLED', 'DISABLED'] } },
+    ] },
+    { id: 'M9', body: { user_id: privacyValue, email: 'private@example.invalid' }, headers: {}, status: 401, auth: true },
+    { id: 'M9', body: { user_id: privacyValue, email: 'private@example.invalid' }, headers: { authorization: privateAuthCredential }, status: 422, errors: [
+      { loc: ['body', 'approval_code'], msg: 'field required', type: 'value_error.missing' },
+    ] },
+  ];
+  const styleTypes = {
+    'pydantic-v1': { 'value_error.missing': 'value_error.missing', 'value_error.extra': 'value_error.extra', 'type_error.integer': 'type_error.integer', 'type_error.enum': 'type_error.enum' },
+    'pydantic-v2': { 'value_error.missing': 'missing', 'value_error.extra': 'extra_forbidden', 'type_error.integer': 'int_type', 'type_error.enum': 'enum' },
+    'problem-json': { 'value_error.missing': 'value_error.missing', 'value_error.extra': 'value_error.extra', 'type_error.integer': 'type_error.integer', 'type_error.enum': 'type_error.enum' },
+  };
+  const canonicalResults = new Map();
+
+  for (const style of Object.keys(styleTypes)) {
+    const canonicalByStage = [];
+    for (const scenario of scenarios) {
+      const failure = validateRequest(get(scenario.id), scenario.body, scenario.headers, style);
+      assert.equal(failure.status, scenario.status, `${scenario.id} status (${style})`);
+      const types = styleTypes[style];
+      if (scenario.auth) {
+        const expectedBody = style === 'pydantic-v1'
+          ? { error: 'missing_auth', scheme: 'Bearer', header: 'Authorization' }
+          : style === 'pydantic-v2'
+            ? { detail: 'Not authenticated', error: 'missing_auth', scheme: 'Bearer', header: 'Authorization' }
+            : { type: 'https://api.example/problems/authentication-error', title: 'Unauthorized', status: 401, detail: 'Authentication required', errors: [], error: 'missing_auth', scheme: 'Bearer', header: 'Authorization' };
+        assert.deepEqual(failure.body, expectedBody, `${scenario.id} auth body (${style})`);
+      } else if (scenario.header) {
+        const expectedBody = style === 'pydantic-v1'
+          ? { error: 'missing_header', header: scenario.header, ...(scenario.allowed ? { allowed: scenario.allowed } : {}) }
+          : style === 'pydantic-v2'
+            ? { detail: [{ loc: ['header', scenario.header.toLowerCase()], msg: 'Field required', type: 'missing', ...(scenario.allowed ? { ctx: { allowed_values: scenario.allowed } } : { ctx: {} }) }] }
+            : { type: 'https://api.example/problems/validation-error', title: 'Bad Request', status: 400, detail: 'Request validation failed', errors: [{ loc: ['header', scenario.header.toLowerCase()], msg: 'Field required', type: 'missing', ...(scenario.allowed ? { ctx: { allowed_values: scenario.allowed } } : { ctx: {} }) }] };
+        assert.deepEqual(failure.body, expectedBody, `${scenario.id} header body (${style})`);
+      } else {
+        const wireErrors = scenario.errors.map((error) => ({
+          ...error,
+          type: types[error.type],
+        }));
+        const expectedBody = style === 'pydantic-v1'
+          ? { detail: wireErrors }
+          : style === 'pydantic-v2'
+            ? { detail: wireErrors }
+            : { type: 'https://api.example/problems/validation-error', title: 'Unprocessable Entity', status: 422, detail: 'Request validation failed', errors: wireErrors };
+        assert.deepEqual(failure.body, expectedBody, `${scenario.id} exact error body (${style})`);
+      }
+
+      const parsed = parseErrors(failure.body, failure.status).map((error) => error.kind === 'missing_header'
+        ? {
+            kind: error.kind,
+            path: [],
+            expected: null,
+            received: null,
+            allowed: error.allowed ?? error.expected,
+            header: String(error.header ?? '').toLowerCase(),
+          }
+        : {
+            kind: error.kind,
+            path: error.path,
+            expected: error.expected,
+            received: error.received,
+            allowed: error.allowed,
+            header: error.header,
+          });
+      canonicalByStage.push(parsed);
+      assert.equal(JSON.stringify(failure.body).includes(privacyValue), false, `${scenario.id} leaks caller value (${style})`);
+      assert.equal(JSON.stringify(failure.body).includes('private@example.invalid'), false, `${scenario.id} leaks caller email (${style})`);
+      assert.equal(JSON.stringify(failure.body).includes(privateTenantCredential), false, `${scenario.id} leaks tenant credential (${style})`);
+      assert.equal(JSON.stringify(failure.body).includes(privateAuthCredential), false, `${scenario.id} leaks bearer credential (${style})`);
+    }
+    canonicalResults.set(style, canonicalByStage);
+  }
+
+  assert.deepEqual(canonicalResults.get('pydantic-v2'), canonicalResults.get('pydantic-v1'));
+  assert.deepEqual(canonicalResults.get('problem-json'), canonicalResults.get('pydantic-v1'));
+});
+
+test('unrelated 401 required-header errors preserve their declared meaning in every style', () => {
+  const mutation = structuredClone(get('M4'));
+  mutation.headers[0].status = 401;
+  mutation.headers[0].error = { error: 'missing_header', header: 'X-Required-Token', allowed: ['service'] };
+
+  const v1 = validateRequest(mutation, {}, {}, 'pydantic-v1');
+  const v2 = validateRequest(mutation, {}, {}, 'pydantic-v2');
+  const problem = validateRequest(mutation, {}, {}, 'problem-json');
+  assert.equal(v1.status, 401);
+  assert.deepEqual(v1.body, { error: 'missing_header', header: 'X-Required-Token', allowed: ['service'] });
+  assert.deepEqual(v2.body, {
+    detail: [{ loc: ['header', 'x-required-token'], msg: 'Field required', type: 'missing', ctx: { allowed_values: ['service'] } }],
+  });
+  assert.deepEqual(problem.body, {
+    type: 'https://api.example/problems/validation-error',
+    title: 'Unprocessable Entity',
+    status: 401,
+    detail: 'Request validation failed',
+    errors: [{ loc: ['header', 'x-required-token'], msg: 'Field required', type: 'missing', ctx: { allowed_values: ['service'] } }],
+  });
+  assert.equal(v2.body.error, undefined, 'a non-auth header failure must not be reformatted as missing_auth');
+  assert.equal(problem.body.error, undefined, 'problem response keeps the declared missing-header error shape');
+});

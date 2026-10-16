@@ -121,3 +121,44 @@ for (const scenario of cases) {
     }
   });
 }
+
+test('GET request adapters transform query arguments without mutating caller input', async () => {
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  const args = { userId: '123' };
+  globalThis.fetch = async (url) => {
+    requests.push(String(url));
+    const query = new URL(url).searchParams;
+    return new Response(JSON.stringify({ id: query.get('user_id') }), {
+      status: 200, headers: { 'content-type': 'application/json' },
+    });
+  };
+  try {
+    registryStore.reset();
+    registryStore.registerApi('m4-get-query-adapter', {
+      baseUrl: 'https://api.example',
+      credentials: {},
+      healing: { enabled: true, mode: 'enforce' },
+      tools: [{
+        name: 'lookup', method: 'GET', path: '/users', sideEffects: 'read',
+        parameters: {
+          type: 'object', properties: { userId: { type: 'string' } },
+          required: ['userId'], additionalProperties: false,
+        },
+        adapter: { request: [{ op: 'rename_field', from: 'userId', to: 'user_id' }] },
+        response: { fields: { id: { path: 'id', type: 'string', required: true } } },
+      }],
+    });
+
+    const result = await invoke({ apiId: 'm4-get-query-adapter', toolName: 'lookup', args });
+    assert.equal(result.ok, true, JSON.stringify(result.error));
+    assert.deepEqual(result.data, { id: '123' });
+    assert.equal(requests.length, 1);
+    assert.equal(new URL(requests[0]).searchParams.get('user_id'), '123');
+    assert.equal(new URL(requests[0]).searchParams.has('userId'), false);
+    assert.deepEqual(args, { userId: '123' });
+  } finally {
+    globalThis.fetch = originalFetch;
+    registryStore.reset();
+  }
+});

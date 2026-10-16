@@ -54,7 +54,7 @@ app.get('/admin/mutations', (_req, res) => {
       return {
         id, label: m.label, category: m.category ?? 'contract', route: m.route,
         recoverable: (m.expected ?? 'heal') !== 'halt', expected: m.expected ?? 'heal',
-        expectedOps: m.expectedOps ?? [],
+        expectedOps: m.expectedOps ?? [], fixture: m.fixture, specVariants: m.specVariants ?? [],
       };
     }),
   });

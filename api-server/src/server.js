@@ -27,8 +27,10 @@ import { listCallEvents, getEventCursor, listRecentEvents } from './db/event-rep
 import { getAuditHead } from './db/audit-repository.js';
 import { snapshotMetrics, metricsTimeseries as readMetricsTimeseries } from './db/metrics-repository.js';
 import { closeRedisMirror, redisMirrorStatus, probeRedisMirror } from './features/patch-cache/redis-mirror.js';
+import { candidates as listPatchCacheCandidates, invalidate as invalidatePatchCacheCandidate, invalidateAll as invalidateAllPatchCacheCandidates } from './features/patch-cache/index.js';
 import { flushDurableEvents } from './features/events/bus.js';
 import { appendServiceLog, searchServiceLogs } from './db/service-log-repository.js';
+import { getInvocation } from './db/invocation-repository.js';
 import { reconcileStaleInvocations } from './db/invocation-recovery.js';
 
 if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is required; file-backed runtime fallback is disabled');
@@ -130,11 +132,61 @@ app.get('/metrics', async (_req, res, next) => {
   catch (error) { next(error); }
 });
 app.get('/metrics/timeseries', async (req, res, next) => {
+  const parseRange = (value, fallback, maximum) => {
+    if (value === undefined) return fallback;
+    if (typeof value !== 'string' || !/^\d+$/.test(value)) return null;
+    const parsed = Number(value);
+    return Number.isSafeInteger(parsed) && parsed >= 1 && parsed <= maximum ? parsed : null;
+  };
+  const windowSeconds = parseRange(req.query.window, 300, 2_592_000);
+  const stepSeconds = parseRange(req.query.step, 5, 86_400);
+  if (windowSeconds === null || stepSeconds === null || Math.ceil(windowSeconds / stepSeconds) + 1 > 10_000) {
+    return res.status(400).json({ ok: false, error: 'invalid_arguments' });
+  }
   try {
     const series = process.env.DATABASE_URL
-      ? await readMetricsTimeseries(getPool(), req.query.window ?? 300, req.query.step ?? 5)
-      : metricsTimeseries(Number(req.query.window ?? 300), Number(req.query.step ?? 5));
+      ? await readMetricsTimeseries(getPool(), windowSeconds, stepSeconds)
+      : metricsTimeseries(windowSeconds, stepSeconds);
     res.json({ series });
+  } catch (error) { next(error); }
+});
+
+app.get('/cache', async (req, res, next) => {
+  const rawLimit = req.query.limit;
+  const limit = rawLimit === undefined ? 100 : Number(rawLimit);
+  const cursor = req.query.cursor ?? null;
+  if (!Number.isInteger(limit) || limit < 1 || limit > 200
+    || (cursor !== null && (typeof cursor !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(cursor)))) {
+    return res.status(400).json({ ok: false, error: 'invalid_arguments' });
+  }
+  try {
+    const rows = await listPatchCacheCandidates({ limit: Math.min(limit + 1, 200), cursor });
+    let hasMore = rows.length > limit;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+    if (limit === 200 && page.length === 200) {
+      const lookahead = await listPatchCacheCandidates({ limit: 1, cursor: page.at(-1)?.id });
+      hasMore = lookahead.length > 0;
+    }
+    res.json({
+      candidates: page,
+      nextCursor: hasMore ? page.at(-1)?.id ?? null : null,
+      mirror: redisMirrorStatus(),
+    });
+  } catch (error) { next(error); }
+});
+
+app.delete('/cache', async (_req, res, next) => {
+  try { res.json({ ok: true, invalidated: await invalidateAllPatchCacheCandidates() }); }
+  catch (error) { next(error); }
+});
+
+app.delete('/cache/:cacheKey', async (req, res, next) => {
+  if (!/^[a-f0-9]{64}$/i.test(req.params.cacheKey)) {
+    return res.status(400).json({ ok: false, error: 'invalid_arguments' });
+  }
+  try {
+    const invalidated = (await invalidatePatchCacheCandidate(req.params.cacheKey)) > 0;
+    res.json({ ok: true, invalidated });
   } catch (error) { next(error); }
 });
 
@@ -149,11 +201,35 @@ app.get('/provider/health', async (_req, res) => {
 });
 
 app.get('/traces/:callId', async (req, res, next) => {
+  const rawLimit = req.query.limit;
+  const rawCursor = req.query.cursor;
+  const limit = rawLimit === undefined ? 100 : (/^\d+$/.test(rawLimit) ? Number(rawLimit) : NaN);
+  const cursor = rawCursor === undefined ? 0 : (/^\d+$/.test(rawCursor) ? Number(rawCursor) : NaN);
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100
+    || !Number.isSafeInteger(cursor) || cursor < 0 || cursor > 2_147_483_647) {
+    return res.status(400).json({ ok: false, error: 'invalid_arguments' });
+  }
   let trace;
   try {
-    trace = process.env.DATABASE_URL
-      ? traceFromEvents(req.params.callId, await listCallEvents(getPool(), req.params.callId))
-      : getTrace(req.params.callId);
+    if (process.env.DATABASE_URL) {
+      const page = await listCallEvents(getPool(), req.params.callId, { cursor, limit });
+      const { retention_floor: retentionFloor } = await getEventCursor(getPool());
+      trace = traceFromEvents(req.params.callId, page.events, { cursor, hasMore: page.hasMore, nextCursor: page.nextCursor });
+      if (trace) trace.retentionFloor = retentionFloor;
+      else {
+        const invocation = await getInvocation(getPool(), req.params.callId);
+        if (invocation) trace = {
+          callId: req.params.callId,
+          startedAt: new Date(invocation.started_at).getTime(),
+          updatedAt: new Date(invocation.finished_at ?? invocation.started_at).getTime(),
+          spans: [], complete: false, incomplete: true,
+          cursor: String(cursor), nextCursor: null, retentionFloor,
+          incompleteReason: Number(retentionFloor) > 0 ? 'retention_boundary' : 'start_event_missing',
+        };
+      }
+    } else {
+      trace = getTrace(req.params.callId);
+    }
   } catch (error) { return next(error); }
   if (!trace) return res.status(404).json({ ok: false, error: 'not_found' });
   res.json(trace);

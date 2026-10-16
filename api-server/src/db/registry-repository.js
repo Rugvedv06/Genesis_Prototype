@@ -307,7 +307,7 @@ export async function listApiTools(queryable) {
 export async function loadRegistryFromDatabase(queryable) {
   const workspaceId = await getLocalWorkspaceId(queryable);
   const { rows: apiRows } = await queryable.query(
-    `SELECT api_id, base_url, spec_url, config, epoch
+    `SELECT api_id, base_url, spec_url, config, epoch, config_revision, credential_revision
      FROM apis WHERE workspace_id = $1 AND deleted_at IS NULL ORDER BY api_id`, [workspaceId],
   );
   const registry = {};
@@ -340,7 +340,10 @@ export async function loadRegistryFromDatabase(queryable) {
       if (!current) throw new Error(`Database current adapter pointer is invalid for ${apiRow.api_id}/${toolRow.tool_name}`);
       tools[toolRow.tool_name] = { versions, current, risk: toolRow.risk };
     }
-    registry[apiRow.api_id] = { tools, config, epoch: apiRow.epoch, configRevision: apiRow.config_revision };
+    registry[apiRow.api_id] = {
+      tools, config, epoch: apiRow.epoch,
+      configRevision: apiRow.config_revision, credentialRevision: apiRow.credential_revision,
+    };
   }
   return registry;
 }
@@ -348,7 +351,7 @@ export async function loadRegistryFromDatabase(queryable) {
 export async function getApiRevisions(queryable, apiId) {
   const workspaceId = await getLocalWorkspaceId(queryable);
   const { rows } = await queryable.query(
-    `SELECT epoch, config_revision FROM apis
+    `SELECT epoch, config_revision, credential_revision FROM apis
      WHERE workspace_id = $1 AND api_id = $2 AND deleted_at IS NULL`, [workspaceId, apiId],
   );
   return rows[0] ?? null;
@@ -390,26 +393,27 @@ export class StaleAdapterError extends Error {
 
 /** Append a verified adapter and advance its pointer within the caller's UoW. */
 export async function commitAdapterInTransaction(client, {
-  apiId, toolName, adapter, change, origin = 'heal', expectedVersion, expectedEpoch, expectedConfigRevision,
+  apiId, toolName, adapter, change, origin = 'heal', expectedVersion, expectedEpoch, expectedConfigRevision, expectedCredentialRevision,
 }) {
   const workspaceId = await getLocalWorkspaceId(client);
   // All mutation paths lock API first and tool second, preventing stale drafts
   // from racing re-registration or another commit.
   const { rows: apiRows } = await client.query(
-    `SELECT epoch, config_revision, deleted_at FROM apis
+    `SELECT epoch, config_revision, credential_revision, deleted_at FROM apis
      WHERE workspace_id = $1 AND api_id = $2 FOR UPDATE`,
     [workspaceId, apiId],
   );
   const api = apiRows[0];
-  if (!api || api.deleted_at) throw new Error('API is not registered');
+  if (!api || api.deleted_at) throw new StaleAdapterError();
   const { rows: toolRows } = await client.query(
     `SELECT current_version, deleted_at FROM tools
      WHERE workspace_id = $1 AND api_id = $2 AND tool_name = $3 FOR UPDATE`,
     [workspaceId, apiId, toolName],
   );
   const tool = toolRows[0];
-  if (!tool || tool.deleted_at) throw new Error('Tool is not registered');
-  if (tool.current_version !== expectedVersion || api.epoch !== expectedEpoch || api.config_revision !== expectedConfigRevision) {
+  if (!tool || tool.deleted_at) throw new StaleAdapterError();
+  if (tool.current_version !== expectedVersion || api.epoch !== expectedEpoch || api.config_revision !== expectedConfigRevision
+    || (expectedCredentialRevision !== undefined && api.credential_revision !== expectedCredentialRevision)) {
     throw new StaleAdapterError();
   }
   const { rows: currentRows } = await client.query(

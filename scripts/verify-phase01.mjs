@@ -263,6 +263,9 @@ async function main() {
         response: { fields: { id: { path: 'result.id', type: 'string' }, name: { path: 'result.name', type: 'string' }, email: { path: 'result.email', type: 'string', format: 'email' } } },
       }],
     });
+    const beforeVersions = (await http(`${coreUrl}/apis/demo-users/tools/get_user/versions`)).json?.versions ?? [];
+    const beforeHealCount = beforeVersions.filter((version) => version.origin === 'heal').length;
+    const beforeMaxVersion = Math.max(0, ...beforeVersions.map((version) => Number(version.version) || 0));
     const ids = ['111', '222', '333'];
     const promises = ids.map((id) => postJSON(`${coreUrl}/apis/demo-users/tools/get_user/invoke`, { args: { user_id: id } }));
     const rs = await Promise.all(promises);
@@ -270,10 +273,12 @@ async function main() {
     // Each caller (leader + followers) must report healed with the 4 committed ops
     const allHealed4 = rs.every((r) => r.json?.meta?.healed === true && (r.json?.meta?.ops?.length ?? 0) === 4);
     const versions = await http(`${coreUrl}/apis/demo-users/tools/get_user/versions`);
-    const singleCommit = versions.json?.versions?.length === 2
-      && versions.json.versions[1]?.version === 2
-      && versions.json.versions[1]?.origin === 'heal';
-    const sameVersion = rs.every((r) => r.json?.meta?.version === 2);
+    const afterVersions = versions.json?.versions ?? [];
+    const newHealVersions = afterVersions.filter((version) => version.origin === 'heal' && Number(version.version) > beforeMaxVersion);
+    const singleCommit = afterVersions.filter((version) => version.origin === 'heal').length === beforeHealCount + 1
+      && newHealVersions.length === 1;
+    const committedVersion = newHealVersions[0]?.version;
+    const sameVersion = committedVersion != null && rs.every((r) => r.json?.meta?.version === committedVersion);
     check('Concurrency: 3 parallel calls return their own ids, share one heal commit', ownIds && allHealed4 && singleCommit && sameVersion, `ids:${rs.map((r) => r.json?.data?.id).join(',')} healed4:${allHealed4} version2:${sameVersion} singleCommit:${singleCommit} codes:${rs.map((r) => r.json?.error?.code ?? 'ok').join(',')}`);
   }
 
@@ -440,7 +445,13 @@ async function main() {
   {
     const { execSync } = await import('node:child_process');
     try {
-      const out = execSync('node --test "api-server/test/**/*.test.js" "demo-server-and-client/server/test/**/*.test.js"', { cwd: ROOT, encoding: 'utf8', timeout: 30000 });
+      const unitEnv = {
+        ...process.env,
+        DATABASE_URL: '',
+        REDIS_URL: '',
+        HEALR_TEST_DATABASE_URL: process.env.HEALR_TEST_DATABASE_URL || process.env.DATABASE_URL || '',
+      };
+      const out = execSync('node --test "api-server/test/**/*.test.js" "demo-server-and-client/server/test/**/*.test.js"', { cwd: ROOT, encoding: 'utf8', timeout: 30000, env: unitEnv });
       const passMatch = out.match(/(?:#|ℹ)\s*pass\s+(\d+)/);
       const failMatch = out.match(/(?:#|ℹ)\s*fail\s+(\d+)/);
       const pass = passMatch ? parseInt(passMatch[1], 10) : 0;

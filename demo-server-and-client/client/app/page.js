@@ -24,12 +24,6 @@ const TOOL_BY_PATH = {
   '/api/users/set-status': { name: 'set_user_status', path: '/api/users/set-status', method: 'POST' },
 };
 
-function inputForTool(tool) {
-  if (tool.path === '/api/users/update-email') return { user_id: '123', email: 'asha+demo@example.com' };
-  if (tool.path === '/api/users/set-status') return { user_id: '123', status: 'active' };
-  return { user_id: '123' };
-}
-
 function matchesTruth(data, truth, fields) {
   if (!data || !truth || truth.error) return null;
   const logical = data.id !== undefined ? data : (data.result ?? data);
@@ -887,7 +881,7 @@ export default function DriftControl() {
   const [truth, setTruth] = useState(null);
   const activeMutation = mutationCatalogue.find((item) => item.id === selectedMutation);
   const selectedTool = TOOL_BY_PATH[activeMutation?.route?.path] ?? TOOL;
-  const selectedArgs = inputForTool(selectedTool);
+  const selectedArgs = activeMutation?.fixture?.args ?? {};
   const truthFields = selectedTool.path === '/api/users/set-status' ? ['id', 'status'] : ['id', 'name', 'email'];
 
   useEffect(() => {

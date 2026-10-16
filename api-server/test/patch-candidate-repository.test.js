@@ -10,9 +10,10 @@ import {
 const fp = 'a'.repeat(64);
 const candidate = {
   cacheKey: fp, scope: 'exact', sourceApiId: 'source', sourceToolName: 'get_user', sourceVersion: 2,
-  adapterFingerprint: fp, schemaFingerprint: fp, operationSignature: 'missing:userId',
+  adapterFingerprint: fp, schemaFingerprint: fp, operationSignature: fp,
   operations: [{ op: 'rename_field', from: 'user_id', to: 'userId' }], evidenceClass: 'validator_error',
-  evidenceSummary: { kind: 'missing_field' }, provenanceRequirements: [{ path: 'user_id', source: 'caller' }],
+  evidenceSummary: { kind: 'missing_field', tier: 1, confidence: 1, replayVerified: true },
+  provenanceRequirements: [{ apiEpoch: 1, configRevision: 1, credentialRevision: 1, method: 'GET' }],
 };
 
 function clientFor(responses = []) {
@@ -37,6 +38,10 @@ test('candidate persistence only accepts verified-shaped, fingerprinted operatio
   assert.equal(JSON.parse(insert.values[9])[0].op, 'rename_field');
   await assert.rejects(() => putVerifiedCandidateInTransaction(db, { ...candidate, adapterFingerprint: 'bad' }), /SHA-256/);
   await assert.rejects(() => putVerifiedCandidateInTransaction(db, { ...candidate, operations: [] }), /non-empty/);
+  await assert.rejects(() => putVerifiedCandidateInTransaction(db, {
+    ...candidate,
+    provenanceRequirements: [{ apiEpoch: 1, configRevision: 1, method: 'GET' }],
+  }), /provenance requirements/);
 });
 
 test('candidate lookup is a PostgreSQL state and fingerprint checked update, stale fingerprints miss', async () => {
@@ -53,6 +58,6 @@ test('candidate listing is bounded and invalidation scopes to current workspace'
   assert.deepEqual(await listPatchCandidates(db, { limit: 10000 }), []);
   assert.equal(db.calls[1].values[2], 200);
   assert.equal(await invalidatePatchCandidatesInTransaction(db), 3);
-  assert.match(db.calls[2].sql, /state = 'invalidated'/);
-  assert.deepEqual(db.calls[2].values, ['workspace-id']);
+  assert.match(db.calls[3].sql, /state = 'invalidated'/);
+  assert.deepEqual(db.calls[3].values, ['workspace-id']);
 });

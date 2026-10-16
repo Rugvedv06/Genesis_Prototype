@@ -1,7 +1,7 @@
 import { getPool } from './pool.js';
 import { withTransaction } from './transaction.js';
 import {
-  commitAdapterInTransaction, getApiRevisions, loadRegistryFromDatabase,
+  commitAdapterInTransaction, getApiRevisions, loadRegistryFromDatabase, StaleAdapterError,
   registerApiInTransaction, rollbackAdapterInTransaction, softDeleteApiInTransaction,
   updateApiConfigInTransaction,
 } from './registry-repository.js';
@@ -9,7 +9,7 @@ import { appendAuditInTransaction } from './audit-repository.js';
 import { appendGatewayEventInTransaction } from './event-repository.js';
 import { registryStore } from '../features/registry/store.js';
 import { clearNegativeForApiAsync } from '../features/safety/circuit.js';
-import { putVerifiedCandidateInTransaction, findVerifiedCandidateInTransaction, invalidatePatchCandidatesInTransaction } from './patch-candidate-repository.js';
+import { putVerifiedCandidateInTransaction, findVerifiedCandidateInTransaction, invalidatePatchCandidatesInTransaction, invalidateAllPatchCandidatesInTransaction } from './patch-candidate-repository.js';
 import { readCandidateMirror, writeCandidateMirror, deleteCandidateMirror } from '../features/patch-cache/redis-mirror.js';
 
 let registryMutationQueue = Promise.resolve();
@@ -78,11 +78,11 @@ export async function removeApi(apiId) {
   return result;
 }
 
-export async function commitAdapter({ apiId, toolName, adapter, change, origin = 'heal', expectedVersion, expectedEpoch, expectedConfigRevision }) {
+export async function commitAdapter({ apiId, toolName, adapter, change, origin = 'heal', expectedVersion, expectedEpoch, expectedConfigRevision, expectedCredentialRevision }) {
   return persistChange(
     async (client) => {
       const committed = await commitAdapterInTransaction(client, {
-        apiId, toolName, adapter, change, origin, expectedVersion, expectedEpoch, expectedConfigRevision,
+        apiId, toolName, adapter, change, origin, expectedVersion, expectedEpoch, expectedConfigRevision, expectedCredentialRevision,
       });
       return committed;
     },
@@ -107,12 +107,13 @@ export async function rollbackAdapter({ apiId, toolName, toVersion, origin = 'ma
 
 export async function commitFromCache({ apiId, toolName, adapter, change, origin = 'heal', current }) {
   const revisions = await getApiRevisions(getPool(), apiId);
-  if (!revisions || !current) throw new Error('API or tool is no longer registered');
+  if (!revisions || !current) throw new StaleAdapterError();
   return commitAdapter({
     apiId, toolName, adapter, change, origin,
     expectedVersion: current.version,
     expectedEpoch: current.epoch,
     expectedConfigRevision: current.configRevision ?? revisions.config_revision,
+    expectedCredentialRevision: current.credentialRevision ?? revisions.credential_revision,
   });
 }
 
@@ -161,6 +162,12 @@ export async function invalidateVerifiedPatchCandidate(cacheKey) {
   const changed = await withTransaction((client) => invalidatePatchCandidatesInTransaction(client, { cacheKey }));
   if (changed) await deleteCandidateMirror(cacheKey);
   return changed;
+}
+
+export async function invalidateAllVerifiedPatchCandidates() {
+  const keys = await withTransaction(invalidateAllPatchCandidatesInTransaction);
+  await Promise.all(keys.map((cacheKey) => deleteCandidateMirror(cacheKey)));
+  return keys.length;
 }
 
 export async function rollbackFromCache({ apiId, toolName, toVersion, origin = 'manual_rollback', current, callId, runId }) {

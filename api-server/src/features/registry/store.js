@@ -223,6 +223,7 @@ export class RegistryStore {
     return {
       epoch: this._byApi[apiId].epoch ?? 0,
       configRevision: this._byApi[apiId].configRevision ?? 1,
+      credentialRevision: this._byApi[apiId].credentialRevision ?? 1,
       version: cur.version,
       versionObj: copy(cur),
       compiled: (() => {

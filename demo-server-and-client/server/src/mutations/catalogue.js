@@ -3,9 +3,16 @@
 //
 // M5: { "target": { "id": 123 } } plus mandatory X-Tenant header.
 // Realistic error order: header check first (400), then layered body 422s.
+const specVariants = () => [
+  { id: 'active', specAvailable: true, specStale: false },
+  { id: 'stale', specAvailable: true, specStale: true, description: 'OpenAPI remains at the baseline contract' },
+  { id: 'unavailable', specAvailable: false, specStale: false, description: 'OpenAPI endpoint returns spec_unavailable' },
+];
+
 export const M1 = {
   id: 'M1', label: 'user_id renamed to userId', category: 'request', expected: 'heal',
   expectedOps: ['rename_field'], route: { method: 'POST', path: '/api/users/get' }, headers: [],
+  fixture: { args: { user_id: '123' } }, specVariants: specVariants(),
   body: { layers: [{
     when: (body) => body?.user_id !== undefined,
     check: (body) => body?.userId !== undefined,
@@ -19,6 +26,7 @@ export const M1 = {
 export const M2 = {
   id: 'M2', label: 'user_id requires an integer', category: 'request', expected: 'heal',
   expectedOps: ['coerce_type'], route: { method: 'POST', path: '/api/users/get' }, headers: [],
+  fixture: { args: { user_id: '123' } }, specVariants: specVariants(),
   body: { layers: [{
     when: (body) => body?.user_id !== undefined,
     check: (body) => Number.isInteger(body.user_id),
@@ -29,6 +37,7 @@ export const M2 = {
 export const M3 = {
   id: 'M3', label: 'user_id moved under target', category: 'request', expected: 'heal',
   expectedOps: ['move_field'], route: { method: 'POST', path: '/api/users/get' }, headers: [],
+  fixture: { args: { user_id: '123' } }, specVariants: specVariants(),
   body: { layers: [{
     when: (body) => body?.user_id !== undefined,
     check: (body) => body?.target?.user_id !== undefined,
@@ -42,6 +51,7 @@ export const M3 = {
 export const M4 = {
   id: 'M4', label: 'X-API-Version header required', category: 'request', expected: 'heal',
   expectedOps: ['add_header'], route: { method: 'POST', path: '/api/users/get' },
+  fixture: { args: { user_id: '123' } }, specVariants: specVariants(),
   headers: [{ name: 'X-API-Version', required: true, error: { error: 'missing_header', header: 'X-API-Version', allowed: ['2'] } }],
   body: { layers: [] },
 };
@@ -49,6 +59,8 @@ export const M4 = {
 export const M7 = {
   id: 'M7', label: 'region field added with documented default', category: 'request', expected: 'heal',
   expectedOps: ['add_field'], route: { method: 'POST', path: '/api/users/get' }, headers: [],
+  fixture: { args: { user_id: '123' } },
+  specVariants: specVariants(),
   body: { layers: [{
     when: () => true,
     check: (body) => body?.region !== undefined,
@@ -59,6 +71,8 @@ export const M7 = {
 export const M8 = {
   id: 'M8', label: 'status enum uses ENABLED or DISABLED', category: 'request', expected: 'heal',
   expectedOps: ['set_enum_map'], route: { method: 'POST', path: '/api/users/set-status' }, headers: [],
+  fixture: { args: { user_id: '123', status: 'active' } },
+  specVariants: specVariants(),
   provenanceAliases: { active: 'ENABLED', inactive: 'DISABLED' },
   body: { layers: [{
     when: (body) => body?.status !== undefined,
@@ -73,7 +87,11 @@ export const M8 = {
 export const M5 = {
   id: 'M5',
   label: 'target nesting + rename + string->integer coerce + tenant header',
+  category: 'request',
+  expected: 'heal',
   route: { method: 'POST', path: '/api/users/get' },
+  fixture: { args: { user_id: '123' } },
+  specVariants: specVariants(),
   expectedOps: ['add_header', 'move_field', 'rename_field', 'coerce_type'],
   // what the mutated contract expects
   headers: [
@@ -130,6 +148,8 @@ export const M9 = {
   expected: 'halt',
   expectedOps: [],
   route: { method: 'POST', path: '/api/users/update-email' },
+  fixture: { args: { user_id: '123', email: 'asha+demo@example.com' } },
+  specVariants: specVariants(),
   headers: [
     { name: 'Authorization', required: true, status: 401, error: { error: 'missing_auth', scheme: 'Bearer', header: 'Authorization' } },
   ],
@@ -150,6 +170,8 @@ export const M6 = {
   category: 'response',
   expected: 'heal',
   route: { method: 'POST', path: '/api/users/get' },
+  fixture: { args: { user_id: '123' } },
+  specVariants: specVariants(),
   headers: [],
   body: { layers: [] },
   responseOps: [{ op: 'move', from: 'result.name', to: 'result.data.profile.name' }],
@@ -162,6 +184,8 @@ export const M10 = {
   category: 'response',
   expected: 'heal',
   route: { method: 'POST', path: '/api/users/get' },
+  fixture: { args: { user_id: '123' } },
+  specVariants: specVariants(),
   headers: [],
   body: { layers: [] },
   responseOps: [{ op: 'move', from: 'result.name', to: 'result.full_name' }],

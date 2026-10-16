@@ -41,6 +41,15 @@ test('rename rule: rename inside target after wrap (M5 round 2)', () => {
   assert.deepStrictEqual(prop.ops, [{ op: 'rename_field', path: 'target', from: 'user_id', to: 'id' }]);
 });
 
+test('root rename omits an empty path while nested rename retains its parent', () => {
+  const errors = [
+    { kind: 'missing', path: ['user_id'], raw: {} },
+    { kind: 'extra', path: ['userId'], raw: {} },
+  ];
+  const proposal = renameRule({ errors, request: { userId: '123' } });
+  assert.deepStrictEqual(proposal.ops, [{ op: 'rename_field', from: 'userId', to: 'user_id' }]);
+});
+
 test('type rule: lossless coerce string->integer (M5 round 3)', () => {
   const g = loadGolden('pydantic-v1', 'm5');
   // Round 3: target.id type error (synthesised from golden context)
@@ -70,15 +79,17 @@ test('header rule: add_header from missing_header (M5 round 0 header)', () => {
     op: 'add_header',
     name: 'X-Tenant',
     source: { type: 'credential', ref: 'X-Tenant' },
-    evidence: { kind: 'error', ref: 'header X-Tenant required' },
   }]);
+  assert.deepStrictEqual(prop.evidence, [g.header]);
+  assert.equal(Object.hasOwn(prop.ops[0], 'evidence'), false);
 });
 
 test('header rule uses an explicitly documented singleton value without guessing', () => {
   const errors = parseErrors({ error: 'missing_header', header: 'X-API-Version', allowed: ['2'] }, 400);
   const proposal = headerRule({ errors, request: baseReq });
   assert.deepStrictEqual(proposal.ops[0].source, { type: 'error_enum', value: '2' });
-  assert.deepStrictEqual(proposal.ops[0].evidence.allowed, ['2']);
+  assert.deepStrictEqual(proposal.evidence[0].allowed, ['2']);
+  assert.equal(Object.hasOwn(proposal.ops[0], 'evidence'), false);
 });
 
 test('header rule does not choose between multiple allowed values', () => {

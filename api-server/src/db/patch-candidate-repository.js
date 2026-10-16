@@ -29,6 +29,7 @@ function validateCandidate(candidate) {
     !requirement || typeof requirement !== 'object' || Array.isArray(requirement)
     || !Number.isSafeInteger(requirement.apiEpoch) || requirement.apiEpoch < 1
     || !Number.isSafeInteger(requirement.configRevision) || requirement.configRevision < 1
+    || !Number.isSafeInteger(requirement.credentialRevision) || requirement.credentialRevision < 1
     || !['GET', 'HEAD'].includes(requirement.method))) throw new TypeError('candidate provenance requirements are invalid');
   if (candidate.operations.some((operation) => {
     if (!operation || typeof operation !== 'object' || Array.isArray(operation)) return true;
@@ -129,4 +130,14 @@ export async function invalidatePatchCandidatesInTransaction(client, { cacheKey 
     params,
   );
   return rowCount;
+}
+
+export async function invalidateAllPatchCandidatesInTransaction(client) {
+  const workspaceId = await getLocalWorkspaceId(client);
+  const { rows } = await client.query(
+    `UPDATE patch_candidates SET state = 'invalidated', invalidated_at = now(), updated_at = now()
+     WHERE workspace_id = $1 AND state = 'verified' RETURNING cache_key`,
+    [workspaceId],
+  );
+  return rows.map(({ cache_key }) => cache_key);
 }

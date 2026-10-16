@@ -170,13 +170,23 @@ export async function listRecentEvents(queryable, limit = 5000) {
   };
 }
 
-export async function listCallEvents(queryable, callId) {
+export async function listCallEvents(queryable, callId, { cursor = 0, limit = 100 } = {}) {
   const workspaceId = await getLocalWorkspaceId(queryable);
   const { rows } = await queryable.query(
     `SELECT payload, sequence_in_call FROM gateway_events
-     WHERE workspace_id = $1 AND call_id = $2 ORDER BY id`, [workspaceId, callId],
+     WHERE workspace_id = $1 AND call_id = $2 AND sequence_in_call >= $3
+     ORDER BY sequence_in_call LIMIT $4`, [workspaceId, callId, cursor, limit + 2],
   );
-  return rows.map((row) => ({ ...row.payload, sequenceInCall: row.sequence_in_call }));
+  // The start marker is needed for completeness but is not rendered as a span;
+  // include it in addition to the requested span budget on the first page.
+  const pageLimit = cursor === 0 && rows[0]?.payload?.type === 'call.started' ? limit + 1 : limit;
+  const hasMore = rows.length > pageLimit;
+  const page = hasMore ? rows.slice(0, pageLimit) : rows;
+  return {
+    events: page.map((row) => ({ ...row.payload, sequenceInCall: row.sequence_in_call })),
+    hasMore,
+    nextCursor: hasMore ? String(Number(page.at(-1).sequence_in_call) + 1) : null,
+  };
 }
 
 export async function getEventCursor(queryable) {

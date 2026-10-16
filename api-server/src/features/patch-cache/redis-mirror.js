@@ -7,6 +7,7 @@ const DEFAULT_TIMEOUT_MS = 75;
 let client;
 let connecting;
 let degraded = false;
+let mirrorGeneration = 0;
 
 function boundedEnvInteger(name, fallback, min, max) {
   const raw = process.env[name];
@@ -22,38 +23,50 @@ function redisNamespace() {
 
 async function getClient() {
   if (!process.env.REDIS_URL) return null;
-  if (!client) {
+  let current = client;
+  if (!current) {
     const url = new URL(process.env.REDIS_URL);
     if (!['redis:', 'rediss:'].includes(url.protocol)) throw new Error('REDIS_URL must use redis:// or rediss://');
-    client = createClient({
+    const generation = ++mirrorGeneration;
+    current = client = createClient({
       url: process.env.REDIS_URL,
       socket: {
         connectTimeout: boundedEnvInteger('REDIS_CONNECT_TIMEOUT_MS', 500, 100, 5000),
         reconnectStrategy: (retries) => retries > 3 ? false : Math.min(100 * (retries + 1), 500),
       },
     });
-    client.on('error', () => { degraded = true; });
-    client.on('ready', () => { degraded = false; });
+    client.on('error', () => { if (generation === mirrorGeneration) degraded = true; });
+    client.on('ready', () => { if (generation === mirrorGeneration) degraded = false; });
   }
-  if (!client.isOpen) {
+  if (!current.isOpen) {
     if (!connecting) {
-      connecting = client.connect().catch(() => { degraded = true; }).finally(() => { connecting = null; });
+      const generation = mirrorGeneration;
+      connecting = current.connect().catch(() => {
+        if (generation === mirrorGeneration) degraded = true;
+      }).finally(() => {
+        if (generation === mirrorGeneration) connecting = null;
+      });
     }
     await connecting;
   }
-  return client.isReady ? client : null;
+  return current.isReady ? current : null;
 }
 
 async function bounded(operation) {
   const timeoutMs = boundedEnvInteger('REDIS_COMMAND_TIMEOUT_MS', DEFAULT_TIMEOUT_MS, 10, 1000);
   let timer;
+  let generation;
   try {
+    // Start synchronously so first-use client creation advances the generation
+    // before this bounded operation captures the status owner.
+    const pending = Promise.resolve(operation());
+    generation = mirrorGeneration;
     return await Promise.race([
-      operation(),
+      pending,
       new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('redis_timeout')), timeoutMs); }),
     ]);
   } catch {
-    degraded = true;
+    if (generation === undefined || generation === mirrorGeneration) degraded = true;
     return null;
   } finally {
     clearTimeout(timer);
@@ -172,10 +185,16 @@ export async function probeRedisMirror() {
 
 export async function closeRedisMirror() {
   const current = client;
+  mirrorGeneration += 1;
   client = undefined;
   connecting = undefined;
-  if (current?.isOpen) {
+  if (current?.isReady) {
     try { await current.quit(); }
     catch { current.disconnect(); }
+  } else if (current?.isOpen) {
+    // A client stuck connecting to an unavailable Redis endpoint has no
+    // protocol session to QUIT; destroy it so shutdown cannot wait forever.
+    current.destroy();
   }
+  degraded = false;
 }
