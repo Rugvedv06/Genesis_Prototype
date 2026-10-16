@@ -17,7 +17,8 @@
     { "method": "GET",    "path": "/audit?limit=50",                "description": "Audit records (§4.7)", "status": "live" },
     { "method": "GET",    "path": "/audit/verify",                  "description": "Hash-chain verification: { ok, headHash, brokenAt?, reason? }", "status": "live" },
     { "method": "GET",    "path": "/audit/export",                  "description": "Export audit records as NDJSON", "status": "live" },
-    { "method": "GET",    "path": "/metrics",                       "description": "Counters and latency histograms", "status": "planned" },
+    { "method": "GET",    "path": "/metrics",                       "description": "Counters and latency histograms", "status": "live" },
+    { "method": "GET",    "path": "/metrics/timeseries",             "description": "Bucketed metrics series", "status": "live" },
     { "method": "POST",   "path": "/dev/tamper {index}",            "description": "Dev only (ENABLE_DEV_ROUTES=1): tamper audit line at index", "status": "planned" },
     { "method": "GET",    "path": "/health",                        "description": "Health check", "status": "live" }
   ]
