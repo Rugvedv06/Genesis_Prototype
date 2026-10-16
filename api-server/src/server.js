@@ -16,6 +16,7 @@ import { get as getTrace } from './features/events/trace-store.js';
 import { auditRoutes } from './features/audit/routes.js';
 import { snapshot as metricsSnapshot, timeseries as metricsTimeseries } from './features/metrics/index.js';
 import { head as auditHead } from './features/audit/index.js';
+import { snapshot as circuitSnapshot } from './features/safety/circuit.js';
 
 const app = express();
 app.use(cors());
@@ -27,6 +28,7 @@ app.get('/health', (_req, res) => {
 
 app.get('/state', (_req, res) => {
   const apis = registryStore.list();
+  const safety = circuitSnapshot();
   const grouped = new Map();
   for (const item of apis) {
     if (!grouped.has(item.apiId)) grouped.set(item.apiId, { apiId: item.apiId, baseUrl: registryStore.config(item.apiId)?.baseUrl, mode: registryStore.config(item.apiId)?.healing?.mode ?? 'enforce', tools: [] });
@@ -39,7 +41,7 @@ app.get('/state', (_req, res) => {
       sideEffects: current?.versionObj?.meta?.sideEffects ?? current?.versionObj?.adapter?.sideEffects ?? 'write',
     });
   }
-  res.json({ lastEventId: bus.since(0).at(-1)?.id ?? 0, apis: [...grouped.values()], metrics: metricsSnapshot(), audit: auditHead(), cache: { entries: 0, hits: 0 }, circuit: [] });
+  res.json({ lastEventId: bus.since(0).at(-1)?.id ?? 0, apis: [...grouped.values()], metrics: metricsSnapshot(), audit: auditHead(), cache: { entries: safety.negativeEntries, hits: 0 }, circuit: safety.open });
 });
 
 app.get('/metrics', (_req, res) => res.json(metricsSnapshot()));

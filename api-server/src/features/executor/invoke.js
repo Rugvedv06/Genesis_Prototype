@@ -346,11 +346,13 @@ export async function invoke({ apiId, toolName, args, runId }) {
   const circuitState = circuit.check(apiId, toolName);
   if (!circuitState.ok) {
     emitCall('halt', { reason: circuitState.reason, retryable: false });
+    appendAudit({ decision: 'halt', apiId, tool: toolName, versionBefore: tool.version, reason: circuitState.reason, callId });
     return halt('circuit_open', { until: circuitState.until });
   }
   if (negativeHit(requestKey)) {
     const result = halt('unfixable_contract', { signature: requestKey });
     emitCall('halt', { reason: 'unfixable_contract', retryable: false });
+    appendAudit({ decision: 'halt', apiId, tool: toolName, versionBefore: tool.version, reason: 'unfixable_contract', callId, cacheHit: true });
     return result;
   }
 

@@ -48,3 +48,13 @@ export function reset() {
   failures.clear();
   negative.clear();
 }
+
+export function snapshot() {
+  const now = Date.now();
+  return {
+    open: [...states.entries()]
+      .filter(([, state]) => state.until > now)
+      .map(([key, state]) => ({ key, until: state.until })),
+    negativeEntries: [...negative.values()].filter((until) => until > now).length,
+  };
+}
