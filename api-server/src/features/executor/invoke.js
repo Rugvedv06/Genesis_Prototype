@@ -46,7 +46,7 @@ function getValidator(apiId, tool, version, jsonSchema) {
 }
 
 function validateArgs(tool, args) {
-  const logical = tool.versionObj?.adapter?._logicalSchema;
+  const logical = tool.versionObj?.meta?.logicalSchema ?? tool.versionObj?.adapter?._logicalSchema;
   if (!logical) return { ok: true };
   const validate = getValidator(tool.apiId, tool.name, tool.version, logical);
   const ok = validate(args);
@@ -76,13 +76,14 @@ async function send(tool, args, resolveCredential) {
 
   const { body, headers } = tool.compiled.buildRequest(args, resolveCredential);
   const adapter = tool.versionObj?.adapter ?? {};
-  const reqPath = adapter._path ?? '';
+  const meta = tool.versionObj?.meta ?? {};
+  const reqPath = meta.path ?? adapter._path;
   const fullUrl = `${baseUrl}${reqPath}`;
   const ctrl = new AbortController();
   const timeout = setTimeout(() => ctrl.abort(), 10000);
   try {
     const resp = await fetch(fullUrl, {
-      method: adapter._method ?? 'POST',
+      method: meta.method ?? adapter._method ?? 'POST',
       headers: { 'Content-Type': 'application/json', ...headers },
       body: JSON.stringify(body),
       signal: ctrl.signal,

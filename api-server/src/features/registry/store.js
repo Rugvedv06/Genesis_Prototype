@@ -1,7 +1,7 @@
 // Phase 1 Track B: versioned registry store (§4.2, §6 Phase 1).
 // Immutable version objects; commit appends, never rewrites. JSON snapshot to
 // data/registry.json on commit.
-import { appendFileSync, existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, mkdirSync, writeFileSync, renameSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { iso } from '../../lib/time.js';
@@ -23,7 +23,24 @@ function loadRegistry() {
   ensureDir();
   if (!existsSync(REGISTRY_FILE)) return {};
   try {
-    return JSON.parse(readFileSync(REGISTRY_FILE, 'utf8'));
+    const registry = JSON.parse(readFileSync(REGISTRY_FILE, 'utf8'));
+    for (const api of Object.values(registry)) {
+      for (const version of Object.values(api.tools ?? {}).flatMap((entry) => entry.versions ?? [])) {
+        if (!version.meta && version.adapter?._path) {
+          version.meta = {
+            path: version.adapter._path,
+            method: version.adapter._method ?? 'POST',
+            logicalSchema: version.adapter._logicalSchema,
+            risk: 'low',
+            sideEffects: version.adapter.sideEffects ?? 'write',
+            identity: {},
+          };
+          const { _path, _method, _logicalSchema, ...adapter } = version.adapter;
+          version.adapter = adapter;
+        }
+      }
+    }
+    return registry;
   } catch {
     return {};
   }
@@ -74,6 +91,14 @@ export class RegistryStore {
       tool,
       createdAt: iso(),
       adapter,
+      meta: {
+        path: adapter._path,
+        method: adapter._method ?? 'POST',
+        logicalSchema: adapter._logicalSchema,
+        risk,
+        sideEffects: adapter.sideEffects ?? 'write',
+        identity: {},
+      },
       origin: 'register',
       change: null,
     };
@@ -103,9 +128,6 @@ export class RegistryStore {
       const adapter = {
         request: tool.adapter?.request ?? [],
         response: { map: responseMap },
-        _path: tool.path,
-        _method: tool.method ?? 'POST',
-        _logicalSchema: tool.parameters,
         sideEffects: tool.sideEffects ?? 'write',
       };
       const versionObj = {
@@ -115,6 +137,14 @@ export class RegistryStore {
         tool: tool.name,
         createdAt: iso(),
         adapter,
+        meta: {
+          path: tool.path,
+          method: tool.method ?? 'POST',
+          logicalSchema: tool.parameters,
+          risk: tool.risk ?? 'low',
+          sideEffects: tool.sideEffects ?? 'write',
+          identity: tool.identity ?? {},
+        },
         origin: 'register',
         change: null,
       };
@@ -210,6 +240,7 @@ export class RegistryStore {
       createdAt: iso(),
       adapter,
       origin: 'heal',
+      meta: entry.current.meta,
       change: change ?? null,
     };
     entry.versions.push(versionObj);
@@ -233,6 +264,7 @@ export class RegistryStore {
       createdAt: iso(),
       adapter: target.adapter,
       origin: 'rollback',
+      meta: target.meta,
       change: null,
     };
     entry.versions.push(versionObj);
@@ -257,7 +289,9 @@ export class RegistryStore {
   _snapshot() {
     try {
       ensureDir();
-      writeFileSync(REGISTRY_FILE, JSON.stringify(this._byApi, null, 2));
+      const tempFile = `${REGISTRY_FILE}.tmp`;
+      writeFileSync(tempFile, JSON.stringify(this._byApi, null, 2));
+      renameSync(tempFile, REGISTRY_FILE);
     } catch {
       // best-effort; in-memory remains source of truth
     }

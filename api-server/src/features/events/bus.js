@@ -26,7 +26,6 @@ export function on(cb) {
 export function clear() {
   buffer.length = 0;
   nextId = 1;
-  listeners.clear();
 }
 
 export function size() {
