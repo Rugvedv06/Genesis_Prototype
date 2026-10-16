@@ -14,8 +14,9 @@ if (!envResult.found) {
 
 function bin(cwd, name) {
   // npm workspaces hoist bins to root node_modules; fall back to workspace-local.
-  const root = join(process.cwd(), 'node_modules', '.bin', name);
-  const local = join(process.cwd(), cwd, 'node_modules', '.bin', name);
+  const executable = process.platform === 'win32' ? `${name}.cmd` : name;
+  const root = join(process.cwd(), 'node_modules', '.bin', executable);
+  const local = join(process.cwd(), cwd, 'node_modules', '.bin', executable);
   return root;
 }
 
@@ -30,6 +31,7 @@ const procs = APPS.map((app) => {
   const p = spawn(app.cmd, app.args, {
     cwd: app.cwd,
     env: { ...process.env, ...app.env },
+    shell: process.platform === 'win32' && app.cmd.endsWith('.cmd'),
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   p.stdout.on('data', (d) => process.stdout.write(`[${app.name}] ${d}`));
