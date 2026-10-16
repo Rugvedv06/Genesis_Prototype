@@ -57,7 +57,25 @@ export const M5 = {
   }),
 };
 
-export const CATALOGUE = { M5 };
+export const M9 = {
+  id: 'M9',
+  label: 'unconfigured bearer auth + approval code',
+  category: 'unrecoverable',
+  expected: 'halt',
+  route: { method: 'POST', path: '/api/users/update-email' },
+  headers: [
+    { name: 'Authorization', required: true, error: { error: 'missing_auth', scheme: 'Bearer', header: 'Authorization' } },
+  ],
+  body: {
+    layers: [{
+      when: () => true,
+      check: (body) => body?.approval_code !== undefined,
+      errors: () => [{ loc: ['body', 'approval_code'], msg: 'field required', type: 'value_error.missing' }],
+    }],
+  },
+};
+
+export const CATALOGUE = { M5, M9 };
 export function get(id) {
   return CATALOGUE[id];
 }
