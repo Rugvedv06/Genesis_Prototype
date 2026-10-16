@@ -3,6 +3,7 @@
 // Returns { tier, confidence, ops, evidence } or null when no diagnosis.
 import { parseErrors } from '../classifier/index.js';
 import { wrapRule, renameRule, typeRule, headerRule, enumRule, RULE_ORDER } from './tier1-rules/index.js';
+import { discover as discoverFromSpec } from './tier0-spec/index.js';
 
 const RULES = { wrap: wrapRule, rename: renameRule, type: typeRule, header: headerRule, enum: enumRule };
 
@@ -10,8 +11,7 @@ export async function run({ tool, args, failure, kind }) {
   const errors = failure.errors ?? parseErrors(failure?.json ?? failure?.text, failure?.status);
   const request = failure.request ?? args;
 
-  // T0 stub: no spec available yet (Phase 4). Returns null -> fall through to T1.
-  const t0 = await runTier0({ tool, args, failure, kind });
+  const t0 = await runTier0({ tool, args, failure, kind, errors });
   if (t0) return t0;
 
   // T1: run each rule in order; first confident proposal wins.
@@ -28,8 +28,9 @@ export async function run({ tool, args, failure, kind }) {
   return null;
 }
 
-async function runTier0() {
-  return null; // Phase 4
+async function runTier0({ tool, args, kind, errors }) {
+  if (kind === 'response_drift') return null;
+  return discoverFromSpec({ tool, args, errors });
 }
 
 async function runTier2() {

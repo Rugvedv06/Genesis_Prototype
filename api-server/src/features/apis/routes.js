@@ -5,6 +5,11 @@ import { emit } from '../events/bus.js';
 import { append as appendAudit } from '../audit/index.js';
 import { cfg } from '../../config.js';
 import { validateUpstreamUrl } from '../http/url-policy.js';
+import { getPool } from '../../db/pool.js';
+import { withTransaction } from '../../db/transaction.js';
+import { getApiConfig, listApiTools, listToolVersions } from '../../db/registry-repository.js';
+import { commitFromCache, registerApi as registerApiInDatabase, removeApi as removeApiInDatabase,
+  rollbackFromCache, updateApiConfig as updateApiConfigInDatabase } from '../../db/registry-service.js';
 
 function publicConfig(config) {
   const safe = { ...config };
@@ -14,29 +19,42 @@ function publicConfig(config) {
 
 export function apisRoutes(app) {
   // GET /apis — list registered APIs and current versions
-  app.get('/apis', (_req, res) => {
-    res.json({ apis: registryStore.list() });
+  app.get('/apis', async (_req, res, next) => {
+    try { res.json({ apis: process.env.DATABASE_URL ? await listApiTools(getPool()) : registryStore.list() }); }
+    catch (error) { next(error); }
   });
 
-  app.get('/apis/:apiId', (req, res) => {
-    const api = registryStore.config(req.params.apiId);
+  app.get('/apis/:apiId', async (req, res, next) => {
+    try {
+    const api = process.env.DATABASE_URL ? await getApiConfig(getPool(), req.params.apiId) : registryStore.config(req.params.apiId);
     if (!api) return res.status(404).json({ ok: false, error: 'not_found' });
-    res.json({ apiId: req.params.apiId, config: publicConfig(api), tools: registryStore.list().filter((item) => item.apiId === req.params.apiId) });
+    const allTools = process.env.DATABASE_URL ? await listApiTools(getPool()) : registryStore.list();
+    res.json({ apiId: req.params.apiId, config: publicConfig(api.config ?? api), tools: allTools.filter((item) => item.apiId === req.params.apiId) });
+    } catch (error) { next(error); }
   });
 
-  app.patch('/apis/:apiId/config', (req, res) => {
+  app.patch('/apis/:apiId/config', async (req, res, next) => {
     const allowed = ['mode', 'confidenceThreshold', 'maxRounds', 'tier2', 'healing'];
     const patch = Object.fromEntries(Object.entries(req.body ?? {}).filter(([key]) => allowed.includes(key)));
     if (patch.mode) patch.healing = { ...(patch.healing ?? {}), mode: patch.mode };
-    const config = registryStore.setConfig(req.params.apiId, patch);
+    let config;
+    try {
+      if (process.env.DATABASE_URL) {
+        const result = await updateApiConfigInDatabase(req.params.apiId, patch);
+        config = result.value?.config;
+      } else config = registryStore.setConfig(req.params.apiId, patch);
+    } catch (error) {
+      if (error instanceof TypeError) return res.status(400).json({ ok: false, error: 'invalid_arguments' });
+      return next(error);
+    }
     if (!config) return res.status(404).json({ ok: false, error: 'not_found' });
     const safeConfig = publicConfig(config);
-    emit({ type: 'config.changed', apiId: req.params.apiId, config: safeConfig });
+    if (!process.env.DATABASE_URL) emit({ type: 'config.changed', apiId: req.params.apiId, config: safeConfig });
     res.json({ ok: true, apiId: req.params.apiId, config: safeConfig });
   });
 
   // POST /apis — register an API (§4.1 payload). Re-registering replaces atomically.
-  app.post('/apis', (req, res) => {
+  app.post('/apis', async (req, res, next) => {
     const { apiId, baseUrl, specUrl, credentials, healing, tools } = req.body ?? {};
     if (!apiId || !baseUrl || !Array.isArray(tools) || tools.length === 0) {
       return res.status(400).json({ ok: false, error: 'invalid_arguments', message: 'apiId, baseUrl and tools[] are required' });
@@ -47,26 +65,41 @@ export function apisRoutes(app) {
     } catch (error) {
       return res.status(400).json({ ok: false, error: 'invalid_upstream_url', message: error.message });
     }
-    const result = registryStore.registerApi(apiId, { apiId, baseUrl, specUrl, credentials, healing, tools });
-    emit({ type: 'api.registered', apiId, baseUrl, specUrl, healing, toolCount: tools.length, epoch: result.epoch });
-    res.json({ ok: true, apiId, tools: result.tools, epoch: result.epoch });
+    try {
+      const payload = { apiId, baseUrl, specUrl, credentials, healing, tools };
+      const result = process.env.DATABASE_URL
+        ? (await registerApiInDatabase(payload)).value
+        : registryStore.registerApi(apiId, payload);
+      if (!process.env.DATABASE_URL) emit({ type: 'api.registered', apiId, baseUrl, specUrl, healing, toolCount: tools.length, epoch: result.epoch });
+      res.json({ ok: true, apiId, tools: result.tools, epoch: result.epoch });
+    } catch (error) {
+      if (error instanceof TypeError) return res.status(400).json({ ok: false, error: 'invalid_arguments' });
+      next(error);
+    }
   });
 
   // DELETE /apis/:apiId — remove (demo reset)
-  app.delete('/apis/:apiId', (req, res) => {
+  app.delete('/apis/:apiId', async (req, res, next) => {
     const { apiId } = req.params;
-    const removed = registryStore.removeApi(apiId);
+    let removed;
+    try {
+      removed = process.env.DATABASE_URL
+        ? (await removeApiInDatabase(apiId)).value.removed
+        : registryStore.removeApi(apiId);
+    } catch (error) { return next(error); }
     if (!removed) {
       return res.status(404).json({ ok: false, error: 'not_found', message: `api ${apiId} not registered` });
     }
-    emit({ type: 'api.removed', apiId });
+    if (!process.env.DATABASE_URL) emit({ type: 'api.removed', apiId });
     res.json({ ok: true, apiId });
   });
 
   // GET /apis/:apiId/tools/:tool/versions — version history
-  app.get('/apis/:apiId/tools/:tool/versions', (req, res) => {
+  app.get('/apis/:apiId/tools/:tool/versions', async (req, res, next) => {
     const { apiId, tool } = req.params;
-    const versions = registryStore.versions(apiId, tool);
+    let versions;
+    try { versions = process.env.DATABASE_URL ? await listToolVersions(getPool(), apiId, tool) : registryStore.versions(apiId, tool); }
+    catch (error) { return next(error); }
     if (versions === null) {
       return res.status(404).json({ ok: false, error: 'not_found', message: `tool ${tool} not found in ${apiId}` });
     }
@@ -74,39 +107,68 @@ export function apisRoutes(app) {
   });
 
   // GET /apis/:apiId/tools/:tool/versions/:n — single version record
-  app.get('/apis/:apiId/tools/:tool/versions/:n', (req, res) => {
+  app.get('/apis/:apiId/tools/:tool/versions/:n', async (req, res, next) => {
     const { apiId, tool, n } = req.params;
-    const version = registryStore.version(apiId, tool, Number(n));
-    if (version === null) {
+    if (!/^\d{1,9}$/.test(n) || Number(n) < 1) return res.status(400).json({ ok: false, error: 'invalid_arguments' });
+    let version;
+    try {
+      if (process.env.DATABASE_URL) version = (await listToolVersions(getPool(), apiId, tool)).find((item) => item.version === Number(n));
+      else version = registryStore.version(apiId, tool, Number(n));
+    } catch (error) { return next(error); }
+    if (version == null) {
       return res.status(404).json({ ok: false, error: 'not_found', message: `version ${n} not found` });
     }
     res.json(version);
   });
 
-  app.get('/apis/:apiId/tools/:tool/diff', (req, res) => {
-    const diff = registryStore.diff(req.params.apiId, req.params.tool, Number(req.query.from), Number(req.query.to));
+  app.get('/apis/:apiId/tools/:tool/diff', async (req, res, next) => {
+    let diff;
+    try {
+      if (process.env.DATABASE_URL) {
+        const versions = await listToolVersions(getPool(), req.params.apiId, req.params.tool);
+        const before = versions.find((item) => item.version === Number(req.query.from));
+        const after = versions.find((item) => item.version === Number(req.query.to));
+        if (before && after) {
+          const beforeOps = before.adapter.request ?? [];
+          const afterOps = after.adapter.request ?? [];
+          const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+          diff = { added: afterOps.filter((op) => !beforeOps.some((old) => same(old, op))), removed: beforeOps.filter((op) => !afterOps.some((nextOp) => same(nextOp, op))), requestBefore: before.adapter, requestAfter: after.adapter };
+        }
+      } else diff = registryStore.diff(req.params.apiId, req.params.tool, Number(req.query.from), Number(req.query.to));
+    } catch (error) { return next(error); }
     if (!diff) return res.status(404).json({ ok: false, error: 'not_found' });
     res.json(diff);
   });
 
   // POST /apis/:apiId/tools/:tool/rollback — { "toVersion": 2 }
-  app.post('/apis/:apiId/tools/:tool/rollback', (req, res) => {
+  app.post('/apis/:apiId/tools/:tool/rollback', async (req, res, next) => {
     const { apiId, tool } = req.params;
     const { toVersion } = req.body ?? {};
     if (toVersion === undefined) {
       return res.status(400).json({ ok: false, error: 'invalid_arguments', message: 'toVersion is required' });
     }
+    if (!Number.isSafeInteger(Number(toVersion)) || Number(toVersion) < 1) {
+      return res.status(400).json({ ok: false, error: 'invalid_arguments', message: 'toVersion must be a positive integer' });
+    }
     try {
-      const committed = registryStore.rollback(apiId, tool, toVersion);
-      appendAudit({ decision: 'rollback', apiId, tool, versionBefore: committed.parent, versionAfter: committed.version, rollbackOf: committed.rollbackOf });
-      emit({ type: 'registry.rollback', apiId, tool, version: committed.version, rollbackOf: committed.rollbackOf });
+      let committed;
+      if (process.env.DATABASE_URL) {
+        const current = registryStore.current(apiId, tool);
+        committed = (await rollbackFromCache({ apiId, toolName: tool, toVersion: Number(toVersion), current })).value;
+      } else {
+        committed = registryStore.rollback(apiId, tool, toVersion);
+        appendAudit({ decision: 'rollback', apiId, tool, versionBefore: committed.parent, versionAfter: committed.version, rollbackOf: committed.rollbackOf });
+        emit({ type: 'registry.rollback', apiId, tool, version: committed.version, rollbackOf: committed.rollbackOf });
+      }
       res.json({ ok: true, version: committed.version, rollbackOf: committed.rollbackOf });
     } catch (err) {
+      if (err.code === 'stale_adapter_version') return res.status(409).json({ ok: false, error: 'stale_adapter_version' });
+      if (process.env.DATABASE_URL && !['TypeError'].includes(err.name)) return next(err);
       res.status(400).json({ ok: false, error: err.message });
     }
   });
 
-  app.post('/dev/force-bad-commit', (req, res) => {
+  app.post('/dev/force-bad-commit', async (req, res, next) => {
     if (!cfg.enableDevRoutes) return res.status(404).json({ ok: false, error: 'not_found' });
     const { apiId, tool } = req.body ?? {};
     const current = registryStore.current(apiId, tool);
@@ -115,8 +177,14 @@ export function apisRoutes(app) {
       ...current.versionObj.adapter,
       request: [...(current.versionObj.adapter.request ?? []), { op: 'rename_field', from: '__healr_bad_field__', to: '__healr_bad_field__' }],
     };
-    const committed = registryStore.commit(apiId, tool, adapter, { ops: adapter.request.slice(-1), tier: 1, confidence: 1, evidence: ['developer forced bad commit'] }, 'dev');
-    emit({ type: 'patch.committed', apiId, tool, version: committed.version, ops: committed.change.ops, dev: true });
+    let committed;
+    try {
+      const change = { ops: adapter.request.slice(-1), tier: 1, confidence: 1, evidence: ['developer forced bad commit'] };
+      committed = process.env.DATABASE_URL
+        ? (await commitFromCache({ apiId, toolName: tool, adapter, change, origin: 'dev', current })).value
+        : registryStore.commit(apiId, tool, adapter, change, 'dev');
+      if (!process.env.DATABASE_URL) emit({ type: 'patch.committed', apiId, tool, version: committed.version, ops: committed.change.ops, dev: true });
+    } catch (error) { return next(error); }
     res.json({ ok: true, version: committed.version });
   });
 
@@ -130,39 +198,39 @@ export function apisRoutes(app) {
     const taskRunId = runId ?? `task_${Date.now()}`;
     const { emit: emitTask } = await import('../events/bus.js');
 
-    emitTask({ type: 'agent.step', runId: taskRunId, callId: 'c_task', apiId, tool: 'get_user', iteration: 1 });
+    emitTask({ type: 'agent.step', runId: taskRunId, apiId, tool: 'get_user', iteration: 1 });
     let r1;
     try {
       r1 = await invoke({ apiId, toolName: 'get_user', args: { user_id: '123' }, runId: taskRunId });
     } catch (err) {
-      emitTask({ type: 'agent.final', runId: taskRunId, callId: 'c_task', apiId, tool: 'get_user', iteration: 1, outcome: 'error', error: err.message });
+      emitTask({ type: 'agent.final', runId: taskRunId, apiId, tool: 'get_user', iteration: 1, outcome: 'error', error: err.message });
       return res.json({ ok: false, runId: taskRunId, error: err.message, step: 1 });
     }
     if (!r1.ok) {
-      emitTask({ type: 'agent.final', runId: taskRunId, callId: 'c_task', apiId, tool: 'get_user', iteration: 1, outcome: 'fail', error: r1.error });
+      emitTask({ type: 'agent.final', runId: taskRunId, apiId, tool: 'get_user', iteration: 1, outcome: 'fail', error: r1.error });
       return res.json({ ok: false, runId: taskRunId, error: r1.error, step: 1, data: r1.data });
     }
 
-    emitTask({ type: 'agent.step', runId: taskRunId, callId: 'c_task', apiId, tool: 'update_user_email', iteration: 2 });
+    emitTask({ type: 'agent.step', runId: taskRunId, apiId, tool: 'update_user_email', iteration: 2 });
     const targetEmail = email ?? 'asha.new@example.com';
     let r2;
     try {
       r2 = await invoke({ apiId, toolName: 'update_user_email', args: { user_id: '123', email: targetEmail }, runId: taskRunId });
     } catch (err) {
-      emitTask({ type: 'agent.final', runId: taskRunId, callId: 'c_task', apiId, tool: 'update_user_email', iteration: 2, outcome: 'error', error: err.message });
+      emitTask({ type: 'agent.final', runId: taskRunId, apiId, tool: 'update_user_email', iteration: 2, outcome: 'error', error: err.message });
       return res.json({ ok: false, runId: taskRunId, error: err.message, step: 2, data: r1.data });
     }
 
-    emitTask({ type: 'agent.step', runId: taskRunId, callId: 'c_task', apiId, tool: 'get_user', iteration: 3 });
+    emitTask({ type: 'agent.step', runId: taskRunId, apiId, tool: 'get_user', iteration: 3 });
     let r3;
     try {
       r3 = await invoke({ apiId, toolName: 'get_user', args: { user_id: '123' }, runId: taskRunId });
     } catch (err) {
-      emitTask({ type: 'agent.final', runId: taskRunId, callId: 'c_task', apiId, tool: 'get_user', iteration: 3, outcome: 'error', error: err.message });
+      emitTask({ type: 'agent.final', runId: taskRunId, apiId, tool: 'get_user', iteration: 3, outcome: 'error', error: err.message });
       return res.json({ ok: false, runId: taskRunId, error: err.message, step: 3, data: r3?.data ?? r1.data });
     }
 
-    emitTask({ type: 'agent.final', runId: taskRunId, callId: 'c_task', apiId, tool: 'get_user', iteration: 3, outcome: r3.ok ? 'success' : 'fail', data: r3.data });
+    emitTask({ type: 'agent.final', runId: taskRunId, apiId, tool: 'get_user', iteration: 3, outcome: r3.ok ? 'success' : 'fail', data: r3.data });
     res.json({ ok: true, runId: taskRunId, step: 3, data: r3.data, results: [r1, r2, r3] });
   });
 }

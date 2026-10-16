@@ -76,7 +76,7 @@ function applyOp(op, c) {
     }
     case 'set_enum_map': {
       const v = getPath(c.body, op.path);
-      if (!(v in op.map)) throw new ProvenanceError(op.path);
+      if (!Object.hasOwn(op.map, v)) throw new ProvenanceError(op.path);
       setPath(c.body, op.path, op.map[v]);
       c.origin.set(op.path, 'arg:enum_mapped');
       break;

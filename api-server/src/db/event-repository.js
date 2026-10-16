@@ -23,10 +23,16 @@ function safeEventValue(value, key = '') {
       if (!operation || typeof operation !== 'object' || Array.isArray(operation)) return { op: 'unknown' };
       const safe = {};
       for (const field of ['op', 'path', 'from', 'to', 'type', 'name']) {
-        if (typeof operation[field] === 'string') safe[field] = operation[field];
+        const candidate = operation[field];
+        if (typeof candidate === 'string' && candidate.length <= 256
+          && /^[A-Za-z0-9_$.[\]{}\/-]+$/.test(candidate) && !/\d{4,}/.test(candidate)
+          && !/(secret|token|password|credential|apikey|authorization|cookie)/i.test(candidate)) safe[field] = candidate;
       }
       if (operation.source && typeof operation.source === 'object') {
-        safe.source = Object.fromEntries(['type', 'ref'].filter((field) => typeof operation.source[field] === 'string').map((field) => [field, operation.source[field]]));
+        safe.source = Object.fromEntries(['type', 'ref'].filter((field) => typeof operation.source[field] === 'string'
+          && /^[A-Za-z_][A-Za-z0-9_.:-]{0,127}$/.test(operation.source[field])
+          && !/(secret|token|password|credential|apikey|authorization|cookie)/i.test(operation.source[field]))
+          .map((field) => [field, operation.source[field]]));
       }
       return safe;
     });
@@ -116,13 +122,13 @@ export async function readEventsAfter(queryable, cursor = '0', { apiId, types, l
        SELECT retention_floor::text, last_committed_id::text
        FROM gateway_event_cursors WHERE workspace_id = $1
      ), event_page AS (
-       SELECT id::text AS id, payload FROM gateway_events
+       SELECT id, payload FROM gateway_events
        WHERE workspace_id = $1 AND id > $2::bigint
          AND ($3::text IS NULL OR api_id = $3)
          AND ($4::text[] IS NULL OR event_type = ANY($4::text[]))
        ORDER BY id LIMIT $5
      )
-     SELECT cursor_state.retention_floor, cursor_state.last_committed_id, event_page.id, event_page.payload
+     SELECT cursor_state.retention_floor, cursor_state.last_committed_id, event_page.id::text AS id, event_page.payload
      FROM cursor_state LEFT JOIN event_page ON true ORDER BY event_page.id`,
     [workspaceId, cursorValue.toString(), apiId ?? null, eventTypes, safeLimit],
   );
@@ -136,4 +142,49 @@ export async function readEventsAfter(queryable, cursor = '0', { apiId, types, l
     retentionFloor: retentionFloor.toString(),
     resetReason,
   };
+}
+
+// Return a bounded, newest-first history snapshot and its high-water cursor
+// from one SQL statement so the client can hydrate and then resume SSE without
+// a gap between the snapshot and the live stream.
+export async function listRecentEvents(queryable, limit = 5000) {
+  const safeLimit = Number.isInteger(limit) ? Math.max(1, Math.min(limit, 10_000)) : 5000;
+  const workspaceId = await getLocalWorkspaceId(queryable);
+  const { rows } = await queryable.query(
+    `WITH cursor_state AS (
+       SELECT last_committed_id::text AS high_water_id, retention_floor::text AS retention_floor
+       FROM gateway_event_cursors WHERE workspace_id = $1
+     ), recent AS (
+       SELECT id, payload FROM gateway_events
+       WHERE workspace_id = $1 ORDER BY id DESC LIMIT $2
+     )
+     SELECT cursor_state.high_water_id, cursor_state.retention_floor, recent.id::text AS id, recent.payload
+     FROM cursor_state LEFT JOIN recent ON true ORDER BY recent.id`,
+    [workspaceId, safeLimit],
+  );
+  if (!rows.length) throw new Error('Durable event cursor state is missing for the workspace');
+  return {
+    lastEventId: rows[0].high_water_id,
+    retentionFloor: rows[0].retention_floor,
+    events: rows.filter((row) => row.id !== null).map((row) => row.payload),
+  };
+}
+
+export async function listCallEvents(queryable, callId) {
+  const workspaceId = await getLocalWorkspaceId(queryable);
+  const { rows } = await queryable.query(
+    `SELECT payload, sequence_in_call FROM gateway_events
+     WHERE workspace_id = $1 AND call_id = $2 ORDER BY id`, [workspaceId, callId],
+  );
+  return rows.map((row) => ({ ...row.payload, sequenceInCall: row.sequence_in_call }));
+}
+
+export async function getEventCursor(queryable) {
+  const workspaceId = await getLocalWorkspaceId(queryable);
+  const { rows } = await queryable.query(
+    `SELECT last_committed_id::text AS last_event_id, retention_floor::text AS retention_floor
+     FROM gateway_event_cursors WHERE workspace_id = $1`, [workspaceId],
+  );
+  if (!rows[0]) throw new Error('Durable event cursor state is missing for the workspace');
+  return rows[0];
 }

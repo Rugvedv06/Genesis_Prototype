@@ -3,10 +3,22 @@
 // Expects 4 committed ops: add_header, move_field, rename_field, coerce_type.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { invoke } from '../src/features/executor/invoke.js';
-import { registryStore } from '../src/features/registry/store.js';
-import { emit, clear as clearBus } from '../src/features/events/bus.js';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { loadGolden, goldenBody } from './helpers/golden.js';
+
+const previousDataDir = process.env.HEALR_DATA_DIR;
+const dataDir = mkdtempSync(join(tmpdir(), 'healr-m5-golden-'));
+process.env.HEALR_DATA_DIR = dataDir;
+const [{ invoke }, { registryStore }, { clear: clearBus }] = await Promise.all([
+  import('../src/features/executor/invoke.js'),
+  import('../src/features/registry/store.js'),
+  import('../src/features/events/bus.js'),
+]);
+if (previousDataDir === undefined) delete process.env.HEALR_DATA_DIR;
+else process.env.HEALR_DATA_DIR = previousDataDir;
+test.after(() => rmSync(dataDir, { recursive: true, force: true }));
 
 const API_ID = 'demo-users';
 const TOOL = 'get_user';

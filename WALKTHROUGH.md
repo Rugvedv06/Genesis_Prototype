@@ -527,4 +527,40 @@ This section records implementation progress as changes land. A milestone is mar
 - The mock applies response operations through one shared transformer, leaving the truth record unchanged. The core remains independent of mock implementation details.
 - The demo now loads mutation choices from `/admin/mutations`, so M6/M10 can be selected without a duplicated client-side catalogue.
 - Focused mock verification: `npm --workspace=@healr/demo-server test` — **8/8 passed**, including response mutation isolation and catalogue metadata. Full M6/M10 gateway and truth UI acceptance remains pending.
+
+## Resume — user confirmed Milestone 1.5 complete
+
+- User confirmed M1.5 is complete and instructed me to proceed with the M2–M4 loop. I’m accepting that as the sequencing decision and continuing without reopening M1.5 work.
+- Repository note: `docs/MILESTONE_1_5_PLAN.md` and runtime source still describe unfinished Postgres cutover/Redis wiring. I’ll verify M4 against the actual available interfaces before claiming durable cache behavior.
+- Starting M2.1: expand the mock mutation catalogue and shared error-style emission. Existing M5/M6/M9/M10 paths remain the regression anchors.
+
+### M2.1 catalogue expansion
+
+- Added declarative mutation entries M1–M4 and M7–M8, completing catalogue IDs M1–M10 alongside existing M5/M6/M9/M10. Each entry includes category, route, expected outcome, and expected operations; response changes remain shared path operations.
+- Added a shared validator error-style emitter for pydantic-v1, pydantic-v2, and problem-json. It translates canonical errors while omitting raw caller input; unknown styles are rejected.
+- Added a mock OpenAPI builder that derives request/response schemas from the active mutation, including M7's explicit region default and M8's documented enum aliases. It marks the active mutation in a stable extension field.
+- Connected admin error-style selection and spec availability/staleness controls to the mock routes and OpenAPI endpoint. Request validation now emits the selected format without including raw caller input.
+- Implemented a bounded, timeout-limited Tier 0 OpenAPI fetch for explicit defaults and declared enum aliases. It rejects stale/unavailable/oversized/invalid specs and does not propose values absent from the current operation schema. Added pydantic-v2 `int_type` normalization.
+- Initial syntax and focused regression checks pass: `node --check` for the mock server/catalogue and Tier 0 module; `node --test demo-server-and-client/server/test/validator.test.js api-server/test/tier1.test.js` — **18/18 passed**. Dedicated Tier 0/default and style-matrix assertions are next.
+- Added mutation-level canonical error assertions for M1–M4/M7/M8, a three-style translation/no-raw-value check, and active OpenAPI default/enum metadata checks. `node --test demo-server-and-client/server/test/validator.test.js` — **11/11 passed**.
+- Tier 0 focused coverage now verifies documented default sourcing, explicit enum aliases, stale-spec rejection, and no default guessing. `node --test api-server/test/tier0-spec.test.js` — **3/3 passed**.
+- Extended the stage registration with a status tool and made baseline/healed runs select the tool and safe fixture arguments from mutation route metadata, enabling M8/M9 as well as read mutations through the same run flow.
+- Expanded the truth check to compare the affected logical fields (including status) and seed the mock's task-value provenance ledger before a run. The mock truth endpoint now reports status from its write ledger.
+- Combined focused verification after these changes: Tier 0, Tier 1, response validation, and mock validator tests passed **28/28**; mock server/OpenAPI syntax checks passed; demo-client production build succeeded.
+- Hardened Tier 0 response reading to enforce the 1 MB cap while streaming, including when the upstream omits `Content-Length`.
+- Next verification layer: exercise M1–M4/M7/M8 through the gateway invoke loop with deterministic upstream responses, asserting exact operations, version commits, and Tier 0/Tier 1 attribution.
+- The first mutation-loop run exposed M1 being misclassified as a wrap because wrap preceded rename. Updated wrap to defer similar missing/extra names to rename; M1 and M3 now both pass exact-operation assertions. Focused mutation + Tier 1 tests pass **16/16**.
+- Mutation listing now returns numerically sorted M1–M10 entries for predictable selection in the stage client.
+- Preserved M9's distinct 401 auth halt in the shared header validator while keeping missing required body fields as 422.
+- Added M9 variant checks across all three error styles: missing bearer auth remains 401, and configured auth followed by missing approval code remains 422. Mock validator suite now passes **12/12**.
+- M9's active OpenAPI entry now describes both the required Authorization header and non-derivable `approval_code` variant.
+- Added a cross-product assertion that M1–M5 and M7–M9 retain the same classifier outcome across pydantic-v1, pydantic-v2, and problem-json. Mock validator suite now passes **13/13**.
+- The gateway mutation matrix then passed after isolating audit/registry data per test file: M1/M2/M3/M4/M7/M8 heal with their exact operation and expected Tier 0/1; response, spec, and mock format checks also pass. Combined focused command passed **26/26**.
+- Added M6 same-response remap coverage plus a write-side response-drift case asserting exactly one POST, correct logical data, and one committed adapter version. `node --test api-server/test/response-validation.test.js` passes **6/6**.
+- Focused validation and metadata tests are being added before claiming this package verified. M7 still needs a spec-backed default path; M8 semantic aliases need explicit spec evidence and must not be guessed.
 - Integrated checks after adding M6/M10 selection: elevated `npm test` — **92/92 passed**; `npm --workspace=@healr/demo-client run build` succeeded; elevated `npm run verify:p01` — **17/17 passed**; `git diff --check` passed. Sandboxed runs intermittently cannot bind test ports (`EPERM` / `could not find free port`); elevated reruns pass.
+- Full-suite rerun exposed a repeatable audit hash mismatch in the legacy M5 test (`api-server/test/heal.test.js`); the new focused tests isolate their data, but this legacy test still uses the repository's default `api-server/data` store, which makes it sensitive to persisted/stale test state. I’m isolating that test fixture before taking the M2/M3 full-suite gate again.
+- Isolated the legacy M5 golden test in its own temporary data directory before importing the runtime modules. This removes dependence on stale or concurrently-mutated `api-server/data` while preserving the exact four-operation assertions. After the fix, `npm test` passes **108/108**, `npm run verify:p01` passes **17/17**, and `npm --workspace=@healr/demo-client run build` succeeds.
+- Updated the evidence ledger: M2 and M3 automated server/mock gates pass, while live stage/browser walkthrough remains open. No browser automation runtime is available in this workspace/session.
+- M4 implementation check: the checked-in plan and runtime show no Redis client, `DATABASE_URL` and `REDIS_URL` are unset in this session, and `/metrics`, traces, and patch cache are still process-local/stubs. The available PostgreSQL repositories are not connected to the runtime. These are concrete prerequisite/runtime gaps; I have not represented M4 as implemented or durable.
+- M4.1 storage slice started: added the official Redis client package, started the documented local PostgreSQL/Redis Compose services, and applied the existing five migrations to the local development database. I’m implementing the candidate repository and bounded Redis mirror as the first isolated unit; runtime healing integration and durable operational views remain separate gates.

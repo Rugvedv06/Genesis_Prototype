@@ -53,7 +53,8 @@ function loadRegistry() {
 
 export class RegistryStore {
   constructor() {
-    this._byApi = loadRegistry(); // { apiId: { tools: { toolName: { versions, current } }, config, epoch } }
+    this.databaseAuthoritative = Boolean(process.env.DATABASE_URL);
+    this._byApi = this.databaseAuthoritative ? {} : loadRegistry(); // DB mode is hydrated before listening.
     this._compiled = new Map(); // key: `${apiId}:${tool}:v${version}` -> compiled adapter
     this._hydrateCompiled();
   }
@@ -221,6 +222,7 @@ export class RegistryStore {
     const cur = entry.current;
     return {
       epoch: this._byApi[apiId].epoch ?? 0,
+      configRevision: this._byApi[apiId].configRevision ?? 1,
       version: cur.version,
       versionObj: copy(cur),
       compiled: (() => {
@@ -355,6 +357,9 @@ export class RegistryStore {
   }
 
   _snapshot() {
+    if (this.databaseAuthoritative) {
+      throw new Error('Registry mutations must use PostgreSQL transactions when DATABASE_URL is configured');
+    }
     try {
       ensureDir();
       const tempFile = `${REGISTRY_FILE}.tmp`;
@@ -369,6 +374,13 @@ export class RegistryStore {
   reset() {
     this._byApi = {};
     this._compiled = new Map();
+  }
+
+  replaceFromDatabase(registry) {
+    if (!this.databaseAuthoritative) throw new Error('Database registry hydration requires DATABASE_URL');
+    this._byApi = copy(registry);
+    this._compiled = new Map();
+    this._hydrateCompiled();
   }
 }
 

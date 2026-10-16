@@ -4,7 +4,7 @@ This execution companion applies the dependency order in [NEW_PLAN.md](./NEW_PLA
 
 ## Gate before starting
 
-Milestone 1.5 is a hard prerequisite. Before M2 catalogue changes, verify the [MILESTONE_1_5_PLAN.md](./MILESTONE_1_5_PLAN.md) exit gate: PostgreSQL is the only runtime authority for registry/audit/invocations/events; Redis is connected as a disposable cache; importer, restart, transaction-failure, audit, and restore checks pass. If that gate is not verified, continue only with isolated M2/M3 work that does not claim persistence, and do not implement M4 with an in-memory or file-backed substitute.
+Milestone 1.5 is a hard prerequisite and was confirmed complete by the user for this execution. M4 work must still use its PostgreSQL/Redis repositories and preserve safe degradation; do not substitute in-memory or file-backed authority.
 
 ## Repeatable loop
 
@@ -51,11 +51,11 @@ Start only after M1.5 repository/cache infrastructure passes.
 
 | Gate | Status | Evidence / blocker |
 |---|---|---|
-| M1.5 prerequisite | In progress | Current source still uses file-backed registry/audit and process-local event/trace/metrics; database foundation changes are present but cutover/Redis/importer gates are not verified. |
-| M2.1–2.4 catalogue, styles, rules, active OpenAPI | In progress | Header singleton evidence and conservative enum case normalization implemented. Mock catalogue now includes M6/M10 response metadata. `node --test api-server/test/tier1.test.js` passed 10/10 and mock tests pass 8/8. M1–M4/M7/M8, full style matrix, and mutation-aware OpenAPI remain incomplete. |
-| M3.1–3.2 detector and no-replay safety | In progress | Unique compatible `name` → `full_name` remap, inconclusive type mismatch, and identity echo mismatch covered. `node --test api-server/test/response-validation.test.js` passed 4/4; all drift cases assert one upstream request, and identity mismatch asserts no commit. |
-| M3.3–3.4 mock truth and demo UI | In progress | Mock M6/M10 response fixtures preserve canonical truth; stage client loads mutation options from `/admin/mutations` and displays response remaps. Demo-client production build passes. End-to-end truth/diff browser acceptance remains open. |
-| M4.1–4.4 durable cache/metrics/traces | Not started | Blocked on verified M1.5 repositories and Redis client. Current modules remain stubs/process-local. |
-| M2 exit | Not started | Requires full catalogue, styles, active OpenAPI, tests, and UI acceptance. |
-| M3 exit | Not started | Requires truth and demo acceptance in addition to server response safety. |
+| M1.5 prerequisite | User-confirmed complete | Proceeding on user's explicit sequencing confirmation. |
+| M2.1–2.4 catalogue, styles, rules, active OpenAPI | Implementation and automated gates pass; UI gate open | M1–M10 catalogue, three error styles, active OpenAPI, Tier 0 defaults/aliases, M1–M4/M7/M8 exact invocation tests, M5 four-op regression, and M9 no-write halt are covered. The client builds; live stage UI smoke remains open. |
+| M3.1–3.2 detector and no-replay safety | Implementation and automated gates pass; UI gate open | Unique compatible `name` → `full_name` remap, nested M6, M10 write response remap, inconclusive type mismatch, and identity mismatch are covered. Drift tests assert one upstream request; invalid mappings do not commit. |
+| M3.3–3.4 mock truth and demo UI | Implementation and automated gates pass; UI gate open | Mock truth retains canonical M6/M10 data and the stage client compares affected fields and reports remaps. Production build passes; live browser acceptance remains open. |
+| M4.1–4.4 durable cache/metrics/traces | Not started | User confirmed M1.5 sequencing, but runtime prerequisites are absent in this checkout: no Redis client, `DATABASE_URL`/`REDIS_URL` are unset, and candidate/metrics/event routes are still stubs or process-local. M4 cannot be safely verified until these repository/cache interfaces are wired and services are available. |
+| M2 exit | Automated gates pass; stage smoke open | `npm test` 108/108, `npm run verify:p01` 17/17, and demo-client production build pass. Need live stage UI smoke. |
+| M3 exit | Automated server gates pass; browser smoke open | Response drift and mock truth regressions pass; need M6/M10 and safe-halt walkthrough in the stage UI. |
 | M4 exit | Not started | Requires persistent stores, Redis degradation, API contracts, and durability verification. |

@@ -1,8 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { invoke, validateResponse } from '../src/features/executor/invoke.js';
-import { registryStore } from '../src/features/registry/store.js';
-import { compileAdapter } from '../src/features/registry/compile.js';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+const previousDataDir = process.env.HEALR_DATA_DIR;
+const dataDir = mkdtempSync(join(tmpdir(), 'healr-response-validation-'));
+process.env.HEALR_DATA_DIR = dataDir;
+const [{ invoke, validateResponse }, { registryStore }, { compileAdapter }] = await Promise.all([
+  import('../src/features/executor/invoke.js'),
+  import('../src/features/registry/store.js'),
+  import('../src/features/registry/compile.js'),
+]);
+test.after(() => {
+  if (previousDataDir === undefined) delete process.env.HEALR_DATA_DIR;
+  else process.env.HEALR_DATA_DIR = previousDataDir;
+  rmSync(dataDir, { recursive: true, force: true });
+});
 
 function registerResponseContract() {
   registryStore.reset();
@@ -106,6 +120,77 @@ test('response remap with a mismatched identity echo halts without committing', 
     assert.equal(result.error.code, 'tool_unavailable');
     assert.equal(calls, 1);
     assert.equal(registryStore.current('response-identity-test', 'get').version, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('M6 nested response field remaps from the same HTTP 200 payload', async () => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    return new Response(JSON.stringify({ result: {
+      id: '123', email: 'asha@example.com', data: { profile: { name: 'Asha Rao' } },
+    } }), { status: 200 });
+  };
+  try {
+    registryStore.reset();
+    registryStore.registerApi('response-m6-test', {
+      baseUrl: 'https://api.example.com', credentials: {}, healing: { mode: 'enforce' },
+      tools: [{
+        name: 'get', method: 'GET', path: '/users/{user_id}', sideEffects: 'none', identity: { user_id: 'id' },
+        parameters: { type: 'object', properties: { user_id: { type: 'string' } }, required: ['user_id'], additionalProperties: false },
+        response: { fields: {
+          id: { path: 'result.id', type: 'string', required: true },
+          name: { path: 'result.name', type: 'string', required: true },
+          email: { path: 'result.email', type: 'string', format: 'email', required: true },
+        } },
+      }],
+    });
+    const result = await invoke({ apiId: 'response-m6-test', toolName: 'get', args: { user_id: '123' } });
+    assert.equal(result.ok, true);
+    assert.equal(result.data.name, 'Asha Rao');
+    assert.equal(result.meta.ops[0].to, 'result.data.profile.name');
+    assert.equal(calls, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('write response drift remaps the original response without replaying the write', async () => {
+  const originalFetch = globalThis.fetch;
+  let writes = 0;
+  globalThis.fetch = async (_url, init) => {
+    assert.equal(init.method, 'POST');
+    writes += 1;
+    return new Response(JSON.stringify({ result: {
+      id: '123', full_name: 'Asha Rao', email: 'asha+demo@example.com', updated_at: '2026-10-16T00:00:00.000Z',
+    } }), { status: 200 });
+  };
+  try {
+    registryStore.reset();
+    registryStore.registerApi('response-write-test', {
+      baseUrl: 'https://api.example.com', credentials: {}, healing: { mode: 'enforce' },
+      tools: [{
+        name: 'update', method: 'POST', path: '/users/{user_id}/email', sideEffects: 'write', identity: { user_id: 'id' },
+        parameters: {
+          type: 'object', properties: { user_id: { type: 'string' }, email: { type: 'string', format: 'email' } },
+          required: ['user_id', 'email'], additionalProperties: false,
+        },
+        response: { fields: {
+          id: { path: 'result.id', type: 'string', required: true },
+          name: { path: 'result.name', type: 'string', required: true },
+          email: { path: 'result.email', type: 'string', format: 'email', required: true },
+          updated_at: { path: 'result.updated_at', type: 'string', required: true },
+        } },
+      }],
+    });
+    const result = await invoke({ apiId: 'response-write-test', toolName: 'update', args: { user_id: '123', email: 'asha+demo@example.com' } });
+    assert.equal(result.ok, true);
+    assert.equal(result.data.name, 'Asha Rao');
+    assert.equal(writes, 1);
+    assert.equal(registryStore.current('response-write-test', 'update').version, 2);
   } finally {
     globalThis.fetch = originalFetch;
   }

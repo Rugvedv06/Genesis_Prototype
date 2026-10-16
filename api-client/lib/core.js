@@ -37,6 +37,7 @@ async function strict(base, path, opts) {
 const e = encodeURIComponent;
 export const api = {
   state: () => strict(CORE, '/state'),
+  recentEvents: (limit = 5000) => strict(CORE, `/events/recent?limit=${limit}`),
   series: (windowSec = 300, step = 5) => strict(CORE, `/metrics/timeseries?window=${windowSec}&step=${step}`),
   apiDetail: (id) => strict(CORE, `/apis/${e(id)}`),
   versions: (id, tool) => strict(CORE, `/apis/${e(id)}/tools/${e(tool)}/versions`),

@@ -1,4 +1,6 @@
 // Phase 0: env parsing + defaults (ports fixed by plan: core 8000, mock 5001, dashboards 3000/3001)
+import './lib/env.js';
+
 export function config(env = process.env) {
   return {
     port: Number(env.PORT ?? 8000),

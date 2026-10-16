@@ -16,7 +16,11 @@
     "verify:p01": "node scripts/verify-phase01.mjs",
     "db:migrate": "npm --workspace=api-server run db:migrate",
     "db:import": "node api-server/src/db/importer/preflight-cli.js",
-    "db:import:dry-run": "node api-server/src/db/importer/preflight-cli.js --dry-run"
+    "db:import:dry-run": "node api-server/src/db/importer/preflight-cli.js --dry-run",
+    "db:seed": "node api-server/src/db/seed-demo-data.js",
+    "db:retention": "node api-server/src/db/retention.js",
+    "db:backup": "sh scripts/db-backup.sh",
+    "db:restore:drill": "sh scripts/db-restore-drill.sh"
   },
   "engines": {
     "node": ">=20"

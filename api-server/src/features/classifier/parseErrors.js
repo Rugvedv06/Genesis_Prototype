@@ -53,7 +53,7 @@ function normalizeDetail(d, rootBody) {
     kind = 'extra';
   } else if (t.includes('enum')) {
     kind = 'enum';
-  } else if (t.includes('integer') || t.includes('int_parsing') || t.includes('is_instance') || t.includes('type_error')) {
+  } else if (t.includes('integer') || t.includes('int_type') || t.includes('int_parsing') || t.includes('is_instance') || t.includes('type_error')) {
     kind = 'type';
   } else if (t.includes('extra_forbidden')) {
     kind = 'extra';

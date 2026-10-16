@@ -18,6 +18,23 @@ const CORE = process.env.NEXT_PUBLIC_CORE_URL || 'http://localhost:8000';
 const MOCK = process.env.NEXT_PUBLIC_MOCK_URL || 'http://localhost:5001';
 const API_ID = 'demo-users';
 const TOOL = { name: 'get_user', path: '/api/users/get', method: 'POST' };
+const TOOL_BY_PATH = {
+  '/api/users/get': TOOL,
+  '/api/users/update-email': { name: 'update_user_email', path: '/api/users/update-email', method: 'POST' },
+  '/api/users/set-status': { name: 'set_user_status', path: '/api/users/set-status', method: 'POST' },
+};
+
+function inputForTool(tool) {
+  if (tool.path === '/api/users/update-email') return { user_id: '123', email: 'asha+demo@example.com' };
+  if (tool.path === '/api/users/set-status') return { user_id: '123', status: 'active' };
+  return { user_id: '123' };
+}
+
+function matchesTruth(data, truth, fields) {
+  if (!data || !truth || truth.error) return null;
+  const logical = data.id !== undefined ? data : (data.result ?? data);
+  return fields.every((field) => String(logical?.[field]) === String(truth[field]));
+}
 
 // ─── Theme Colors ────────────────────────────────────────────────────────────
 const C = {
@@ -467,10 +484,9 @@ function HealingPipeline({ events, outcome }) {
 }
 
 // ─── Truth Check Comparison Table ────────────────────────────────────────────
-function TruthTable({ data, truth }) {
+function TruthTable({ data, truth, fields = ['id', 'name', 'email'] }) {
   if (!truth || !data) return null;
   const flat = data.id !== undefined ? data : (data.result ?? data);
-  const fields = ['id', 'name', 'email'];
 
   return (
     <div style={{ marginTop: 10, background: C.surfaceHi, padding: 10, borderRadius: 8, border: `1px solid ${C.border}` }}>
@@ -589,21 +605,12 @@ function Pane({
   ops,
   version,
   truth,
+  truthFields = ['id', 'name', 'email'],
   mode,
 }) {
   const [tab, setTab] = useState('timeline'); // timeline | diff | patches | raw
 
-  const truthOk = (() => {
-    if (!data || !truth) return null;
-    if (truth.error) return null;
-    const flat = data.id !== undefined ? data : (data.result ?? data);
-    if (!flat) return null;
-    return (
-      String(flat.id) === String(truth.id) &&
-      flat.name === truth.name &&
-      flat.email === truth.email
-    );
-  })();
+  const truthOk = matchesTruth(data, truth, truthFields);
 
   const timeline = buildTimeline(events);
   const hasData = Boolean(data);
@@ -762,7 +769,7 @@ function Pane({
                   {truthOk ? 'MATCH (Verified against Mock DB)' : 'MISMATCH (Payload diverges)'}
                 </span>
               </div>
-              <TruthTable data={data} truth={truth} />
+              <TruthTable data={data} truth={truth} fields={truthFields} />
             </div>
           )}
 
@@ -878,6 +885,10 @@ export default function DriftControl() {
     events: [], data: null, error: null, ops: [], version: null,
   });
   const [truth, setTruth] = useState(null);
+  const activeMutation = mutationCatalogue.find((item) => item.id === selectedMutation);
+  const selectedTool = TOOL_BY_PATH[activeMutation?.route?.path] ?? TOOL;
+  const selectedArgs = inputForTool(selectedTool);
+  const truthFields = selectedTool.path === '/api/users/set-status' ? ['id', 'status'] : ['id', 'name', 'email'];
 
   useEffect(() => {
     let active = true;
@@ -1014,6 +1025,15 @@ export default function DriftControl() {
               updated_at: { path: 'result.updated_at', type: 'string' },
             }},
           },
+          {
+            name: 'set_user_status', method: 'POST', path: '/api/users/set-status',
+            risk: 'medium', sideEffects: 'write',
+            parameters: { type: 'object', properties: { user_id: { type: 'string' }, status: { type: 'string' } }, required: ['user_id', 'status'], additionalProperties: false },
+            response: { fields: {
+              id: { path: 'result.id', type: 'string' },
+              status: { path: 'result.status', type: 'string' },
+            } },
+          },
         ],
       }),
     });
@@ -1023,6 +1043,10 @@ export default function DriftControl() {
   // ── Run Both with Separate Independent Timers ─────────────────────────────
   const runBoth = async () => {
     await registerApi();
+    await fetch(`${MOCK}/admin/task`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ values: Object.values(selectedArgs) }),
+    });
     setMode('running');
     setTruth(null);
 
@@ -1039,7 +1063,7 @@ export default function DriftControl() {
         const res = await fetch(`${MOCK}/demo/run`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ apiId: API_ID, tool: TOOL, args: { user_id: '123' }, baseUrl: MOCK, runId: bRunId }),
+          body: JSON.stringify({ apiId: API_ID, tool: selectedTool, args: selectedArgs, baseUrl: MOCK, runId: bRunId }),
         }).then(r => r.json());
         const bElapsed = Date.now() - bT0;
         setBaseline((b) => ({
@@ -1066,10 +1090,10 @@ export default function DriftControl() {
     const runHealedPromise = (async () => {
       const hT0 = Date.now();
       try {
-        const res = await fetch(`${CORE}/apis/${API_ID}/tools/${TOOL.name}/invoke`, {
+        const res = await fetch(`${CORE}/apis/${API_ID}/tools/${selectedTool.name}/invoke`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ args: { user_id: '123' }, runId: hRunId }),
+          body: JSON.stringify({ args: selectedArgs, runId: hRunId }),
         }).then(r => r.json());
         const hElapsed = Date.now() - hT0;
         setHealed((h) => ({
@@ -1186,17 +1210,14 @@ export default function DriftControl() {
             label="Invariant Truth Check"
             value={mode === 'idle' ? '—' : truth === null ? 'Checking…' : truth.error ? 'Unavailable' : (() => {
               if (!healed.data) return '—';
-              const flat = healed.data.id !== undefined ? healed.data : (healed.data.result ?? healed.data);
-              if (!flat) return '—';
-              const ok = String(flat.id) === String(truth.id) && flat.name === truth.name && flat.email === truth.email;
+              const ok = matchesTruth(healed.data, truth, truthFields);
               return ok ? 'MATCH' : 'MISMATCH';
             })()}
             sub={mode === 'idle' ? 'Verified after the comparison runs' : 'Independent DB verification'}
             color={truth === null ? C.textDim : truth.error ? C.textDim : (() => {
               if (!healed.data || !truth) return C.textDim;
-              const flat = healed.data.id !== undefined ? healed.data : (healed.data.result ?? healed.data);
-              if (!flat) return C.textDim;
-              return String(flat.id) === String(truth.id) && flat.name === truth.name && flat.email === truth.email ? C.green : C.amber;
+              const ok = matchesTruth(healed.data, truth, truthFields);
+              return ok === null ? C.textDim : ok ? C.green : C.amber;
             })()}
           />
         </div>
@@ -1214,6 +1235,7 @@ export default function DriftControl() {
           data={baseline.data}
           error={baseline.error}
           truth={truth}
+          truthFields={truthFields}
           mode={baseline.mode}
         />
         <Pane
@@ -1229,6 +1251,7 @@ export default function DriftControl() {
           ops={healed.ops}
           version={healed.version}
           truth={truth}
+          truthFields={truthFields}
         />
       </main>
 
