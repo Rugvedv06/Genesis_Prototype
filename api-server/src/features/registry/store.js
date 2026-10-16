@@ -216,6 +216,7 @@ export class RegistryStore {
       origin: v.origin,
       change: v.change,
       adapterHash: v.adapter ? sha256(stableStringify(v.adapter)) : null,
+      meta: v.meta,
     }));
   }
 
@@ -233,6 +234,7 @@ export class RegistryStore {
       origin: v.origin,
       change: v.change,
       adapterHash: v.adapter ? sha256(stableStringify(v.adapter)) : null,
+      meta: v.meta,
       adapter: v.adapter,
       meta: v.meta,
     };
