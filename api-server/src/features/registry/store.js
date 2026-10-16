@@ -125,6 +125,17 @@ export class RegistryStore {
       const responseMap = tool.response
         ? Object.fromEntries(Object.entries(tool.response.fields ?? {}).map(([k, v]) => [k, v.path]))
         : {};
+      const responseSchema = tool.response
+        ? {
+            type: 'object',
+            properties: Object.fromEntries(Object.entries(tool.response.fields ?? {}).map(([k, v]) => [k, {
+              type: v.type ?? 'string',
+              ...(v.format ? { format: v.format } : {}),
+            }])),
+            required: Object.entries(tool.response.fields ?? {}).filter(([, v]) => v.required).map(([k]) => k),
+            additionalProperties: true,
+          }
+        : null;
       const adapter = {
         request: tool.adapter?.request ?? [],
         response: { map: responseMap },
@@ -141,6 +152,7 @@ export class RegistryStore {
           path: tool.path,
           method: tool.method ?? 'POST',
           logicalSchema: tool.parameters,
+          responseSchema,
           risk: tool.risk ?? 'low',
           sideEffects: tool.sideEffects ?? 'write',
           identity: tool.identity ?? {},

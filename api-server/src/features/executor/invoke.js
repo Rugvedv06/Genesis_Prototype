@@ -41,6 +41,9 @@ class ConfigError extends Error {
 function validatorKey(apiId, tool, version) {
   return `${apiId}:${tool}:v${version}`;
 }
+function responseValidatorKey(apiId, tool, version) {
+  return `${apiId}:${tool}:response:v${version}`;
+}
 function getValidator(apiId, tool, version, jsonSchema) {
   const key = validatorKey(apiId, tool, version);
   let v = validatorCache.get(key);
@@ -57,6 +60,27 @@ function validateArgs(tool, args) {
   const validate = getValidator(tool.apiId, tool.name, tool.version, logical);
   const ok = validate(args);
   return ok ? { ok: true } : { ok: false, errors: validate.errors ?? [] };
+}
+
+function validateResponse(tool, response) {
+  const schema = tool.versionObj?.meta?.responseSchema;
+  if (!schema) {
+    const fields = tool.versionObj?.adapter?.response?.map ?? {};
+    const json = response.json ?? {};
+    const missing = Object.entries(fields)
+      .filter(([, path]) => getPath(json, path) === undefined)
+      .map(([logical, path]) => ({ keyword: 'required', instancePath: `/${logical}`, params: { path } }));
+    return { ok: missing.length === 0, errors: missing };
+  }
+  const extracted = tool.compiled.extract(response.json ?? {});
+  const key = responseValidatorKey(tool.apiId, tool.name, tool.version);
+  let validate = validatorCache.get(key);
+  if (!validate) {
+    validate = ajv.compile(schema);
+    validatorCache.set(key, validate);
+  }
+  const ok = validate(extracted);
+  return { ok, errors: ok ? [] : (validate.errors ?? []) };
 }
 
 function credentialResolver(apiId) {
@@ -121,14 +145,7 @@ async function send(tool, args, resolveCredential) {
 }
 
 function matchesLogicalResponse(tool, response) {
-  const fields = tool.versionObj?.adapter?.response?.map ?? {};
-  if (!fields || Object.keys(fields).length === 0) return response.ok;
-  const json = response.json ?? {};
-  for (const [logical, path] of Object.entries(fields)) {
-    if (getPath(json, path) === undefined) return false;
-  }
-
-  return true;
+  return response.ok && validateResponse(tool, response).ok;
 }
 
 function matchesIdentity(tool, args, response) {
@@ -377,8 +394,16 @@ export async function invoke({ apiId, toolName, args, runId }) {
     return success(tool, first, { healed: false, rounds: 0, tier: 0, latencyMs: Date.now() - t0 });
   }
 
-  const errors = parseErrors(first.json ?? first.text, first.status);
-  const kind = classify(errors, first.status);
+  let errors = parseErrors(first.json ?? first.text, first.status);
+  let kind = classify(errors, first.status);
+  if (first.ok) {
+    const responseCheck = validateResponse(tool, first);
+    if (!responseCheck.ok) {
+      errors = responseCheck.errors;
+      kind = 'response_drift';
+      emitCall('drift.detected', { kind, errors });
+    }
+  }
   const signature = errorSignature(toolName, first);
   emitCall('upstream.request', { phase: 'live', status: first.status, ok: first.ok, ms: Date.now() - t0 });
 
@@ -461,4 +486,4 @@ export async function invoke({ apiId, toolName, args, runId }) {
   return result;
 }
 
-export { errorSignature, withHealLock, MissingCredential };
+export { errorSignature, withHealLock, MissingCredential, validateResponse };
