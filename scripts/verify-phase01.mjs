@@ -275,6 +275,7 @@ async function main() {
     const ids = ['111', '222', '333'];
     const promises = ids.map((id) => postJSON(`${coreUrl}/apis/demo-users/tools/get_user/invoke`, { args: { user_id: id } }));
     const rs = await Promise.all(promises);
+<<<<<<< HEAD
     const versions = await http(`${coreUrl}/apis/demo-users/tools/get_user/versions`);
     const afterVersions = versions.json?.versions ?? [];
     const newHealVersions = afterVersions.filter((version) => version.origin === 'heal' && Number(version.version) > beforeMaxVersion);
@@ -287,6 +288,17 @@ async function main() {
     const exactFourOpCommit = JSON.stringify(committedOps) === JSON.stringify(['add_header', 'move_field', 'rename_field', 'coerce_type']);
     const hasHealedCall = rs.some((r) => r.json?.meta?.healed === true);
     check('Concurrency: 3 parallel calls return their own ids, share one heal commit', consistentResults && hasHealedCall && singleCommit && sameVersion && exactFourOpCommit, `ids:${rs.map((r) => r.json?.data?.id).join(',')} resultsConsistent:${consistentResults} version2:${sameVersion} singleCommit:${singleCommit} exactFourOps:${exactFourOpCommit} codes:${rs.map((r) => r.json?.error?.code ?? 'ok').join(',')} metas:${JSON.stringify(rs.map((r) => r.json?.meta))}`);
+=======
+    const ownIds = rs.every((r, i) => r.json?.data?.id === ids[i]);
+    // Each caller (leader + followers) must report healed with the 4 committed ops
+    const allHealed4 = rs.every((r) => r.json?.meta?.healed === true && (r.json?.meta?.ops?.length ?? 0) === 4);
+    const versions = await http(`${coreUrl}/apis/demo-users/tools/get_user/versions`);
+    const singleCommit = versions.json?.versions?.length === 2
+      && versions.json.versions[1]?.version === 2
+      && versions.json.versions[1]?.origin === 'heal';
+    const sameVersion = rs.every((r) => r.json?.meta?.version === 2);
+    check('Concurrency: 3 parallel calls return their own ids, share one heal commit', ownIds && allHealed4 && singleCommit && sameVersion, `ids:${rs.map((r) => r.json?.data?.id).join(',')} healed4:${allHealed4} version2:${sameVersion} singleCommit:${singleCommit} codes:${rs.map((r) => r.json?.error?.code ?? 'ok').join(',')}`);
+>>>>>>> origin/main
   }
 
   // Check 8: Missing credential — restart core without TENANT_ID (registry
@@ -452,6 +464,7 @@ async function main() {
   {
     const { execSync } = await import('node:child_process');
     try {
+<<<<<<< HEAD
       const unitEnv = {
         ...process.env,
         DATABASE_URL: '',
@@ -459,6 +472,9 @@ async function main() {
         HEALR_TEST_DATABASE_URL: '',
       };
       const out = execSync('npm test', { cwd: ROOT, encoding: 'utf8', timeout: 30000, env: unitEnv });
+=======
+      const out = execSync('node --test "api-server/test/**/*.test.js" "demo-server-and-client/server/test/**/*.test.js"', { cwd: ROOT, encoding: 'utf8', timeout: 30000 });
+>>>>>>> origin/main
       const passMatch = out.match(/(?:#|ℹ)\s*pass\s+(\d+)/);
       const failMatch = out.match(/(?:#|ℹ)\s*fail\s+(\d+)/);
       const pass = passMatch ? parseInt(passMatch[1], 10) : 0;

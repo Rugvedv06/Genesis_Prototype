@@ -90,8 +90,11 @@ export const M5 = {
   category: 'request',
   expected: 'heal',
   route: { method: 'POST', path: '/api/users/get' },
+<<<<<<< HEAD
   fixture: { args: { user_id: '123' } },
   specVariants: specVariants(),
+=======
+>>>>>>> origin/main
   expectedOps: ['add_header', 'move_field', 'rename_field', 'coerce_type'],
   // what the mutated contract expects
   headers: [
@@ -148,10 +151,15 @@ export const M9 = {
   expected: 'halt',
   expectedOps: [],
   route: { method: 'POST', path: '/api/users/update-email' },
+<<<<<<< HEAD
   fixture: { args: { user_id: '123', email: 'asha+demo@example.com' } },
   specVariants: specVariants(),
   headers: [
     { name: 'Authorization', required: true, status: 401, error: { error: 'missing_auth', scheme: 'Bearer', header: 'Authorization' } },
+=======
+  headers: [
+    { name: 'Authorization', required: true, error: { error: 'missing_auth', scheme: 'Bearer', header: 'Authorization' } },
+>>>>>>> origin/main
   ],
   body: {
     layers: [{
@@ -170,8 +178,11 @@ export const M6 = {
   category: 'response',
   expected: 'heal',
   route: { method: 'POST', path: '/api/users/get' },
+<<<<<<< HEAD
   fixture: { args: { user_id: '123' } },
   specVariants: specVariants(),
+=======
+>>>>>>> origin/main
   headers: [],
   body: { layers: [] },
   responseOps: [{ op: 'move', from: 'result.name', to: 'result.data.profile.name' }],
@@ -184,14 +195,18 @@ export const M10 = {
   category: 'response',
   expected: 'heal',
   route: { method: 'POST', path: '/api/users/get' },
+<<<<<<< HEAD
   fixture: { args: { user_id: '123' } },
   specVariants: specVariants(),
+=======
+>>>>>>> origin/main
   headers: [],
   body: { layers: [] },
   responseOps: [{ op: 'move', from: 'result.name', to: 'result.full_name' }],
   expectedOps: [{ op: 'remap_response_path', logical: 'name', from: 'result.name', to: 'result.full_name' }],
 };
 
+<<<<<<< HEAD
 export const M11 = {
   id: 'M11', label: 'update-email fields renamed to subscriber_ref and contact_address',
   category: 'request', expected: 'heal', expectedOps: ['rename_field', 'rename_field'], expectedTier: 2, llmRequired: true,
@@ -212,6 +227,9 @@ export const M11 = {
 
 
 export const CATALOGUE = { M1, M2, M3, M4, M5, M6, M7, M8, M9, M10, M11 };
+=======
+export const CATALOGUE = { M5, M9, M6, M10 };
+>>>>>>> origin/main
 export function get(id) {
   return CATALOGUE[id];
 }

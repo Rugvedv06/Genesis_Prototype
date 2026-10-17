@@ -74,6 +74,7 @@ export async function runTask({
 } = {}) {
   const id = String(runId ?? `b_${Date.now()}`);
   const callId = newId('c');
+<<<<<<< HEAD
   const started = Date.now();
   const resultTrace = [];
   const tokenTotal = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
@@ -89,6 +90,17 @@ export async function runTask({
     emitEvent({ type: 'agent.final', runId: id, callId, apiId, outcome, iterations: traces.length, steps: traces.length, tokens: tokenTotal, tokensByRole: { agent: { input: tokenTotal.inputTokens, output: tokenTotal.outputTokens } }, provider: providerName, model: modelName, mode, ms, ...(extra.error ? { error: extra.error.code } : {}) });
     return { ok: outcome === 'completed', runId: id, apiId, answer: finalAnswer, ...(data !== undefined ? { data } : {}), iterations: traces.length, steps: traces.length, tokens: tokenTotal, provider: providerName, model: modelName, mode, outcome, ms, trace: resultTrace, ...extra };
   };
+=======
+  const iterations = [];
+  let totalTokens = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+  let lastResult = null;
+  const baselineMode = process.env.BASELINE_MODE ?? 'scripted';
+  const llm = createGemini(
+    baselineMode === 'gemini'
+      ? (process.env.AGENT_LLM ?? 'gemini:gemini-2.5-flash')
+      : 'scripted',
+  );
+>>>>>>> origin/main
 
   let api;
   try { api = await loadApi(apiId, coreFetchImpl); }

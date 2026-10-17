@@ -3,8 +3,11 @@
 // Returns { tier, confidence, ops, evidence } or null when no diagnosis.
 import { parseErrors } from '../classifier/index.js';
 import { wrapRule, renameRule, typeRule, headerRule, enumRule, RULE_ORDER } from './tier1-rules/index.js';
+<<<<<<< HEAD
 import { discover as discoverFromSpec } from './tier0-spec/index.js';
 import { propose as proposeWithLlm } from './tier2-llm/index.js';
+=======
+>>>>>>> origin/main
 
 const RULES = { wrap: wrapRule, rename: renameRule, type: typeRule, header: headerRule, enum: enumRule };
 

@@ -1,7 +1,11 @@
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+<<<<<<< HEAD
 import { validateAdapterForStorage } from '../registry-repository.js';
+=======
+import { compileAdapter } from '../../features/registry/compile.js';
+>>>>>>> origin/main
 import { sha256, stableStringify } from '../../lib/hash.js';
 import { resolveDataDir } from '../../lib/data-dir.js';
 
@@ -53,6 +57,7 @@ function validateCredentialReferences(credentials, apiId) {
   }
 }
 
+<<<<<<< HEAD
 function validateApiConfig(config, apiId) {
   const failConfig = (field) => fail('registry_api_config_invalid', { apiId, field });
   if (config.confidenceThreshold !== undefined && (typeof config.confidenceThreshold !== 'number'
@@ -75,6 +80,10 @@ function verifyAuditBytes(text, headText) {
   const records = [];
   let firstChainFailure;
   let firstChainFailureReasons;
+=======
+function verifyAuditBytes(text, headText) {
+  const records = [];
+>>>>>>> origin/main
   for (const [lineIndex, line] of text.split(/\r?\n/).entries()) {
     if (!line) continue;
     let record;
@@ -88,6 +97,7 @@ function verifyAuditBytes(text, headText) {
       || typeof record.hash !== 'string' || !/^[a-f0-9]{64}$/i.test(record.hash)) {
       fail('audit_malformed_record', { index: records.length, line: lineIndex + 1 });
     }
+<<<<<<< HEAD
     for (const key of ['apiId', 'tool', 'callId', 'healId']) {
       if (record[key] !== undefined && record[key] !== null && typeof record[key] !== 'string') {
         fail('audit_malformed_record', { index: records.length, line: lineIndex + 1, field: key });
@@ -107,6 +117,12 @@ function verifyAuditBytes(text, headText) {
     if (firstChainFailure === undefined && reasons.length) {
       firstChainFailure = records.length;
       firstChainFailureReasons = reasons;
+=======
+    const expected = sha256(stableStringify(Object.fromEntries(Object.entries(record).filter(([key]) => key !== 'hash'))));
+    if (record.index !== records.length || record.hash !== expected
+      || record.prevHash !== (records.at(-1)?.hash ?? null)) {
+      fail('audit_chain_invalid', { index: records.length });
+>>>>>>> origin/main
     }
     records.push(record);
   }
@@ -117,6 +133,7 @@ function verifyAuditBytes(text, headText) {
     if (!head || typeof head !== 'object' || !Number.isSafeInteger(head.index) || head.index < 0
       || typeof head.hash !== 'string' || !/^[a-f0-9]{64}$/i.test(head.hash)) fail('audit_head_malformed');
     const tail = records.at(-1);
+<<<<<<< HEAD
     if (!tail || head.index !== tail.index || head.hash !== tail.hash) {
       if (firstChainFailure === undefined) {
         firstChainFailure = records.length;
@@ -136,6 +153,12 @@ function verifyAuditBytes(text, headText) {
     ok: firstChainFailure === undefined, firstFailureAt: firstChainFailure,
     ...(firstChainFailureReasons ? { firstFailureReasons: firstChainFailureReasons } : {}),
   } };
+=======
+    if (!tail || head.index !== tail.index || head.hash !== tail.hash) fail('audit_head_mismatch');
+  }
+  if (!records.length && headText !== null) fail('audit_head_without_records');
+  return { records, head };
+>>>>>>> origin/main
 }
 
 function hasUnsafeAuditMaterial(value, key = '') {
@@ -145,6 +168,7 @@ function hasUnsafeAuditMaterial(value, key = '') {
   return false;
 }
 
+<<<<<<< HEAD
 function auditNeedsRedaction(record) {
   const allowed = new Set(['index', 'ts', 'prevHash', 'hash', 'decision', 'apiId', 'tool', 'callId', 'healId',
     'version', 'versionBefore', 'versionAfter', 'tier', 'rounds', 'latencyMs', 'confidence', 'responseOnly', 'reason', 'ops', 'evidence']);
@@ -209,12 +233,17 @@ function changeNeedsRedaction(change) {
   });
 }
 
+=======
+>>>>>>> origin/main
 function validateRegistry(registry) {
   if (!registry || typeof registry !== 'object' || Array.isArray(registry)) fail('registry_root_invalid');
   let apis = 0;
   let tools = 0;
   let versions = 0;
+<<<<<<< HEAD
   let changeEntriesRequiringRedaction = 0;
+=======
+>>>>>>> origin/main
   for (const [apiId, api] of Object.entries(registry)) {
     if (!apiId.trim() || !api || typeof api !== 'object' || Array.isArray(api)
       || !api.tools || typeof api.tools !== 'object' || Array.isArray(api.tools)) fail('registry_api_invalid', { apiId });
@@ -233,7 +262,10 @@ function validateRegistry(registry) {
     validateCredentialReferences(api.config?.credentials, apiId);
     const { credentials: _credentials, ...safeConfig } = api.config;
     validateSafeConfig(safeConfig, apiId);
+<<<<<<< HEAD
     validateApiConfig(safeConfig, apiId);
+=======
+>>>>>>> origin/main
     apis += 1;
     for (const [toolName, entry] of Object.entries(api.tools)) {
       if (!toolName.trim() || !entry || typeof entry !== 'object' || !Array.isArray(entry.versions) || entry.versions.length === 0) {
@@ -260,7 +292,10 @@ function validateRegistry(registry) {
           fail('registry_version_metadata_invalid', { apiId, tool: toolName, version: version.version });
         }
         validateSafeConfig(version.meta, apiId, `tools.${toolName}.versions.${version.version}.meta`);
+<<<<<<< HEAD
         if (version.change && changeNeedsRedaction(version.change)) changeEntriesRequiringRedaction += 1;
+=======
+>>>>>>> origin/main
         if (!['register', 'heal', 'manual_rollback', 'watchdog_rollback', 'rollback', 'dev', 'import'].includes(version.origin ?? 'register')) {
           fail('registry_version_origin_invalid', { apiId, tool: toolName, version: version.version });
         }
@@ -270,7 +305,11 @@ function validateRegistry(registry) {
         if (version.rollbackOf != null && (!Number.isInteger(version.rollbackOf) || version.rollbackOf >= version.version || !seen.has(version.rollbackOf))) {
           fail('registry_rollback_target_invalid', { apiId, tool: toolName, version: version.version });
         }
+<<<<<<< HEAD
         try { validateAdapterForStorage(version.adapter); } catch { fail('registry_adapter_invalid', { apiId, tool: toolName, version: version.version }); }
+=======
+        try { compileAdapter(version.adapter); } catch { fail('registry_adapter_invalid', { apiId, tool: toolName, version: version.version }); }
+>>>>>>> origin/main
         version.adapterHash = sha256(stableStringify(version.adapter));
         previous = version.version;
         seen.add(version.version);
@@ -288,7 +327,11 @@ function validateRegistry(registry) {
       tools += 1;
     }
   }
+<<<<<<< HEAD
   return { apis, tools, versions, changeEntriesRequiringRedaction };
+=======
+  return { apis, tools, versions };
+>>>>>>> origin/main
 }
 
 export function inspectImportSources({ dataDir = resolveDataDir(process.env.HEALR_DATA_DIR), includeData = false } = {}) {
@@ -296,10 +339,16 @@ export function inspectImportSources({ dataDir = resolveDataDir(process.env.HEAL
   const registryTempPath = `${registryPath}.tmp`;
   const auditPath = join(dataDir, 'audit.jsonl');
   const auditHeadPath = join(dataDir, 'audit.head.json');
+<<<<<<< HEAD
   const auditBackupPath = `${auditPath}.bak`;
   if (!existsSync(registryPath)) fail('registry_snapshot_missing', { path: registryPath });
   if (existsSync(registryTempPath)) fail('registry_snapshot_interrupted_write');
   const sourcePaths = [registryPath, auditPath, auditHeadPath, auditBackupPath];
+=======
+  if (!existsSync(registryPath)) fail('registry_snapshot_missing', { path: registryPath });
+  if (existsSync(registryTempPath)) fail('registry_snapshot_interrupted_write');
+  const sourcePaths = [registryPath, auditPath, auditHeadPath];
+>>>>>>> origin/main
   const before = sourcePaths.map((path) => {
     if (!existsSync(path)) return null;
     const info = statSync(path, { bigint: true });
@@ -313,9 +362,15 @@ export function inspectImportSources({ dataDir = resolveDataDir(process.env.HEAL
 
   const auditBytes = existsSync(auditPath) ? readFileSync(auditPath) : Buffer.alloc(0);
   const auditHeadText = existsSync(auditHeadPath) ? readFileSync(auditHeadPath, 'utf8') : null;
+<<<<<<< HEAD
   const auditBackupBytes = existsSync(auditBackupPath) ? readFileSync(auditBackupPath) : null;
   const audit = verifyAuditBytes(auditBytes.toString('utf8'), auditHeadText);
   const unsafeAuditEntries = audit.records.reduce((count, record) => count + (auditNeedsRedaction(record) ? 1 : 0), 0);
+=======
+  const audit = verifyAuditBytes(auditBytes.toString('utf8'), auditHeadText);
+  const unsafeAuditEntries = audit.records.reduce((count, record) =>
+    count + (record.evidence !== undefined || hasUnsafeAuditMaterial(record) ? 1 : 0), 0);
+>>>>>>> origin/main
   const after = sourcePaths.map((path) => {
     if (!existsSync(path)) return null;
     const info = statSync(path, { bigint: true });
@@ -328,6 +383,7 @@ export function inspectImportSources({ dataDir = resolveDataDir(process.env.HEAL
       registry: digest(registryBytes),
       audit: digest(auditBytes),
       auditHead: auditHeadText === null ? null : digest(Buffer.from(auditHeadText)),
+<<<<<<< HEAD
       auditBackup: auditBackupBytes ? digest(auditBackupBytes) : null,
     },
     auditIntegrity: audit.integrity,
@@ -343,4 +399,17 @@ export function inspectImportSources({ dataDir = resolveDataDir(process.env.HEAL
     ],
   };
   return includeData ? { ...report, sourceData: { registry, auditRecords: audit.records, auditHead: audit.head, auditIntegrity: audit.integrity, auditBackupPresent: existsSync(auditBackupPath) } } : report;
+=======
+    },
+    counts: { ...counts, auditEntries: audit.records.length, auditEntriesRequiringRedaction: unsafeAuditEntries },
+    warnings: [
+      ...(counts.apis === 0 ? ['registry_is_empty'] : []),
+      ...(existsSync(`${auditPath}.bak`) ? ['audit_backup_present_not_imported'] : []),
+      ...(audit.records.length > 0 && auditHeadText === null ? ['audit_head_missing_will_be_reconstructed'] : []),
+      ...(unsafeAuditEntries ? ['audit_material_requires_review_before_import'] : []),
+      ...(Object.values(registry).some((api) => (api.epoch ?? 1) > 1) ? ['prior_re_registration_versions_may_be_missing'] : []),
+    ],
+  };
+  return includeData ? { ...report, sourceData: { registry, auditRecords: audit.records, auditHead: audit.head } } : report;
+>>>>>>> origin/main
 }

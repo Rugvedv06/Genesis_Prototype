@@ -2,7 +2,10 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+<<<<<<< HEAD
 import { useRouter } from 'next/navigation';
+=======
+>>>>>>> origin/main
 import { ArrowUpRight, Boxes, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,10 +15,15 @@ import { demoRegistration } from '@/lib/demo-registration';
 import { api } from '@/lib/core';
 import { refreshState, useStore } from '@/lib/store';
 import { toolHealth } from '@/lib/derive';
+<<<<<<< HEAD
 import { toast } from 'sonner';
 
 export default function APIsPage() {
   const router = useRouter();
+=======
+
+export default function APIsPage() {
+>>>>>>> origin/main
   const { apis, calls: callMap, order, bootstrapped, error } = useStore();
   const [open, setOpen] = useState(false);
   const [json, setJson] = useState(() => JSON.stringify(demoRegistration(), null, 2));
@@ -23,6 +31,7 @@ export default function APIsPage() {
   const [busy, setBusy] = useState(false);
   const [removeTarget, setRemoveTarget] = useState(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
+<<<<<<< HEAD
   const [registrationTab, setRegistrationTab] = useState('manual');
   const [importSource, setImportSource] = useState('url');
   const [specUrl, setSpecUrl] = useState('');
@@ -36,11 +45,14 @@ export default function APIsPage() {
   const [credentialEnv, setCredentialEnv] = useState('');
   const [defaultIdempotencyHeader, setDefaultIdempotencyHeader] = useState('');
   const [customDefaultIdempotencyHeader, setCustomDefaultIdempotencyHeader] = useState('');
+=======
+>>>>>>> origin/main
   const calls = order.map((id) => callMap.get(id)).filter(Boolean);
   const health = toolHealth(apis, calls);
 
   const registerPayload = async (payload) => {
     setBusy(true); setMessage('');
+<<<<<<< HEAD
     try {
       await api.register(payload);
       await refreshState(); setOpen(false); toast.success(`Registered ${payload.apiId}`);
@@ -89,6 +101,12 @@ export default function APIsPage() {
     }
     await registerPayload({ apiId: importApiId.trim(), baseUrl: baseUrl.trim(), ...(preview.sourceUrl ? { specUrl: preview.sourceUrl } : {}), ...(credentials ? { credentials } : {}), tools });
   };
+=======
+    try { await api.register(payload); await refreshState(); setOpen(false); }
+    catch (err) { setMessage(err.message); }
+    finally { setBusy(false); }
+  };
+>>>>>>> origin/main
   const register = async (event) => {
     event.preventDefault(); setMessage('');
     let payload;
@@ -106,7 +124,11 @@ export default function APIsPage() {
   };
 
   return <>
+<<<<<<< HEAD
     <PageHeader title="APIs" purpose="Manage the upstream services and tool contracts registered with healr." actions={<Button onClick={() => { resetRegistration(); setOpen(true); }}><Plus />Register API</Button>} />
+=======
+    <PageHeader title="APIs" purpose="Manage the upstream services and tool contracts registered with healr." actions={<Button onClick={() => { setMessage(''); setJson(JSON.stringify(demoRegistration(), null, 2)); setOpen(true); }}><Plus />Register API</Button>} />
+>>>>>>> origin/main
     {message && <div className="page-error" role="alert"><p>{message}</p></div>}
     {!bootstrapped ? <PageLoading label="Loading registered APIs" /> : error && !apis.length ? <PageError error={{ message: error }} label="Could not load APIs" /> : apis.length === 0 ? <Card><CardContent><EmptyState icon={Boxes} title="No APIs registered">Register your contract to route tool calls through healr. For a working local example, register the demo-users API against the mock service.</EmptyState><div className="empty-actions"><Button disabled={busy} onClick={() => registerPayload(demoRegistration())}>{busy ? 'Registering demo API…' : 'Register demo API'}</Button><Button variant="outline" onClick={() => { setMessage(''); setOpen(true); }}>Use my registration JSON</Button></div></CardContent></Card> : <div className="api-card-list">{apis.map((item) => {
       const tools = item.tools ?? [];
@@ -120,6 +142,7 @@ export default function APIsPage() {
       </Card>;
     })}</div>}
 
+<<<<<<< HEAD
     <Modal open={open} onClose={() => setOpen(false)} title="Register an API" actions={<><Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>{registrationTab === 'manual' ? <Button disabled={busy} onClick={register}>{busy ? 'Registering…' : 'Register API'}</Button> : preview && <Button disabled={busy} onClick={registerImported}>{busy ? 'Registering…' : 'Register reviewed API'}</Button>}</>}>
       <div className="segmented-tabs" role="tablist" aria-label="Registration method">
         <button type="button" role="tab" aria-selected={registrationTab === 'manual'} className={registrationTab === 'manual' ? 'selected' : ''} onClick={() => { setRegistrationTab('manual'); setMessage(''); }}>Manual JSON</button>
@@ -160,6 +183,13 @@ export default function APIsPage() {
         </>}
       </div>}
       {message && <p className="form-error" role="alert">{message}</p>}
+=======
+    <Modal open={open} onClose={() => setOpen(false)} title="Register an API" actions={<><Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button><Button disabled={busy} onClick={register}>{busy ? 'Registering…' : 'Register API'}</Button></>}>
+      <p className="dialog-copy">Provide the registration payload used by <code>POST /apis</code>. Credentials should reference environment variables, not contain secret values.</p>
+      <Textarea className="json-editor" value={json} onChange={(event) => setJson(event.target.value)} spellCheck="false" aria-label="API registration JSON" />
+      {message && <p className="form-error" role="alert">{message}</p>}
+      <div className="modal-tools"><Button variant="link" size="sm" onClick={() => setJson(JSON.stringify(demoRegistration(), null, 2))}>Load demo registration</Button><Link href="/settings">Check core and mock connection details <ArrowUpRight size={13} /></Link></div>
+>>>>>>> origin/main
     </Modal>
 
     <Modal open={!!removeTarget} onClose={() => setRemoveTarget(null)} title={`Remove ${removeTarget?.apiId ?? 'API'}?`} actions={<><Button variant="outline" onClick={() => setRemoveTarget(null)}>Cancel</Button><Button variant="destructive" disabled={confirmBusy} onClick={remove}>{confirmBusy ? 'Removing…' : 'Remove API'}</Button></>}>

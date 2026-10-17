@@ -54,10 +54,14 @@ export function checkResponse({ tool, response }) {
       .map((path) => ({ path, score: fieldScore(logical, path), value: getPath(response.json, path) }))
       .filter((candidate) => candidate.score > 0 && compatible(candidate.value, fieldSchema));
     candidates.sort((a, b) => b.score - a.score);
+<<<<<<< HEAD
     if (!candidates.length) {
       return { ok: false, reason: 'response_mapping_unresolved', logical, ops: [] };
     }
     if (candidates[1] && candidates[1].score === candidates[0].score) {
+=======
+    if (!candidates.length || (candidates[1] && candidates[1].score === candidates[0].score)) {
+>>>>>>> origin/main
       return { ok: false, reason: 'response_mapping_ambiguous', logical, ops: [] };
     }
     if (candidates[0].path === currentPath) return { ok: false, reason: 'response_mapping_invalid', logical, ops: [] };

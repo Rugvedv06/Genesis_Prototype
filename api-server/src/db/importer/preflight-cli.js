@@ -36,6 +36,7 @@ try {
     if (!Number.isInteger(port) || port < 1 || port > 65535) throw Object.assign(new Error('Invalid core PORT'), { code: 'invalid_core_port' });
     const stopped = await corePortStatus(port);
     if (stopped !== true) throw Object.assign(new Error('Could not confirm the core is stopped'), { code: stopped === false ? 'core_is_running' : 'core_stop_status_unknown' });
+<<<<<<< HEAD
     const hasAuditRewrite = report.counts.auditEntriesRequiringRedaction > 0
       || report.counts.changeEntriesRequiringRedaction > 0 || !report.auditIntegrity?.ok;
     const allowAuditRedactionAndRechain = process.argv.includes('--confirm-audit-redaction-and-rechain');
@@ -48,6 +49,13 @@ try {
 } catch (error) {
   console.error(JSON.stringify({ ok: false, code: error.code ?? 'import_preflight_failed',
     details: error.details ?? Object.fromEntries(['constraint', 'table', 'column'].filter((key) => error[key]).map((key) => [key, error[key]])) }));
+=======
+    const result = await applyFileImport({ pool: getPool(), report });
+    console.log(JSON.stringify(result));
+  }
+} catch (error) {
+  console.error(JSON.stringify({ ok: false, code: error.code ?? 'import_preflight_failed', details: error.details ?? {} }));
+>>>>>>> origin/main
   process.exitCode = 1;
 } finally {
   try { await closePool(); } catch { process.exitCode = 1; }

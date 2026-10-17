@@ -41,7 +41,11 @@ export async function startInvocationInTransaction(client, input) {
 export async function finishInvocationInTransaction(client, input) {
   const {
     callId, outcome, finishedAt = new Date(), finalVersion, httpStatus, errorCode,
+<<<<<<< HEAD
     haltReason, tier, rounds, durationMs, cacheHit, inputTokens, outputTokens, tokenUsage, summary = {},
+=======
+    haltReason, tier, rounds, durationMs, cacheHit, inputTokens, outputTokens, summary = {},
+>>>>>>> origin/main
   } = input ?? {};
   if (typeof callId !== 'string' || !callId.trim()) throw new TypeError('callId is required');
   if (!TERMINAL_OUTCOMES.has(outcome)) throw new TypeError('invalid terminal invocation outcome');
@@ -54,13 +58,21 @@ export async function finishInvocationInTransaction(client, input) {
        finished_at = $3, outcome = $4, final_version = $5, http_status = $6, error_code = $7,
        halt_reason = $8, tier = $9, rounds = COALESCE($10, rounds), duration_ms = $11,
        cache_hit = COALESCE($12, cache_hit), input_tokens = COALESCE($13, input_tokens),
+<<<<<<< HEAD
        output_tokens = COALESCE($14, output_tokens), summary = summary || $15::jsonb,
        token_usage = COALESCE($16::jsonb, token_usage)
+=======
+       output_tokens = COALESCE($14, output_tokens), summary = summary || $15::jsonb
+>>>>>>> origin/main
      WHERE workspace_id = $1 AND call_id = $2 AND outcome = 'running'
      RETURNING call_id, outcome, finished_at`,
     [workspaceId, callId, finishedAt, outcome, finalVersion ?? null, httpStatus ?? null,
       errorCode ?? null, haltReason ?? null, tier ?? null, rounds ?? null, durationMs ?? null,
+<<<<<<< HEAD
       cacheHit ?? null, inputTokens ?? null, outputTokens ?? null, JSON.stringify(safe), tokenUsage ? JSON.stringify(tokenUsage) : null],
+=======
+      cacheHit ?? null, inputTokens ?? null, outputTokens ?? null, JSON.stringify(safe)],
+>>>>>>> origin/main
   );
   if (rows[0]) return { ...rows[0], alreadyFinished: false };
   const { rows: existing } = await client.query(
@@ -78,7 +90,11 @@ export async function getInvocation(queryable, callId) {
   const { rows } = await queryable.query(
     `SELECT call_id, run_id, api_id, tool_name, started_at, finished_at, outcome,
        initial_version, final_version, http_status, error_code, halt_reason,
+<<<<<<< HEAD
        healing_mode, tier, rounds, duration_ms, cache_hit, input_tokens, output_tokens, token_usage, summary
+=======
+       healing_mode, tier, rounds, duration_ms, cache_hit, input_tokens, output_tokens, summary
+>>>>>>> origin/main
      FROM invocations WHERE workspace_id = $1 AND call_id = $2`,
     [workspaceId, callId],
   );

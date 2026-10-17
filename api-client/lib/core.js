@@ -37,6 +37,7 @@ async function strict(base, path, opts) {
 const e = encodeURIComponent;
 export const api = {
   state: () => strict(CORE, '/state'),
+<<<<<<< HEAD
   metrics: () => strict(CORE, '/metrics'),
   recentEvents: (limit = 5000) => strict(CORE, `/events/recent?limit=${limit}`),
   series: (windowSec = 300, step = 5) => strict(CORE, `/metrics/timeseries?window=${windowSec}&step=${step}`),
@@ -46,13 +47,19 @@ export const api = {
   },
   invalidateCacheKey: (cacheKey) => strict(CORE, `/cache/${e(cacheKey)}`, { method: 'DELETE' }),
   clearCache: () => strict(CORE, '/cache', { method: 'DELETE' }),
+=======
+  series: (windowSec = 300, step = 5) => strict(CORE, `/metrics/timeseries?window=${windowSec}&step=${step}`),
+>>>>>>> origin/main
   apiDetail: (id) => strict(CORE, `/apis/${e(id)}`),
   versions: (id, tool) => strict(CORE, `/apis/${e(id)}/tools/${e(tool)}/versions`),
   diff: (id, tool, from, to) => strict(CORE, `/apis/${e(id)}/tools/${e(tool)}/diff?from=${from}&to=${to}`),
   rollback: (id, tool, toVersion) => strict(CORE, `/apis/${e(id)}/tools/${e(tool)}/rollback`, { method: 'POST', body: { toVersion } }),
   patchConfig: (id, patch) => strict(CORE, `/apis/${e(id)}/config`, { method: 'PATCH', body: patch }),
   register: (payload) => strict(CORE, '/apis', { method: 'POST', body: payload }),
+<<<<<<< HEAD
   previewOpenApi: (source) => strict(CORE, '/apis/import/openapi/preview', { method: 'POST', body: source, timeout: 8000 }),
+=======
+>>>>>>> origin/main
   remove: (id) => strict(CORE, `/apis/${e(id)}`, { method: 'DELETE' }),
   // invoke returns the body even when ok:false (HTTP 200 or 400). Only network errors throw.
   invoke: async (id, tool, args, runId) => (await raw(CORE, `/apis/${e(id)}/tools/${e(tool)}/invoke`, { method: 'POST', body: { args, runId }, timeout: 15000 })).data,
@@ -66,7 +73,11 @@ export const api = {
   },
   auditVerify: () => strict(CORE, '/audit/verify'),
   auditExportUrl: `${CORE}/audit/export`,
+<<<<<<< HEAD
   trace: (callId, { cursor = 0, limit = 100 } = {}) => strict(CORE, `/traces/${e(callId)}?${new URLSearchParams({ cursor: String(cursor), limit: String(limit) })}`),
+=======
+  trace: (callId) => strict(CORE, `/traces/${e(callId)}`),
+>>>>>>> origin/main
   providerHealth: async () => (await raw(CORE, '/provider/health')).data,
   tamper: (index, mode) => strict(CORE, '/dev/tamper', { method: 'POST', body: { index, mode } }),
   tamperRestore: () => strict(CORE, '/dev/tamper/restore', { method: 'POST' }),

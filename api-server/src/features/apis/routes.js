@@ -5,6 +5,7 @@ import { emit } from '../events/bus.js';
 import { append as appendAudit } from '../audit/index.js';
 import { cfg } from '../../config.js';
 import { validateUpstreamUrl } from '../http/url-policy.js';
+<<<<<<< HEAD
 import { getPool } from '../../db/pool.js';
 import { withTransaction } from '../../db/transaction.js';
 import { getApiConfig, listApiTools, listToolVersions } from '../../db/registry-repository.js';
@@ -14,12 +15,15 @@ import { commitFromCache, registerApi as registerApiInDatabase, removeApi as rem
 import { randomUUID } from 'node:crypto';
 import { activeRunCount, cancelRun, getRun, startRun } from '../orchestrator/runs.js';
 import { previewOpenApi, previewOpenApiUrl } from './import/openapi-import.js';
+=======
+>>>>>>> origin/main
 
 function publicConfig(config) {
   const safe = { ...config };
   delete safe.credentials;
   return safe;
 }
+<<<<<<< HEAD
 
 export function apisRoutes(app, dependencies = {}) {
   app.post('/apis/import/openapi/preview', async (req, res) => {
@@ -34,6 +38,8 @@ export function apisRoutes(app, dependencies = {}) {
       return res.status(400).json({ ok: false, error: 'invalid_openapi', message: String(error.message ?? 'OpenAPI document is invalid').slice(0, 500) });
     }
   });
+=======
+>>>>>>> origin/main
 
   // GET /apis — list registered APIs and current versions
   app.get('/apis', async (_req, res, next) => {
@@ -83,6 +89,23 @@ export function apisRoutes(app, dependencies = {}) {
     res.json({ ok: true, apiId: req.params.apiId, config: safeConfig });
   });
 
+  app.get('/apis/:apiId', (req, res) => {
+    const api = registryStore.config(req.params.apiId);
+    if (!api) return res.status(404).json({ ok: false, error: 'not_found' });
+    res.json({ apiId: req.params.apiId, config: publicConfig(api), tools: registryStore.list().filter((item) => item.apiId === req.params.apiId) });
+  });
+
+  app.patch('/apis/:apiId/config', (req, res) => {
+    const allowed = ['mode', 'confidenceThreshold', 'maxRounds', 'tier2', 'healing'];
+    const patch = Object.fromEntries(Object.entries(req.body ?? {}).filter(([key]) => allowed.includes(key)));
+    if (patch.mode) patch.healing = { ...(patch.healing ?? {}), mode: patch.mode };
+    const config = registryStore.setConfig(req.params.apiId, patch);
+    if (!config) return res.status(404).json({ ok: false, error: 'not_found' });
+    const safeConfig = publicConfig(config);
+    emit({ type: 'config.changed', apiId: req.params.apiId, config: safeConfig });
+    res.json({ ok: true, apiId: req.params.apiId, config: safeConfig });
+  });
+
   // POST /apis — register an API (§4.1 payload). Re-registering replaces atomically.
   app.post('/apis', async (req, res, next) => {
     const { apiId, baseUrl, specUrl, credentials, healing, tools } = req.body ?? {};
@@ -95,6 +118,7 @@ export function apisRoutes(app, dependencies = {}) {
     } catch (error) {
       return res.status(400).json({ ok: false, error: 'invalid_upstream_url', message: error.message });
     }
+<<<<<<< HEAD
     try {
       const payload = { apiId, baseUrl, specUrl, credentials, healing, tools };
       const result = process.env.DATABASE_URL
@@ -106,6 +130,11 @@ export function apisRoutes(app, dependencies = {}) {
       if (error instanceof TypeError) return res.status(400).json({ ok: false, error: 'invalid_arguments' });
       next(error);
     }
+=======
+    const result = registryStore.registerApi(apiId, { apiId, baseUrl, specUrl, credentials, healing, tools });
+    emit({ type: 'api.registered', apiId, baseUrl, specUrl, healing, toolCount: tools.length, epoch: result.epoch });
+    res.json({ ok: true, apiId, tools: result.tools, epoch: result.epoch });
+>>>>>>> origin/main
   });
 
   // DELETE /apis/:apiId — remove (demo reset)
@@ -151,6 +180,7 @@ export function apisRoutes(app, dependencies = {}) {
     res.json(version);
   });
 
+<<<<<<< HEAD
   app.get('/apis/:apiId/tools/:tool/diff', async (req, res, next) => {
     let diff;
     try {
@@ -166,6 +196,10 @@ export function apisRoutes(app, dependencies = {}) {
         }
       } else diff = registryStore.diff(req.params.apiId, req.params.tool, Number(req.query.from), Number(req.query.to));
     } catch (error) { return next(error); }
+=======
+  app.get('/apis/:apiId/tools/:tool/diff', (req, res) => {
+    const diff = registryStore.diff(req.params.apiId, req.params.tool, Number(req.query.from), Number(req.query.to));
+>>>>>>> origin/main
     if (!diff) return res.status(404).json({ ok: false, error: 'not_found' });
     res.json(diff);
   });
@@ -181,6 +215,7 @@ export function apisRoutes(app, dependencies = {}) {
       return res.status(400).json({ ok: false, error: 'invalid_arguments', message: 'toVersion must be a positive integer' });
     }
     try {
+<<<<<<< HEAD
       let committed;
       if (process.env.DATABASE_URL) {
         const current = registryStore.current(apiId, tool);
@@ -190,6 +225,11 @@ export function apisRoutes(app, dependencies = {}) {
         appendAudit({ decision: 'rollback', apiId, tool, versionBefore: committed.parent, versionAfter: committed.version, adapterHash: committed.adapterHash, rollbackOf: committed.rollbackOf });
         emit({ type: 'registry.rollback', apiId, tool, version: committed.version, rollbackOf: committed.rollbackOf });
       }
+=======
+      const committed = registryStore.rollback(apiId, tool, toVersion);
+      appendAudit({ decision: 'rollback', apiId, tool, versionBefore: committed.parent, versionAfter: committed.version, rollbackOf: committed.rollbackOf });
+      emit({ type: 'registry.rollback', apiId, tool, version: committed.version, rollbackOf: committed.rollbackOf });
+>>>>>>> origin/main
       res.json({ ok: true, version: committed.version, rollbackOf: committed.rollbackOf });
     } catch (err) {
       if (err.code === 'stale_adapter_version') return res.status(409).json({ ok: false, error: 'stale_adapter_version' });
@@ -198,7 +238,11 @@ export function apisRoutes(app, dependencies = {}) {
     }
   });
 
+<<<<<<< HEAD
   app.post('/dev/force-bad-commit', async (req, res, next) => {
+=======
+  app.post('/dev/force-bad-commit', (req, res) => {
+>>>>>>> origin/main
     if (!cfg.enableDevRoutes) return res.status(404).json({ ok: false, error: 'not_found' });
     const { apiId, tool } = req.body ?? {};
     const current = registryStore.current(apiId, tool);
@@ -207,6 +251,7 @@ export function apisRoutes(app, dependencies = {}) {
       ...current.versionObj.adapter,
       request: [...(current.versionObj.adapter.request ?? []), { op: 'rename_field', from: '__healr_bad_field__', to: '__healr_bad_field__' }],
     };
+<<<<<<< HEAD
     let committed;
     try {
       const change = { ops: adapter.request.slice(-1), tier: 1, confidence: 1, evidence: ['developer forced bad commit'] };
@@ -215,6 +260,10 @@ export function apisRoutes(app, dependencies = {}) {
         : registryStore.commit(apiId, tool, adapter, change, 'dev');
       if (!process.env.DATABASE_URL) emit({ type: 'patch.committed', apiId, tool, version: committed.version, ops: committed.change.ops, dev: true });
     } catch (error) { return next(error); }
+=======
+    const committed = registryStore.commit(apiId, tool, adapter, { ops: adapter.request.slice(-1), tier: 1, confidence: 1, evidence: ['developer forced bad commit'] }, 'dev');
+    emit({ type: 'patch.committed', apiId, tool, version: committed.version, ops: committed.change.ops, dev: true });
+>>>>>>> origin/main
     res.json({ ok: true, version: committed.version });
   });
 

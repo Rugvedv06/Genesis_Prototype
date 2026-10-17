@@ -32,7 +32,10 @@ const procs = APPS.map((app) => {
     cwd: app.cwd,
     env: { ...process.env, ...app.env },
     shell: process.platform === 'win32' && app.cmd.endsWith('.cmd'),
+<<<<<<< HEAD
     detached: process.platform !== 'win32',
+=======
+>>>>>>> origin/main
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   p.stdout.on('data', (d) => process.stdout.write(`[${app.name}] ${d}`));
