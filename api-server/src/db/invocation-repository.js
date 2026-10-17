@@ -44,7 +44,11 @@ export async function finishInvocationInTransaction(client, input) {
 <<<<<<< HEAD
     haltReason, tier, rounds, durationMs, cacheHit, inputTokens, outputTokens, tokenUsage, summary = {},
 =======
+<<<<<<< HEAD
+    haltReason, tier, rounds, durationMs, cacheHit, inputTokens, outputTokens, tokenUsage, summary = {},
+=======
     haltReason, tier, rounds, durationMs, cacheHit, inputTokens, outputTokens, summary = {},
+>>>>>>> origin/main
 >>>>>>> origin/main
   } = input ?? {};
   if (typeof callId !== 'string' || !callId.trim()) throw new TypeError('callId is required');
@@ -62,7 +66,12 @@ export async function finishInvocationInTransaction(client, input) {
        output_tokens = COALESCE($14, output_tokens), summary = summary || $15::jsonb,
        token_usage = COALESCE($16::jsonb, token_usage)
 =======
+<<<<<<< HEAD
+       output_tokens = COALESCE($14, output_tokens), summary = summary || $15::jsonb,
+       token_usage = COALESCE($16::jsonb, token_usage)
+=======
        output_tokens = COALESCE($14, output_tokens), summary = summary || $15::jsonb
+>>>>>>> origin/main
 >>>>>>> origin/main
      WHERE workspace_id = $1 AND call_id = $2 AND outcome = 'running'
      RETURNING call_id, outcome, finished_at`,
@@ -71,7 +80,11 @@ export async function finishInvocationInTransaction(client, input) {
 <<<<<<< HEAD
       cacheHit ?? null, inputTokens ?? null, outputTokens ?? null, JSON.stringify(safe), tokenUsage ? JSON.stringify(tokenUsage) : null],
 =======
+<<<<<<< HEAD
+      cacheHit ?? null, inputTokens ?? null, outputTokens ?? null, JSON.stringify(safe), tokenUsage ? JSON.stringify(tokenUsage) : null],
+=======
       cacheHit ?? null, inputTokens ?? null, outputTokens ?? null, JSON.stringify(safe)],
+>>>>>>> origin/main
 >>>>>>> origin/main
   );
   if (rows[0]) return { ...rows[0], alreadyFinished: false };
@@ -93,7 +106,11 @@ export async function getInvocation(queryable, callId) {
 <<<<<<< HEAD
        healing_mode, tier, rounds, duration_ms, cache_hit, input_tokens, output_tokens, token_usage, summary
 =======
+<<<<<<< HEAD
+       healing_mode, tier, rounds, duration_ms, cache_hit, input_tokens, output_tokens, token_usage, summary
+=======
        healing_mode, tier, rounds, duration_ms, cache_hit, input_tokens, output_tokens, summary
+>>>>>>> origin/main
 >>>>>>> origin/main
      FROM invocations WHERE workspace_id = $1 AND call_id = $2`,
     [workspaceId, callId],

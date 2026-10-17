@@ -35,6 +35,10 @@ const procs = APPS.map((app) => {
 <<<<<<< HEAD
     detached: process.platform !== 'win32',
 =======
+<<<<<<< HEAD
+    detached: process.platform !== 'win32',
+=======
+>>>>>>> origin/main
 >>>>>>> origin/main
     stdio: ['ignore', 'pipe', 'pipe'],
   });

@@ -3,9 +3,13 @@ name: healr
 services:
   postgres:
 <<<<<<< HEAD
+    image: postgres:18-alpine
+=======
+<<<<<<< HEAD
     image: postgres:16-alpine
 =======
     image: postgres:18-alpine
+>>>>>>> origin/main
 >>>>>>> origin/main
     restart: unless-stopped
     environment:
@@ -25,9 +29,13 @@ services:
 
   redis:
 <<<<<<< HEAD
+    image: redis:8-alpine
+=======
+<<<<<<< HEAD
     image: redis:7-alpine
 =======
     image: redis:8-alpine
+>>>>>>> origin/main
 >>>>>>> origin/main
     restart: unless-stopped
     command:

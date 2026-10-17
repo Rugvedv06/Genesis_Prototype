@@ -39,6 +39,9 @@
   },
   "eventTypes": [
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
     "call.started",
     "call.failed",
     "call.succeeded",
@@ -64,12 +67,15 @@
     "api.removed",
     "config.changed",
     "tier2.unavailable"
+<<<<<<< HEAD
+=======
 =======
     "call.started", "call.failed", "call.succeeded",
     "diagnosis.started", "diagnosis.finished", "upstream.request", "heal.started", "heal.finished",
     "patch.proposed", "patch.verified", "patch.committed", "patch.rolledback",
     "cache.hit", "drift.silent", "halt", "agent.step", "agent.final", "metrics",
     "audit.appended", "circuit.opened", "circuit.closed", "api.registered", "api.removed", "config.changed"
+>>>>>>> origin/main
 >>>>>>> origin/main
   ],
   "agentEvents": {

@@ -16,6 +16,9 @@ export const HALT_REASON = {
   max_rounds: 'The heal budget ran out before the call succeeded.',
   circuit_open: 'Too many failed heals. healr paused this tool.',
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
   requires_approval: 'A high-risk proposal is waiting for operator review. It was not committed.',
   tier2_no_proposal: 'Tier 2 could not make a validated proposal. Review the evidence before taking action.',
   tier2_timeout: 'Tier 2 exceeded its request budget. Deterministic healing remains available.',
@@ -27,6 +30,11 @@ export const haltReason = (r) => HALT_REASON[r] ?? `Stopped: ${r}`;
 export const TIER_LABEL = Object.freeze({ 0: 'Tier 0 · OpenAPI spec', 1: 'Tier 1 · deterministic', 2: 'Tier 2 · Gemini', cache: 'Verified cache' });
 export const tierLabel = (tier) => TIER_LABEL[tier] ?? (tier == null ? 'No diagnosis tier' : `Tier ${tier}`);
 
+<<<<<<< HEAD
+export const EVENT_LABEL = {
+  'call.started': 'Call started', 'upstream.request': 'Sent to API', 'call.failed': 'API rejected the call',
+  'upstream.classified': 'Upstream classified',
+=======
 =======
 };
 export const haltReason = (r) => HALT_REASON[r] ?? `Stopped: ${r}`;
@@ -34,12 +42,29 @@ export const haltReason = (r) => HALT_REASON[r] ?? `Stopped: ${r}`;
 >>>>>>> origin/main
 export const EVENT_LABEL = {
   'call.started': 'Call started', 'upstream.request': 'Sent to API', 'call.failed': 'API rejected the call',
+>>>>>>> origin/main
   'diagnosis.started': 'Diagnosing', 'patch.proposed': 'Fix proposed', 'patch.verified': 'Fix verified by replay',
   'patch.committed': 'Fix committed', 'call.succeeded': 'Call succeeded', 'heal.started': 'Heal started',
   'heal.finished': 'Heal finished', halt: 'Halted safely', 'cache.hit': 'Cache hit', 'drift.silent': 'Silent drift detected',
   'registry.rollback': 'Rolled back', 'api.registered': 'API registered', 'api.removed': 'API removed',
 };
 
+<<<<<<< HEAD
+export const UPSTREAM_CLASSIFICATION_LABEL = Object.freeze({
+  transport_error: 'TRANSPORT ERROR',
+  auth_error: 'AUTH ERROR',
+  rate_limited: 'RATE LIMITED',
+  upstream_error: 'UPSTREAM ERROR',
+  request_error: 'REQUEST ERROR',
+  valid_empty_response: 'VALID EMPTY RESPONSE',
+  invalid_upstream_response: 'INVALID UPSTREAM RESPONSE',
+  request_contract_drift: 'REQUEST CONTRACT DRIFT',
+  response_drift: 'RESPONSE DRIFT',
+  no_drift: 'NO DRIFT',
+});
+
+=======
+>>>>>>> origin/main
 // Human sentence for a typed patch op. Used by OpChip, call drawer, version timeline.
 export function describeOp(op) {
   switch (op.op) {

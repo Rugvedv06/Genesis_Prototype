@@ -6,6 +6,9 @@ import { append as appendAudit } from '../audit/index.js';
 import { cfg } from '../../config.js';
 import { validateUpstreamUrl } from '../http/url-policy.js';
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
 import { getPool } from '../../db/pool.js';
 import { withTransaction } from '../../db/transaction.js';
 import { getApiConfig, listApiTools, listToolVersions } from '../../db/registry-repository.js';
@@ -15,7 +18,10 @@ import { commitFromCache, registerApi as registerApiInDatabase, removeApi as rem
 import { randomUUID } from 'node:crypto';
 import { activeRunCount, cancelRun, getRun, startRun } from '../orchestrator/runs.js';
 import { previewOpenApi, previewOpenApiUrl } from './import/openapi-import.js';
+<<<<<<< HEAD
 =======
+=======
+>>>>>>> origin/main
 >>>>>>> origin/main
 
 function publicConfig(config) {
@@ -24,6 +30,9 @@ function publicConfig(config) {
   return safe;
 }
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
 
 export function apisRoutes(app, dependencies = {}) {
   app.post('/apis/import/openapi/preview', async (req, res) => {
@@ -38,7 +47,10 @@ export function apisRoutes(app, dependencies = {}) {
       return res.status(400).json({ ok: false, error: 'invalid_openapi', message: String(error.message ?? 'OpenAPI document is invalid').slice(0, 500) });
     }
   });
+<<<<<<< HEAD
 =======
+=======
+>>>>>>> origin/main
 >>>>>>> origin/main
 
   // GET /apis — list registered APIs and current versions
@@ -87,6 +99,8 @@ export function apisRoutes(app, dependencies = {}) {
     const safeConfig = publicConfig(config);
     if (!process.env.DATABASE_URL) emit({ type: 'config.changed', apiId: req.params.apiId, config: safeConfig });
     res.json({ ok: true, apiId: req.params.apiId, config: safeConfig });
+<<<<<<< HEAD
+=======
   });
 
   app.get('/apis/:apiId', (req, res) => {
@@ -104,6 +118,7 @@ export function apisRoutes(app, dependencies = {}) {
     const safeConfig = publicConfig(config);
     emit({ type: 'config.changed', apiId: req.params.apiId, config: safeConfig });
     res.json({ ok: true, apiId: req.params.apiId, config: safeConfig });
+>>>>>>> origin/main
   });
 
   // POST /apis — register an API (§4.1 payload). Re-registering replaces atomically.
@@ -119,6 +134,9 @@ export function apisRoutes(app, dependencies = {}) {
       return res.status(400).json({ ok: false, error: 'invalid_upstream_url', message: error.message });
     }
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
     try {
       const payload = { apiId, baseUrl, specUrl, credentials, healing, tools };
       const result = process.env.DATABASE_URL
@@ -130,10 +148,13 @@ export function apisRoutes(app, dependencies = {}) {
       if (error instanceof TypeError) return res.status(400).json({ ok: false, error: 'invalid_arguments' });
       next(error);
     }
+<<<<<<< HEAD
+=======
 =======
     const result = registryStore.registerApi(apiId, { apiId, baseUrl, specUrl, credentials, healing, tools });
     emit({ type: 'api.registered', apiId, baseUrl, specUrl, healing, toolCount: tools.length, epoch: result.epoch });
     res.json({ ok: true, apiId, tools: result.tools, epoch: result.epoch });
+>>>>>>> origin/main
 >>>>>>> origin/main
   });
 
@@ -181,6 +202,9 @@ export function apisRoutes(app, dependencies = {}) {
   });
 
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
   app.get('/apis/:apiId/tools/:tool/diff', async (req, res, next) => {
     let diff;
     try {
@@ -196,9 +220,12 @@ export function apisRoutes(app, dependencies = {}) {
         }
       } else diff = registryStore.diff(req.params.apiId, req.params.tool, Number(req.query.from), Number(req.query.to));
     } catch (error) { return next(error); }
+<<<<<<< HEAD
+=======
 =======
   app.get('/apis/:apiId/tools/:tool/diff', (req, res) => {
     const diff = registryStore.diff(req.params.apiId, req.params.tool, Number(req.query.from), Number(req.query.to));
+>>>>>>> origin/main
 >>>>>>> origin/main
     if (!diff) return res.status(404).json({ ok: false, error: 'not_found' });
     res.json(diff);
@@ -216,6 +243,9 @@ export function apisRoutes(app, dependencies = {}) {
     }
     try {
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
       let committed;
       if (process.env.DATABASE_URL) {
         const current = registryStore.current(apiId, tool);
@@ -225,10 +255,13 @@ export function apisRoutes(app, dependencies = {}) {
         appendAudit({ decision: 'rollback', apiId, tool, versionBefore: committed.parent, versionAfter: committed.version, adapterHash: committed.adapterHash, rollbackOf: committed.rollbackOf });
         emit({ type: 'registry.rollback', apiId, tool, version: committed.version, rollbackOf: committed.rollbackOf });
       }
+<<<<<<< HEAD
+=======
 =======
       const committed = registryStore.rollback(apiId, tool, toVersion);
       appendAudit({ decision: 'rollback', apiId, tool, versionBefore: committed.parent, versionAfter: committed.version, rollbackOf: committed.rollbackOf });
       emit({ type: 'registry.rollback', apiId, tool, version: committed.version, rollbackOf: committed.rollbackOf });
+>>>>>>> origin/main
 >>>>>>> origin/main
       res.json({ ok: true, version: committed.version, rollbackOf: committed.rollbackOf });
     } catch (err) {
@@ -241,7 +274,11 @@ export function apisRoutes(app, dependencies = {}) {
 <<<<<<< HEAD
   app.post('/dev/force-bad-commit', async (req, res, next) => {
 =======
+<<<<<<< HEAD
+  app.post('/dev/force-bad-commit', async (req, res, next) => {
+=======
   app.post('/dev/force-bad-commit', (req, res) => {
+>>>>>>> origin/main
 >>>>>>> origin/main
     if (!cfg.enableDevRoutes) return res.status(404).json({ ok: false, error: 'not_found' });
     const { apiId, tool } = req.body ?? {};
@@ -252,6 +289,9 @@ export function apisRoutes(app, dependencies = {}) {
       request: [...(current.versionObj.adapter.request ?? []), { op: 'rename_field', from: '__healr_bad_field__', to: '__healr_bad_field__' }],
     };
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
     let committed;
     try {
       const change = { ops: adapter.request.slice(-1), tier: 1, confidence: 1, evidence: ['developer forced bad commit'] };
@@ -260,9 +300,12 @@ export function apisRoutes(app, dependencies = {}) {
         : registryStore.commit(apiId, tool, adapter, change, 'dev');
       if (!process.env.DATABASE_URL) emit({ type: 'patch.committed', apiId, tool, version: committed.version, ops: committed.change.ops, dev: true });
     } catch (error) { return next(error); }
+<<<<<<< HEAD
+=======
 =======
     const committed = registryStore.commit(apiId, tool, adapter, { ops: adapter.request.slice(-1), tier: 1, confidence: 1, evidence: ['developer forced bad commit'] }, 'dev');
     emit({ type: 'patch.committed', apiId, tool, version: committed.version, ops: committed.change.ops, dev: true });
+>>>>>>> origin/main
 >>>>>>> origin/main
     res.json({ ok: true, version: committed.version });
   });

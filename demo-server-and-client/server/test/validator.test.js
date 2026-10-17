@@ -6,6 +6,10 @@ import { get, ids } from '../src/mutations/catalogue.js';
 <<<<<<< HEAD
 import { classify, parseErrors } from '../../../api-server/src/features/classifier/index.js';
 =======
+<<<<<<< HEAD
+import { classify, parseErrors } from '../../../api-server/src/features/classifier/index.js';
+=======
+>>>>>>> origin/main
 >>>>>>> origin/main
 
 const M5 = get('M5');
@@ -81,6 +85,9 @@ test('mutation catalogue exposes M6 and M10 response mutation metadata', () => {
   }
 });
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
 
 test('M1, M2, M3, M4, M7, and M8 fixtures emit the expected canonical errors', () => {
   const cases = [
@@ -290,5 +297,8 @@ test('M11 reports ambiguous renamed update fields and accepts only both wire nam
   assert.deepEqual(failure.body.detail.map((item) => item.loc.at(-1)), ['subscriber_ref', 'contact_address', 'user_id', 'email']);
   assert.equal(validateRequest(mutation, { subscriber_ref: '123', contact_address: 'a@b.com' }, {}), null);
 });
+<<<<<<< HEAD
 =======
+=======
+>>>>>>> origin/main
 >>>>>>> origin/main

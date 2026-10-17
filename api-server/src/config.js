@@ -9,6 +9,9 @@ export function config(env = process.env) {
     tenantId: env.TENANT_ID,
     geminiApiKey: env.GEMINI_API_KEY,
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
     geminiApiKeys: env.GEMINI_API_KEYS,
     llmMaxConcurrency: Number(env.LLM_MAX_CONCURRENCY ?? 4),
     tier2TimeoutMs: Number(env.TIER2_TIMEOUT_MS ?? 2500),
@@ -19,7 +22,10 @@ export function config(env = process.env) {
     agentRunTimeoutMs: Number(env.AGENT_RUN_TIMEOUT_MS ?? 60000),
     agentMaxConcurrentRuns: Number(env.AGENT_MAX_CONCURRENT_RUNS ?? 8),
     baselineMode: env.BASELINE_MODE ?? 'llm',
+<<<<<<< HEAD
 =======
+=======
+>>>>>>> origin/main
 >>>>>>> origin/main
     agentLlm: env.AGENT_LLM ?? 'gemini:gemini-2.5-flash',
     diagnoserLlm: env.DIAGNOSER_LLM ?? 'gemini:gemini-2.5-flash',

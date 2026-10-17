@@ -15,8 +15,13 @@ import { registryStore } from './features/registry/store.js';
 import { bus, configureEventPersistence } from './features/events/bus.js';
 import { get as getTrace, traceFromEvents } from './features/events/trace-store.js';
 =======
+<<<<<<< HEAD
+import { bus, configureEventPersistence } from './features/events/bus.js';
+import { get as getTrace, traceFromEvents } from './features/events/trace-store.js';
+=======
 import { bus } from './features/events/bus.js';
 import { get as getTrace } from './features/events/trace-store.js';
+>>>>>>> origin/main
 >>>>>>> origin/main
 import { auditRoutes } from './features/audit/routes.js';
 import { snapshot as metricsSnapshot, timeseries as metricsTimeseries } from './features/metrics/index.js';
@@ -24,6 +29,9 @@ import { head as auditHead } from './features/audit/index.js';
 import { snapshot as circuitSnapshot } from './features/safety/circuit.js';
 import { getProvider } from './features/llm/provider.js';
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
 import { closePool, databaseStatus, getPool, poolStatus } from './db/pool.js';
 import { migrationStatus } from './db/migrate.js';
 import { refreshRegistryCache } from './db/registry-service.js';
@@ -62,9 +70,12 @@ const recoveredInvocations = await reconcileStaleInvocations();
 if (recoveredInvocations.reconciled) {
   log({ level: 'warn', service: 'api-server', code: 'stale_invocations_reconciled', count: recoveredInvocations.reconciled });
 }
+<<<<<<< HEAD
+=======
 =======
 import { closePool, databaseStatus } from './db/pool.js';
 import { migrationStatus } from './db/migrate.js';
+>>>>>>> origin/main
 >>>>>>> origin/main
 
 const app = express();
@@ -73,6 +84,9 @@ app.use(express.json({ limit: '1100kb' }));
 
 app.get('/health', (_req, res) => {
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
   res.json({ ok: true, service: 'api-server', port: cfg.port, version: '0.1.0', apis: registryStore.list().length, time: new Date().toISOString() });
 });
 
@@ -107,6 +121,8 @@ app.get('/logs', async (req, res, next) => {
 
 app.get('/state', async (_req, res, next) => {
   try {
+<<<<<<< HEAD
+=======
 =======
   res.json({ ok: true, service: 'api-server', port: cfg.port, version: '0.1.0', apis: registryStore.list().length, auditHead: auditHead(), time: new Date().toISOString() });
 });
@@ -126,6 +142,7 @@ app.get('/ready', async (_req, res) => {
 
 app.get('/state', (_req, res) => {
 >>>>>>> origin/main
+>>>>>>> origin/main
   const apis = registryStore.list();
   const safety = circuitSnapshot();
   const grouped = new Map();
@@ -141,6 +158,9 @@ app.get('/state', (_req, res) => {
     });
   }
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
   const [metrics, audit, eventCursor] = process.env.DATABASE_URL
     ? await Promise.all([snapshotMetrics(getPool()), getAuditHead(getPool()), getEventCursor(getPool())])
     : [metricsSnapshot(), auditHead(), { last_event_id: String(bus.since(0).at(-1)?.id ?? 0) }];
@@ -226,6 +246,8 @@ app.get('/provider/health', async (_req, res) => {
     const [agent, diagnoser] = await Promise.all([getProvider('agent').health(), getProvider('diagnoser').health()]);
     const result = { ...diagnoser, roles: { agent, diagnoser } };
     res.status(agent.ok && diagnoser.ok ? 200 : 503).json(result);
+<<<<<<< HEAD
+=======
 =======
   res.json({ lastEventId: bus.since(0).at(-1)?.id ?? 0, apis: [...grouped.values()], metrics: metricsSnapshot(), audit: auditHead(), cache: { entries: safety.negativeEntries, hits: 0 }, circuit: safety.open });
 });
@@ -239,12 +261,16 @@ app.get('/provider/health', async (_req, res) => {
     const result = await provider.health();
     res.status(result.ok ? 200 : 503).json(result);
 >>>>>>> origin/main
+>>>>>>> origin/main
   } catch (error) {
     res.status(503).json({ ok: false, code: 'provider_configuration_error', message: error.message });
   }
 });
 
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
 app.get('/traces/:callId', async (req, res, next) => {
   const rawLimit = req.query.limit;
   const rawCursor = req.query.cursor;
@@ -276,9 +302,12 @@ app.get('/traces/:callId', async (req, res, next) => {
       trace = getTrace(req.params.callId);
     }
   } catch (error) { return next(error); }
+<<<<<<< HEAD
+=======
 =======
 app.get('/traces/:callId', (req, res) => {
   const trace = getTrace(req.params.callId);
+>>>>>>> origin/main
 >>>>>>> origin/main
   if (!trace) return res.status(404).json({ ok: false, error: 'not_found' });
   res.json(trace);
@@ -348,6 +377,9 @@ async function shutdown(signal) {
     await httpClosed;
     clearTimeout(forceCloseTimer);
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
     try { await flushDurableEvents(); }
     catch { log({ level: 'warn', service: 'api-server', code: 'event_queue_flush_failed' }); }
     try { await closeRedisMirror(); }
@@ -364,10 +396,13 @@ async function shutdown(signal) {
     }
     try { await closePool(); }
     catch { log({ level: 'error', service: 'api-server', code: 'postgres_pool_shutdown_error' }); }
+<<<<<<< HEAD
+=======
 =======
     try { await closePool(); }
     catch { log({ level: 'error', service: 'api-server', code: 'postgres_pool_shutdown_error' }); }
     log({ level: 'info', service: 'api-server', code: 'shutdown_complete' });
+>>>>>>> origin/main
 >>>>>>> origin/main
   })();
   return shutdownPromise;

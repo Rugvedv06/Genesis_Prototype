@@ -164,6 +164,10 @@ export async function exportAuditNdjson(queryable) {
 <<<<<<< HEAD
   return rows.map((row) => JSON.stringify(row.canonical_record)).join('\n') + (rows.length ? '\n' : '');
 =======
+<<<<<<< HEAD
+  return rows.map((row) => JSON.stringify(row.canonical_record)).join('\n') + (rows.length ? '\n' : '');
+=======
   return rows.map((row) => JSON.stringify(row.canonical_record)).join('') + (rows.length ? '\n' : '');
+>>>>>>> origin/main
 >>>>>>> origin/main
 }

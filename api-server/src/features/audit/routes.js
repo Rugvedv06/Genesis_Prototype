@@ -1,6 +1,9 @@
 import * as audit from './index.js';
 import { cfg } from '../../config.js';
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
 import { getPool } from '../../db/pool.js';
 import { exportAuditNdjson, getAuditHead, listAuditRecords, verifyAuditChain } from '../../db/audit-repository.js';
 import { withTransaction } from '../../db/transaction.js';
@@ -47,6 +50,8 @@ export function auditRoutes(app) {
     catch (error) { next(error); }
   });
   if (cfg.enableDevRoutes && !process.env.DATABASE_URL) {
+<<<<<<< HEAD
+=======
 =======
 
 export function auditRoutes(app) {
@@ -65,6 +70,7 @@ export function auditRoutes(app) {
     res.type('application/x-ndjson').send(audit.exportNdjson());
   });
   if (cfg.enableDevRoutes) {
+>>>>>>> origin/main
 >>>>>>> origin/main
     app.post('/dev/tamper', (req, res) => {
       const index = Number(req.body?.index);

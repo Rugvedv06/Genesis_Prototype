@@ -56,7 +56,11 @@ function normalizeDetail(d, rootBody) {
 <<<<<<< HEAD
   } else if (t.includes('integer') || t.includes('int_type') || t.includes('int_parsing') || t.includes('is_instance') || t.includes('type_error')) {
 =======
+<<<<<<< HEAD
+  } else if (t.includes('integer') || t.includes('int_type') || t.includes('int_parsing') || t.includes('is_instance') || t.includes('type_error')) {
+=======
   } else if (t.includes('integer') || t.includes('int_parsing') || t.includes('is_instance') || t.includes('type_error')) {
+>>>>>>> origin/main
 >>>>>>> origin/main
     kind = 'type';
   } else if (t.includes('extra_forbidden')) {

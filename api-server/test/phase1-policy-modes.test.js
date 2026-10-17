@@ -10,6 +10,10 @@ import { fileURLToPath } from 'node:url';
 <<<<<<< HEAD
 import { createIsolatedDatabase } from './helpers/isolated-database.js';
 =======
+<<<<<<< HEAD
+import { createIsolatedDatabase } from './helpers/isolated-database.js';
+=======
+>>>>>>> origin/main
 >>>>>>> origin/main
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
@@ -107,6 +111,9 @@ async function waitForHealth(url, children) {
 }
 
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
 test('M5 policy modes enforce, log, and disable adapter changes with auditable outcomes', {
   skip: !process.env.HEALR_TEST_DATABASE_URL && 'set HEALR_TEST_DATABASE_URL to run isolated PostgreSQL runtime coverage',
 }, async (t) => {
@@ -120,9 +127,12 @@ test('M5 policy modes enforce, log, and disable adapter changes with auditable o
     assert.deepEqual(await isolatedDb.drop(), { dropped: true, databaseExists: false }, 'isolated policy database is dropped');
   });
   dataDir = mkdtempSync(join(tmpdir(), 'healr-policy-modes-'));
+<<<<<<< HEAD
+=======
 =======
 test('M5 policy modes enforce, log, and disable adapter changes with auditable outcomes', async (t) => {
   const dataDir = mkdtempSync(join(tmpdir(), 'healr-policy-modes-'));
+>>>>>>> origin/main
 >>>>>>> origin/main
   const corePort = await freePort();
   const mockPort = await freePort([corePort]);
@@ -135,6 +145,12 @@ test('M5 policy modes enforce, log, and disable adapter changes with auditable o
     REDIS_URL: '',
     HEALR_TEST_DATABASE_URL: '',
 =======
+<<<<<<< HEAD
+    DATABASE_URL: isolatedDb.url,
+    REDIS_URL: '',
+    HEALR_TEST_DATABASE_URL: '',
+=======
+>>>>>>> origin/main
 >>>>>>> origin/main
     PORT: String(corePort),
     CORE_URL: coreUrl,
@@ -149,12 +165,17 @@ test('M5 policy modes enforce, log, and disable adapter changes with auditable o
   core = start(CORE_ENTRY, join(ROOT, 'api-server'), env);
   mock = start(MOCK_ENTRY, join(ROOT, 'demo-server-and-client/server'), { ...env, PORT: String(mockPort) });
 =======
+<<<<<<< HEAD
+  core = start(CORE_ENTRY, join(ROOT, 'api-server'), env);
+  mock = start(MOCK_ENTRY, join(ROOT, 'demo-server-and-client/server'), { ...env, PORT: String(mockPort) });
+=======
   const core = start(CORE_ENTRY, join(ROOT, 'api-server'), env);
   const mock = start(MOCK_ENTRY, join(ROOT, 'demo-server-and-client/server'), { ...env, PORT: String(mockPort) });
   t.after(async () => {
     await Promise.all([stop(core), stop(mock)]);
     rmSync(dataDir, { recursive: true, force: true });
   });
+>>>>>>> origin/main
 >>>>>>> origin/main
 
   await Promise.all([waitForHealth(coreUrl, [core]), waitForHealth(mockUrl, [mock])]);
@@ -240,19 +261,29 @@ test('M5 policy modes enforce, log, and disable adapter changes with auditable o
 <<<<<<< HEAD
       assert.equal(invocation.body.ok, true, JSON.stringify(invocation.body));
 =======
+<<<<<<< HEAD
+      assert.equal(invocation.body.ok, true, JSON.stringify(invocation.body));
+=======
       assert.equal(invocation.body.ok, true);
+>>>>>>> origin/main
 >>>>>>> origin/main
       assert.equal(invocation.body.meta.healed, true);
       assert.equal(invocation.body.meta.version, 2);
       assert.equal(versions.body.versions.length, 2);
       assert.equal(versions.body.versions[1].origin, 'heal');
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
       const persistedHeaderOp = versions.body.versions[1].adapter.request.find((operation) => operation.op === 'add_header');
       assert.ok(persistedHeaderOp, 'enforce mode persists the validated header adapter operation');
       assert.equal(Object.hasOwn(persistedHeaderOp, 'evidence'), false, 'evidence must not be stored in the executable adapter');
       const commitAudit = records.find((record) => record.decision === 'commit');
       assert.ok(commitAudit?.evidenceCount > 0, 'proposal evidence remains in durable provenance');
+<<<<<<< HEAD
 =======
+=======
+>>>>>>> origin/main
 >>>>>>> origin/main
       assert.ok(mockState.body.lastRequests.length > 1, 'enforce should replay after each verified patch');
       assert.equal(mockState.body.lastRequests.at(-1).status, 200);

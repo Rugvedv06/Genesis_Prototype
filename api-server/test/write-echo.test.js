@@ -1,7 +1,13 @@
+<<<<<<< HEAD
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { matchesWriteEcho } from '../src/features/executor/invoke.js';
+=======
 process.env.DATABASE_URL = '';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 const { matchesWriteEcho } = await import('../src/features/executor/invoke.js');
+>>>>>>> origin/main
 
 const tool = {
   versionObj: { meta: { method: 'POST', sideEffects: 'write' }, adapter: { response: { map: { email: 'result.email' } } } },
@@ -14,6 +20,8 @@ test('write replay requires matching declared request and response fields', () =
   assert.equal(matchesWriteEcho(tool, { email: 'new@example.com' }, { json: { result: { email: 'old@example.com' } } }, 1), true);
   assert.equal(matchesWriteEcho(tool, { user_id: '123' }, { json: { result: { email: 'anything@example.com' } } }, 2), true);
 });
+<<<<<<< HEAD
+=======
 
 test('unsafe write failures are not automatically replayed', async () => {
   const { invoke } = await import('../src/features/executor/invoke.js');
@@ -88,3 +96,4 @@ test('declared idempotency support reuses one invocation key across transient re
     if (oldDatabaseUrl === undefined) delete process.env.DATABASE_URL; else process.env.DATABASE_URL = oldDatabaseUrl;
   }
 });
+>>>>>>> origin/main

@@ -10,6 +10,7 @@ const taskPrompt = (email = 'asha.new@example.com') => `Fetch user 123, then upd
 
 function safeError(error) {
   return { code: String(error?.code ?? 'baseline_error').slice(0, 80), message: String(error?.message ?? 'Baseline agent failed').slice(0, 500) };
+<<<<<<< HEAD
 }
 
 async function readJson(response, maxBytes = 1_000_000) {
@@ -62,6 +63,60 @@ async function rawSend(baseUrl, tool, args, fetchImpl) {
   } finally { clearTimeout(timer); }
 }
 
+=======
+}
+
+async function readJson(response, maxBytes = 1_000_000) {
+  const text = await response.text();
+  if (Buffer.byteLength(text) > maxBytes) throw Object.assign(new Error('Core API detail exceeded the response size limit.'), { code: 'response_too_large' });
+  try { return JSON.parse(text); } catch { throw Object.assign(new Error('Core API returned invalid JSON.'), { code: 'invalid_core_response' }); }
+}
+
+async function loadApi(apiId, coreFetchImpl) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5000);
+  try {
+    const response = await coreFetchImpl(`${CORE_URL()}/apis/${encodeURIComponent(apiId)}`, { signal: controller.signal, headers: { Accept: 'application/json' } });
+    if (!response.ok) throw Object.assign(new Error(`Core API detail returned HTTP ${response.status}.`), { code: 'api_not_found' });
+    const detail = await readJson(response);
+    if (!detail.config?.baseUrl || !Array.isArray(detail.tools)) throw Object.assign(new Error('Core API detail is missing its base URL or logical tools.'), { code: 'invalid_core_response' });
+    const tools = detail.tools.map((tool) => ({
+      name: tool.name ?? tool.tool,
+      description: `Invoke ${tool.name ?? tool.tool} using its logical arguments.`,
+      parameters: tool.parameters,
+      sideEffects: tool.sideEffects ?? 'write',
+      method: tool.method ?? 'POST', path: tool.path,
+    })).filter((tool) => typeof tool.name === 'string' && tool.parameters?.type === 'object' && tool.path);
+    if (!tools.length) throw Object.assign(new Error('No supported logical tools are registered for this API.'), { code: 'no_tools' });
+    return { baseUrl: detail.config.baseUrl, tools };
+  } finally { clearTimeout(timer); }
+}
+
+async function rawSend(baseUrl, tool, args, fetchImpl) {
+  const base = new URL(baseUrl);
+  if (!['http:', 'https:'].includes(base.protocol)) throw Object.assign(new Error('Registered base URL must use HTTP or HTTPS.'), { code: 'invalid_base_url' });
+  let path = tool.path;
+  const body = structuredClone(args ?? {});
+  path = path.replace(/\{([^}]+)\}/g, (_match, key) => {
+    if (body[key] === undefined) throw Object.assign(new Error(`Missing path argument ${key}.`), { code: 'missing_path_argument' });
+    const value = encodeURIComponent(String(body[key])); delete body[key]; return value;
+  });
+  const url = new URL(path, base);
+  if (url.origin !== base.origin) throw Object.assign(new Error('Registered tool path changes the upstream origin.'), { code: 'invalid_tool_path' });
+  const method = String(tool.method ?? 'POST').toUpperCase();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 10_000);
+  try {
+    const response = await fetchImpl(url, { method, headers: { Accept: 'application/json', 'Content-Type': 'application/json' }, body: ['GET', 'HEAD'].includes(method) ? undefined : JSON.stringify(body), signal: controller.signal, redirect: 'error' });
+    const text = await response.text();
+    const bounded = text.slice(0, 16_384);
+    let json;
+    try { json = bounded ? JSON.parse(bounded) : null; } catch { json = bounded; }
+    return { ok: response.ok, status: response.status, body: json };
+  } finally { clearTimeout(timer); }
+}
+
+>>>>>>> origin/main
 function usage(value = {}) {
   return { inputTokens: Number(value.inputTokens ?? 0), outputTokens: Number(value.outputTokens ?? 0), totalTokens: Number(value.totalTokens ?? Number(value.inputTokens ?? 0) + Number(value.outputTokens ?? 0)) };
 }
@@ -75,6 +130,9 @@ export async function runTask({
   const id = String(runId ?? `b_${Date.now()}`);
   const callId = newId('c');
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
   const started = Date.now();
   const resultTrace = [];
   const tokenTotal = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
@@ -90,6 +148,8 @@ export async function runTask({
     emitEvent({ type: 'agent.final', runId: id, callId, apiId, outcome, iterations: traces.length, steps: traces.length, tokens: tokenTotal, tokensByRole: { agent: { input: tokenTotal.inputTokens, output: tokenTotal.outputTokens } }, provider: providerName, model: modelName, mode, ms, ...(extra.error ? { error: extra.error.code } : {}) });
     return { ok: outcome === 'completed', runId: id, apiId, answer: finalAnswer, ...(data !== undefined ? { data } : {}), iterations: traces.length, steps: traces.length, tokens: tokenTotal, provider: providerName, model: modelName, mode, outcome, ms, trace: resultTrace, ...extra };
   };
+<<<<<<< HEAD
+=======
 =======
   const iterations = [];
   let totalTokens = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
@@ -100,6 +160,7 @@ export async function runTask({
       ? (process.env.AGENT_LLM ?? 'gemini:gemini-2.5-flash')
       : 'scripted',
   );
+>>>>>>> origin/main
 >>>>>>> origin/main
 
   let api;

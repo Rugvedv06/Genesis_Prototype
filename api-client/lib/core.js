@@ -38,6 +38,9 @@ const e = encodeURIComponent;
 export const api = {
   state: () => strict(CORE, '/state'),
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
   metrics: () => strict(CORE, '/metrics'),
   recentEvents: (limit = 5000) => strict(CORE, `/events/recent?limit=${limit}`),
   series: (windowSec = 300, step = 5) => strict(CORE, `/metrics/timeseries?window=${windowSec}&step=${step}`),
@@ -47,8 +50,11 @@ export const api = {
   },
   invalidateCacheKey: (cacheKey) => strict(CORE, `/cache/${e(cacheKey)}`, { method: 'DELETE' }),
   clearCache: () => strict(CORE, '/cache', { method: 'DELETE' }),
+<<<<<<< HEAD
+=======
 =======
   series: (windowSec = 300, step = 5) => strict(CORE, `/metrics/timeseries?window=${windowSec}&step=${step}`),
+>>>>>>> origin/main
 >>>>>>> origin/main
   apiDetail: (id) => strict(CORE, `/apis/${e(id)}`),
   versions: (id, tool) => strict(CORE, `/apis/${e(id)}/tools/${e(tool)}/versions`),
@@ -59,6 +65,10 @@ export const api = {
 <<<<<<< HEAD
   previewOpenApi: (source) => strict(CORE, '/apis/import/openapi/preview', { method: 'POST', body: source, timeout: 8000 }),
 =======
+<<<<<<< HEAD
+  previewOpenApi: (source) => strict(CORE, '/apis/import/openapi/preview', { method: 'POST', body: source, timeout: 8000 }),
+=======
+>>>>>>> origin/main
 >>>>>>> origin/main
   remove: (id) => strict(CORE, `/apis/${e(id)}`, { method: 'DELETE' }),
   // invoke returns the body even when ok:false (HTTP 200 or 400). Only network errors throw.
@@ -76,7 +86,11 @@ export const api = {
 <<<<<<< HEAD
   trace: (callId, { cursor = 0, limit = 100 } = {}) => strict(CORE, `/traces/${e(callId)}?${new URLSearchParams({ cursor: String(cursor), limit: String(limit) })}`),
 =======
+<<<<<<< HEAD
+  trace: (callId, { cursor = 0, limit = 100 } = {}) => strict(CORE, `/traces/${e(callId)}?${new URLSearchParams({ cursor: String(cursor), limit: String(limit) })}`),
+=======
   trace: (callId) => strict(CORE, `/traces/${e(callId)}`),
+>>>>>>> origin/main
 >>>>>>> origin/main
   providerHealth: async () => (await raw(CORE, '/provider/health')).data,
   tamper: (index, mode) => strict(CORE, '/dev/tamper', { method: 'POST', body: { index, mode } }),

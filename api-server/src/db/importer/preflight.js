@@ -4,7 +4,11 @@ import { join } from 'node:path';
 <<<<<<< HEAD
 import { validateAdapterForStorage } from '../registry-repository.js';
 =======
+<<<<<<< HEAD
+import { validateAdapterForStorage } from '../registry-repository.js';
+=======
 import { compileAdapter } from '../../features/registry/compile.js';
+>>>>>>> origin/main
 >>>>>>> origin/main
 import { sha256, stableStringify } from '../../lib/hash.js';
 import { resolveDataDir } from '../../lib/data-dir.js';
@@ -58,6 +62,9 @@ function validateCredentialReferences(credentials, apiId) {
 }
 
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
 function validateApiConfig(config, apiId) {
   const failConfig = (field) => fail('registry_api_config_invalid', { apiId, field });
   if (config.confidenceThreshold !== undefined && (typeof config.confidenceThreshold !== 'number'
@@ -80,9 +87,12 @@ function verifyAuditBytes(text, headText) {
   const records = [];
   let firstChainFailure;
   let firstChainFailureReasons;
+<<<<<<< HEAD
+=======
 =======
 function verifyAuditBytes(text, headText) {
   const records = [];
+>>>>>>> origin/main
 >>>>>>> origin/main
   for (const [lineIndex, line] of text.split(/\r?\n/).entries()) {
     if (!line) continue;
@@ -98,6 +108,9 @@ function verifyAuditBytes(text, headText) {
       fail('audit_malformed_record', { index: records.length, line: lineIndex + 1 });
     }
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
     for (const key of ['apiId', 'tool', 'callId', 'healId']) {
       if (record[key] !== undefined && record[key] !== null && typeof record[key] !== 'string') {
         fail('audit_malformed_record', { index: records.length, line: lineIndex + 1, field: key });
@@ -117,11 +130,14 @@ function verifyAuditBytes(text, headText) {
     if (firstChainFailure === undefined && reasons.length) {
       firstChainFailure = records.length;
       firstChainFailureReasons = reasons;
+<<<<<<< HEAD
+=======
 =======
     const expected = sha256(stableStringify(Object.fromEntries(Object.entries(record).filter(([key]) => key !== 'hash'))));
     if (record.index !== records.length || record.hash !== expected
       || record.prevHash !== (records.at(-1)?.hash ?? null)) {
       fail('audit_chain_invalid', { index: records.length });
+>>>>>>> origin/main
 >>>>>>> origin/main
     }
     records.push(record);
@@ -134,6 +150,9 @@ function verifyAuditBytes(text, headText) {
       || typeof head.hash !== 'string' || !/^[a-f0-9]{64}$/i.test(head.hash)) fail('audit_head_malformed');
     const tail = records.at(-1);
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
     if (!tail || head.index !== tail.index || head.hash !== tail.hash) {
       if (firstChainFailure === undefined) {
         firstChainFailure = records.length;
@@ -153,11 +172,14 @@ function verifyAuditBytes(text, headText) {
     ok: firstChainFailure === undefined, firstFailureAt: firstChainFailure,
     ...(firstChainFailureReasons ? { firstFailureReasons: firstChainFailureReasons } : {}),
   } };
+<<<<<<< HEAD
+=======
 =======
     if (!tail || head.index !== tail.index || head.hash !== tail.hash) fail('audit_head_mismatch');
   }
   if (!records.length && headText !== null) fail('audit_head_without_records');
   return { records, head };
+>>>>>>> origin/main
 >>>>>>> origin/main
 }
 
@@ -169,6 +191,9 @@ function hasUnsafeAuditMaterial(value, key = '') {
 }
 
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
 function auditNeedsRedaction(record) {
   const allowed = new Set(['index', 'ts', 'prevHash', 'hash', 'decision', 'apiId', 'tool', 'callId', 'healId',
     'version', 'versionBefore', 'versionAfter', 'tier', 'rounds', 'latencyMs', 'confidence', 'responseOnly', 'reason', 'ops', 'evidence']);
@@ -233,7 +258,10 @@ function changeNeedsRedaction(change) {
   });
 }
 
+<<<<<<< HEAD
 =======
+=======
+>>>>>>> origin/main
 >>>>>>> origin/main
 function validateRegistry(registry) {
   if (!registry || typeof registry !== 'object' || Array.isArray(registry)) fail('registry_root_invalid');
@@ -243,6 +271,10 @@ function validateRegistry(registry) {
 <<<<<<< HEAD
   let changeEntriesRequiringRedaction = 0;
 =======
+<<<<<<< HEAD
+  let changeEntriesRequiringRedaction = 0;
+=======
+>>>>>>> origin/main
 >>>>>>> origin/main
   for (const [apiId, api] of Object.entries(registry)) {
     if (!apiId.trim() || !api || typeof api !== 'object' || Array.isArray(api)
@@ -265,6 +297,10 @@ function validateRegistry(registry) {
 <<<<<<< HEAD
     validateApiConfig(safeConfig, apiId);
 =======
+<<<<<<< HEAD
+    validateApiConfig(safeConfig, apiId);
+=======
+>>>>>>> origin/main
 >>>>>>> origin/main
     apis += 1;
     for (const [toolName, entry] of Object.entries(api.tools)) {
@@ -295,6 +331,10 @@ function validateRegistry(registry) {
 <<<<<<< HEAD
         if (version.change && changeNeedsRedaction(version.change)) changeEntriesRequiringRedaction += 1;
 =======
+<<<<<<< HEAD
+        if (version.change && changeNeedsRedaction(version.change)) changeEntriesRequiringRedaction += 1;
+=======
+>>>>>>> origin/main
 >>>>>>> origin/main
         if (!['register', 'heal', 'manual_rollback', 'watchdog_rollback', 'rollback', 'dev', 'import'].includes(version.origin ?? 'register')) {
           fail('registry_version_origin_invalid', { apiId, tool: toolName, version: version.version });
@@ -308,7 +348,11 @@ function validateRegistry(registry) {
 <<<<<<< HEAD
         try { validateAdapterForStorage(version.adapter); } catch { fail('registry_adapter_invalid', { apiId, tool: toolName, version: version.version }); }
 =======
+<<<<<<< HEAD
+        try { validateAdapterForStorage(version.adapter); } catch { fail('registry_adapter_invalid', { apiId, tool: toolName, version: version.version }); }
+=======
         try { compileAdapter(version.adapter); } catch { fail('registry_adapter_invalid', { apiId, tool: toolName, version: version.version }); }
+>>>>>>> origin/main
 >>>>>>> origin/main
         version.adapterHash = sha256(stableStringify(version.adapter));
         previous = version.version;
@@ -330,7 +374,11 @@ function validateRegistry(registry) {
 <<<<<<< HEAD
   return { apis, tools, versions, changeEntriesRequiringRedaction };
 =======
+<<<<<<< HEAD
+  return { apis, tools, versions, changeEntriesRequiringRedaction };
+=======
   return { apis, tools, versions };
+>>>>>>> origin/main
 >>>>>>> origin/main
 }
 
@@ -340,14 +388,20 @@ export function inspectImportSources({ dataDir = resolveDataDir(process.env.HEAL
   const auditPath = join(dataDir, 'audit.jsonl');
   const auditHeadPath = join(dataDir, 'audit.head.json');
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
   const auditBackupPath = `${auditPath}.bak`;
   if (!existsSync(registryPath)) fail('registry_snapshot_missing', { path: registryPath });
   if (existsSync(registryTempPath)) fail('registry_snapshot_interrupted_write');
   const sourcePaths = [registryPath, auditPath, auditHeadPath, auditBackupPath];
+<<<<<<< HEAD
+=======
 =======
   if (!existsSync(registryPath)) fail('registry_snapshot_missing', { path: registryPath });
   if (existsSync(registryTempPath)) fail('registry_snapshot_interrupted_write');
   const sourcePaths = [registryPath, auditPath, auditHeadPath];
+>>>>>>> origin/main
 >>>>>>> origin/main
   const before = sourcePaths.map((path) => {
     if (!existsSync(path)) return null;
@@ -367,9 +421,15 @@ export function inspectImportSources({ dataDir = resolveDataDir(process.env.HEAL
   const audit = verifyAuditBytes(auditBytes.toString('utf8'), auditHeadText);
   const unsafeAuditEntries = audit.records.reduce((count, record) => count + (auditNeedsRedaction(record) ? 1 : 0), 0);
 =======
+<<<<<<< HEAD
+  const auditBackupBytes = existsSync(auditBackupPath) ? readFileSync(auditBackupPath) : null;
+  const audit = verifyAuditBytes(auditBytes.toString('utf8'), auditHeadText);
+  const unsafeAuditEntries = audit.records.reduce((count, record) => count + (auditNeedsRedaction(record) ? 1 : 0), 0);
+=======
   const audit = verifyAuditBytes(auditBytes.toString('utf8'), auditHeadText);
   const unsafeAuditEntries = audit.records.reduce((count, record) =>
     count + (record.evidence !== undefined || hasUnsafeAuditMaterial(record) ? 1 : 0), 0);
+>>>>>>> origin/main
 >>>>>>> origin/main
   const after = sourcePaths.map((path) => {
     if (!existsSync(path)) return null;
@@ -384,6 +444,9 @@ export function inspectImportSources({ dataDir = resolveDataDir(process.env.HEAL
       audit: digest(auditBytes),
       auditHead: auditHeadText === null ? null : digest(Buffer.from(auditHeadText)),
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
       auditBackup: auditBackupBytes ? digest(auditBackupBytes) : null,
     },
     auditIntegrity: audit.integrity,
@@ -399,6 +462,8 @@ export function inspectImportSources({ dataDir = resolveDataDir(process.env.HEAL
     ],
   };
   return includeData ? { ...report, sourceData: { registry, auditRecords: audit.records, auditHead: audit.head, auditIntegrity: audit.integrity, auditBackupPresent: existsSync(auditBackupPath) } } : report;
+<<<<<<< HEAD
+=======
 =======
     },
     counts: { ...counts, auditEntries: audit.records.length, auditEntriesRequiringRedaction: unsafeAuditEntries },
@@ -411,5 +476,6 @@ export function inspectImportSources({ dataDir = resolveDataDir(process.env.HEAL
     ],
   };
   return includeData ? { ...report, sourceData: { registry, auditRecords: audit.records, auditHead: audit.head } } : report;
+>>>>>>> origin/main
 >>>>>>> origin/main
 }

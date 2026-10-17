@@ -1,6 +1,9 @@
 const NAME = /^[a-zA-Z][a-zA-Z0-9_]{0,63}$/;
 const METHODS = new Set(['get', 'post', 'put', 'patch', 'delete', 'head']);
+<<<<<<< HEAD
+=======
 const IDEMPOTENCY_HEADERS = new Set(['idempotency-key', 'x-idempotency-key']);
+>>>>>>> origin/main
 
 function slug(value) {
   let result = String(value).replace(/[^a-zA-Z0-9_]+/g, '_').replace(/^_+|_+$/g, '');
@@ -45,12 +48,16 @@ function paths(schema, prefix = '', out = {}, inheritedRequired = false) {
 export function toolFromOperation({ method, path, operation, pathParameters = [], usedNames }) {
   const lowerMethod = method.toLowerCase();
   if (!METHODS.has(lowerMethod)) return { skipped: 'unsupported_method' };
+<<<<<<< HEAD
+  if (operation.parameters?.length || pathParameters.length) return { skipped: 'unsupported_parameter_location' };
+=======
   const parametersList = [...pathParameters, ...(operation.parameters ?? [])];
   const idempotencyParameters = parametersList.filter((parameter) => parameter?.in === 'header'
     && IDEMPOTENCY_HEADERS.has(String(parameter.name ?? '').toLowerCase()));
   const unsupportedParameters = parametersList.filter((parameter) => !idempotencyParameters.includes(parameter));
   if (idempotencyParameters.length > 1) return { skipped: 'ambiguous_idempotency_header' };
   if (unsupportedParameters.length) return { skipped: 'unsupported_parameter_location' };
+>>>>>>> origin/main
   if (/[{}]/.test(path)) return { skipped: 'unsupported_parameter_location' };
   if (!operation.requestBody) return { skipped: 'missing_json_request_body' };
   const requestContent = operation.requestBody.content ?? {};
@@ -82,7 +89,10 @@ export function toolFromOperation({ method, path, operation, pathParameters = []
     risk: lowerMethod === 'delete' ? 'high' : ['get', 'head'].includes(lowerMethod) ? 'low' : 'medium',
     response: { fields },
   };
+<<<<<<< HEAD
+=======
   if (idempotencyParameters.length === 1) tool.idempotencyKeyHeader = idempotencyParameters[0].name;
+>>>>>>> origin/main
   if (suggestions.length === 1 && fields.id) tool.identitySuggestion = { [suggestions[0]]: 'id' };
   return { tool, warnings: [ambiguousName ? 'ambiguous_name' : null, response ? null : 'no_response_schema'].filter(Boolean) };
 }

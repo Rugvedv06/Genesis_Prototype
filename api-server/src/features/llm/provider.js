@@ -1,6 +1,9 @@
 <<<<<<< HEAD
 export { createGeminiProvider, getProvider, parseProviderSpec } from '@healr/llm';
 =======
+<<<<<<< HEAD
+export { createGeminiProvider, getProvider, parseProviderSpec } from '@healr/llm';
+=======
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash';
 const PLACEHOLDER_KEYS = new Set(['', 'your_gemini_api_key_here', 'changeme', 'xxx']);
@@ -72,4 +75,5 @@ export function getProvider(role = 'diagnoser', env = process.env) {
   }
   return createGeminiProvider({ model: spec.model, apiKey: env.GEMINI_API_KEY });
 }
+>>>>>>> origin/main
 >>>>>>> origin/main

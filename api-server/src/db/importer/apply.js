@@ -6,7 +6,11 @@ import { inspectImportSources } from './preflight.js';
 <<<<<<< HEAD
 const FINGERPRINT_VERSION = 'file-import-v2-audit-redacted-rechain';
 =======
+<<<<<<< HEAD
+const FINGERPRINT_VERSION = 'file-import-v2-audit-redacted-rechain';
+=======
 const FINGERPRINT_VERSION = 'file-import-v1';
+>>>>>>> origin/main
 >>>>>>> origin/main
 
 function sourceFingerprint(checksums) {
@@ -25,15 +29,21 @@ function safeChange(change) {
       const safe = {};
       for (const key of ['op', 'path', 'from', 'to', 'type', 'name']) {
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
         if (safePathOrName(op[key])) safe[key] = op[key];
       }
       if (op.source && typeof op.source === 'object') {
         safe.source = Object.fromEntries(['type', 'ref'].filter((key) => safeIdentifier(op.source[key])).map((key) => [key, op.source[key]]));
+<<<<<<< HEAD
+=======
 =======
         if (typeof op[key] === 'string') safe[key] = op[key];
       }
       if (op.source && typeof op.source === 'object') {
         safe.source = Object.fromEntries(['type', 'ref'].filter((key) => typeof op.source[key] === 'string').map((key) => [key, op.source[key]]));
+>>>>>>> origin/main
 >>>>>>> origin/main
       }
       return safe;
@@ -49,6 +59,9 @@ function safeApiConfig(config) {
 }
 
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
 function safeIdentifier(value) {
   return typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/.test(value) && !/(secret|token|password|credential|apikey)/i.test(value);
 }
@@ -146,7 +159,10 @@ function normalizeAuditRecords(sourceRecords) {
   return { records, redactedCounts };
 }
 
+<<<<<<< HEAD
 =======
+=======
+>>>>>>> origin/main
 >>>>>>> origin/main
 async function assertDatabaseEmpty(client, workspaceId) {
   const { rows } = await client.query(
@@ -156,6 +172,11 @@ async function assertDatabaseEmpty(client, workspaceId) {
        (SELECT count(*) FROM api_credentials WHERE workspace_id = $1) AS credentials,
        (SELECT count(*) FROM tools WHERE workspace_id = $1) AS tools,
 =======
+<<<<<<< HEAD
+       (SELECT count(*) FROM api_credentials WHERE workspace_id = $1) AS credentials,
+       (SELECT count(*) FROM tools WHERE workspace_id = $1) AS tools,
+=======
+>>>>>>> origin/main
 >>>>>>> origin/main
        (SELECT count(*) FROM adapter_versions WHERE workspace_id = $1) AS versions,
        (SELECT count(*) FROM audit_entries WHERE workspace_id = $1) AS audit_entries,
@@ -166,6 +187,11 @@ async function assertDatabaseEmpty(client, workspaceId) {
        (SELECT count(*) FROM patch_candidates WHERE workspace_id = $1) AS patch_candidates,
        (SELECT count(*) FROM metric_buckets WHERE workspace_id = $1) AS metric_buckets,
 =======
+<<<<<<< HEAD
+       (SELECT count(*) FROM patch_candidates WHERE workspace_id = $1) AS patch_candidates,
+       (SELECT count(*) FROM metric_buckets WHERE workspace_id = $1) AS metric_buckets,
+=======
+>>>>>>> origin/main
 >>>>>>> origin/main
        (SELECT count(*) FROM file_imports WHERE workspace_id = $1) AS imports`,
     [workspaceId],
@@ -178,6 +204,9 @@ async function assertDatabaseEmpty(client, workspaceId) {
 }
 
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
 export async function applyFileImport({ pool, report = inspectImportSources({ includeData: true }), allowAuditRedactionAndRechain = false } = {}) {
   if (!report.sourceData) throw new Error('Import preflight data is required');
   if (report.sourceData.auditBackupPresent) {
@@ -187,11 +216,14 @@ export async function applyFileImport({ pool, report = inspectImportSources({ in
   }
   if ((report.counts.auditEntriesRequiringRedaction > 0 || report.counts.changeEntriesRequiringRedaction > 0 || !report.auditIntegrity?.ok) && !allowAuditRedactionAndRechain) {
     const error = new Error('Legacy audit or adapter change material requires the explicit redaction and rechain policy');
+<<<<<<< HEAD
+=======
 =======
 export async function applyFileImport({ pool, report = inspectImportSources({ includeData: true }) } = {}) {
   if (!report.sourceData) throw new Error('Import preflight data is required');
   if (report.counts.auditEntriesRequiringRedaction > 0) {
     const error = new Error('Audit source contains evidence or value fields that require an explicit redaction and rechain decision');
+>>>>>>> origin/main
 >>>>>>> origin/main
     error.code = 'audit_redaction_decision_required';
     throw error;
@@ -203,6 +235,9 @@ export async function applyFileImport({ pool, report = inspectImportSources({ in
       invocations, gateway_events, service_logs, file_imports IN ACCESS EXCLUSIVE MODE`);
     const { rows: existingImports } = await client.query(
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
       'SELECT source_fingerprint, imported_counts FROM file_imports WHERE workspace_id = $1 FOR UPDATE', [workspaceId],
     );
     if (existingImports[0]) {
@@ -211,12 +246,15 @@ export async function applyFileImport({ pool, report = inspectImportSources({ in
           ok: true, alreadyImported: true, fingerprint, counts: existingImports[0].imported_counts,
           auditSourceIntegrity: report.auditIntegrity,
         };
+<<<<<<< HEAD
+=======
 =======
       'SELECT source_fingerprint FROM file_imports WHERE workspace_id = $1 FOR UPDATE', [workspaceId],
     );
     if (existingImports[0]) {
       if (existingImports[0].source_fingerprint === fingerprint) {
         return { ok: true, alreadyImported: true, fingerprint, counts: report.counts };
+>>>>>>> origin/main
 >>>>>>> origin/main
       }
       const error = new Error('A different file snapshot was already imported into this workspace');
@@ -226,6 +264,9 @@ export async function applyFileImport({ pool, report = inspectImportSources({ in
     await assertDatabaseEmpty(client, workspaceId);
 
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
     const { registry } = report.sourceData;
     const requiresAuditRewrite = report.counts.auditEntriesRequiringRedaction > 0 || !report.auditIntegrity?.ok;
     const normalizedAudit = requiresAuditRewrite
@@ -233,8 +274,11 @@ export async function applyFileImport({ pool, report = inspectImportSources({ in
       : { records: report.sourceData.auditRecords, redactedCounts: { records: 0, fields: 0 } };
     const { records: auditRecords, redactedCounts } = normalizedAudit;
     const auditHashFormatVersion = requiresAuditRewrite ? 2 : 1;
+<<<<<<< HEAD
+=======
 =======
     const { registry, auditRecords } = report.sourceData;
+>>>>>>> origin/main
 >>>>>>> origin/main
     const normalizedVersions = [];
     for (const [apiId, api] of Object.entries(registry)) {
@@ -275,7 +319,11 @@ export async function applyFileImport({ pool, report = inspectImportSources({ in
 <<<<<<< HEAD
               JSON.stringify(version.meta), safeChange(version.change) === null ? null : JSON.stringify(safeChange(version.change)), adapterHash,
 =======
+<<<<<<< HEAD
+              JSON.stringify(version.meta), safeChange(version.change) === null ? null : JSON.stringify(safeChange(version.change)), adapterHash,
+=======
               JSON.stringify(version.meta), JSON.stringify(safeChange(version.change)), adapterHash,
+>>>>>>> origin/main
 >>>>>>> origin/main
               new Date(version.createdAt)],
           );
@@ -290,15 +338,21 @@ export async function applyFileImport({ pool, report = inspectImportSources({ in
          (workspace_id, sequence, recorded_at, decision, call_id, api_id, tool_name, version, reason,
           details, previous_hash, record_hash, canonical_record, hash_format_version)
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $12, $13::jsonb, $14)`,
         [workspaceId, record.index, new Date(record.ts), record.decision, record.callId ?? null,
           record.apiId ?? null, record.tool ?? null, record.versionAfter ?? record.versionBefore ?? null,
           record.reason ?? null, JSON.stringify(record), record.prevHash, record.hash, JSON.stringify(record), auditHashFormatVersion],
+<<<<<<< HEAD
+=======
 =======
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $12, $13::jsonb, 1)`,
         [workspaceId, record.index, new Date(record.ts), record.decision, record.callId ?? null,
           record.apiId ?? null, record.tool ?? null, record.versionAfter ?? record.version ?? null,
           record.reason ?? null, JSON.stringify(record), record.prevHash, record.hash, JSON.stringify(record)],
+>>>>>>> origin/main
 >>>>>>> origin/main
       );
     }
@@ -316,6 +370,9 @@ export async function applyFileImport({ pool, report = inspectImportSources({ in
       throw error;
     }
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
     const importedCounts = {
       ...report.counts,
       redactedAuditRecords: redactedCounts.records,
@@ -339,6 +396,8 @@ export async function applyFileImport({ pool, report = inspectImportSources({ in
       auditSourceIntegrity: report.auditIntegrity,
       auditPolicy: requiresAuditRewrite ? 'redact-and-rechain-v2' : 'preserve-legacy-v1',
     };
+<<<<<<< HEAD
+=======
 =======
     await client.query(
       `INSERT INTO file_imports(workspace_id, source_fingerprint, source_manifest, imported_counts)
@@ -346,6 +405,7 @@ export async function applyFileImport({ pool, report = inspectImportSources({ in
       [workspaceId, fingerprint, JSON.stringify(report.sourceChecksums), JSON.stringify({ ...report.counts, adapterHashes: normalizedVersions.length })],
     );
     return { ok: true, alreadyImported: false, fingerprint, counts: report.counts };
+>>>>>>> origin/main
 >>>>>>> origin/main
   }, { pool });
 }

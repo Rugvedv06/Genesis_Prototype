@@ -56,6 +56,9 @@ export default function SettingsPage() {
       </SectionCard>
 
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
       <SectionCard title="Gemini provider" detail="Provider credentials stay on the core server and are never shown in this client.">
         {provider.loading && !provider.data ? <PageLoading label="Checking provider health" /> : provider.error ? <PageError error={provider.error} onRetry={provider.reload} label="Provider health could not be checked" /> : <div className="space-y-4">
           {['agent', 'diagnoser'].map((role) => { const status = provider.data?.roles?.[role]; return <div className="provider-status" key={role}><span className={`state-indicator ${status?.ok ? 'state-live' : 'state-offline'}`} /><div><strong>{role === 'agent' ? 'Agent' : 'Tier 2 diagnoser'}: {status?.ok ? 'available' : 'unavailable'}</strong><p>{status?.ok ? `Gemini · ${status.model ?? 'configured'}` : status?.code === 'missing_api_key' ? 'Configure GEMINI_API_KEYS in the core environment.' : status?.message ?? status?.code ?? 'Provider unavailable.'}</p></div></div>; })}
@@ -63,9 +66,12 @@ export default function SettingsPage() {
           {!provider.data?.roles?.agent?.ok || !provider.data?.roles?.diagnoser?.ok ? <p className="text-xs text-muted-foreground">Tier 2 is unavailable. Deterministic Tier 0 and Tier 1 healing remain available.</p> : null}
           <Button variant="outline" size="sm" onClick={provider.reload}><RefreshCw />Refresh</Button>
         </div>}
+<<<<<<< HEAD
+=======
 =======
       <SectionCard title="Tier 2 provider" detail="Provider credentials stay on the core server and are never shown in this client.">
         {provider.loading && !provider.data ? <PageLoading label="Checking provider health" /> : provider.error ? <PageError error={provider.error} onRetry={provider.reload} label="Provider health could not be checked" /> : <div className="provider-status"><span className={`state-indicator ${provider.data?.ok ? 'state-live' : 'state-offline'}`} /><div><strong>{provider.data?.ok ? `${provider.data.provider ?? 'Provider'} connected` : 'Tier 2 is not available'}</strong><p>{provider.data?.ok ? `Model: ${provider.data.model ?? 'configured'}` : provider.data?.code === 'missing_api_key' ? 'Set the provider API key in the core environment and restart the core. Deterministic Tier 1 healing remains available.' : provider.data?.message ?? provider.data?.code ?? 'The core reports that no provider is available.'}</p></div><Button variant="outline" size="sm" onClick={provider.reload}><RefreshCw />Refresh</Button></div>}
+>>>>>>> origin/main
 >>>>>>> origin/main
       </SectionCard>
 

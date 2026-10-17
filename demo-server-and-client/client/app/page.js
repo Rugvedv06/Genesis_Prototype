@@ -25,6 +25,9 @@ const TOOL_BY_PATH = {
 };
 
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
 function matchesTruth(data, truth, fields) {
   if (!data || !truth || truth.error) return null;
   const logical = data.id !== undefined ? data : (data.result ?? data);
@@ -85,6 +88,8 @@ function deriveSteps(events) {
   return map;
 }
 
+<<<<<<< HEAD
+=======
 =======
 // ─── Theme Colors ────────────────────────────────────────────────────────────
 const C = {
@@ -141,6 +146,7 @@ function deriveSteps(events) {
 }
 
 >>>>>>> origin/main
+>>>>>>> origin/main
 // ─── Timeline Event Parsing ──────────────────────────────────────────────────
 function buildTimeline(events) {
   const steps = [];
@@ -196,7 +202,11 @@ function buildTimeline(events) {
 <<<<<<< HEAD
         detail = `${ev.tier === 2 ? `${ev.provider ?? 'gemini'} · ${ev.model ?? ''} · ${ev.usage?.inputTokens ?? 0} in / ${ev.usage?.outputTokens ?? 0} out · ${ev.latencyMs ?? 0} ms · ` : ''}Tier ${ev.tier ?? 1} · Confidence ${ev.confidence != null ? Math.round(ev.confidence * 100) + '%' : '100%'} · ${ev.evidence?.[0]?.quote ?? ev.evidence?.[0] ?? 'Contract analysis'}`;
 =======
+<<<<<<< HEAD
+        detail = `${ev.tier === 2 ? `${ev.provider ?? 'gemini'} · ${ev.model ?? ''} · ${ev.usage?.inputTokens ?? 0} in / ${ev.usage?.outputTokens ?? 0} out · ${ev.latencyMs ?? 0} ms · ` : ''}Tier ${ev.tier ?? 1} · Confidence ${ev.confidence != null ? Math.round(ev.confidence * 100) + '%' : '100%'} · ${ev.evidence?.[0]?.quote ?? ev.evidence?.[0] ?? 'Contract analysis'}`;
+=======
         detail = `Tier ${ev.tier ?? 1} · Confidence ${ev.confidence != null ? Math.round(ev.confidence * 100) + '%' : '100%'} · ${ev.evidence?.[0] ?? 'Contract analysis'}`;
+>>>>>>> origin/main
 >>>>>>> origin/main
         kind = 'info';
         break;
@@ -544,10 +554,16 @@ function TruthTable({ data, truth, fields = ['id', 'name', 'email'] }) {
   if (!truth || !data) return null;
   const flat = data.id !== undefined ? data : (data.result ?? data);
 =======
+<<<<<<< HEAD
+function TruthTable({ data, truth, fields = ['id', 'name', 'email'] }) {
+  if (!truth || !data) return null;
+  const flat = data.id !== undefined ? data : (data.result ?? data);
+=======
 function TruthTable({ data, truth }) {
   if (!truth || !data) return null;
   const flat = data.id !== undefined ? data : (data.result ?? data);
   const fields = ['id', 'name', 'email'];
+>>>>>>> origin/main
 >>>>>>> origin/main
 
   return (
@@ -668,6 +684,9 @@ function Pane({
   version,
   truth,
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
   truthFields = ['id', 'name', 'email'],
   mode,
   provider,
@@ -677,6 +696,8 @@ function Pane({
   const [tab, setTab] = useState('timeline'); // timeline | diff | patches | raw
 
   const truthOk = matchesTruth(data, truth, truthFields);
+<<<<<<< HEAD
+=======
 =======
   mode,
 }) {
@@ -693,6 +714,7 @@ function Pane({
       flat.email === truth.email
     );
   })();
+>>>>>>> origin/main
 >>>>>>> origin/main
 
   const timeline = buildTimeline(events);
@@ -736,6 +758,10 @@ function Pane({
 <<<<<<< HEAD
         {provider && <span style={{ fontSize: '0.65rem', color: C.textDim }}>{provider} · {model}</span>}
 =======
+<<<<<<< HEAD
+        {provider && <span style={{ fontSize: '0.65rem', color: C.textDim }}>{provider} · {model}</span>}
+=======
+>>>>>>> origin/main
 >>>>>>> origin/main
         <div style={{ marginLeft: 'auto' }}>
           <StatusBadge status={status} truthOk={status === 'ok' ? truthOk : null} hasData={hasData} />
@@ -752,8 +778,14 @@ function Pane({
             <MetricCard label="Latency" value={elapsed > 0 ? elapsed : '—'} unit={elapsed > 0 ? 'ms' : ''} />
             <MetricCard label="Tokens" value={events.reduce((sum, event) => sum + Number(event.tokens?.totalTokens ?? 0), 0)} />
 =======
+<<<<<<< HEAD
+            <MetricCard label="Outcome" value={status === 'ok' ? 'OK' : status === 'review' ? 'NEEDS REVIEW' : status === 'fail' ? 'FAILED' : status === 'running' ? 'RUNNING' : '—'} color={status === 'ok' ? C.green : status === 'review' ? C.amber : status === 'fail' ? C.red : C.textDim} />
+            <MetricCard label="Latency" value={elapsed > 0 ? elapsed : '—'} unit={elapsed > 0 ? 'ms' : ''} />
+            <MetricCard label="Tokens" value={events.reduce((sum, event) => sum + Number(event.tokens?.totalTokens ?? 0), 0)} />
+=======
             <MetricCard label="Outcome" value={status === 'ok' ? 'OK' : status === 'fail' ? 'FAILED' : status === 'running' ? 'RUNNING' : '—'} color={status === 'ok' ? C.green : status === 'fail' ? C.red : C.textDim} />
             <MetricCard label="Latency" value={elapsed > 0 ? elapsed : '—'} unit={elapsed > 0 ? 'ms' : ''} />
+>>>>>>> origin/main
 >>>>>>> origin/main
           </>
         ) : (
@@ -765,6 +797,10 @@ function Pane({
 <<<<<<< HEAD
             <MetricCard label="Agent tokens" value={tokens?.totalTokens ?? events.reduce((sum, event) => sum + Number(event.tokens?.totalTokens ?? 0), 0)} />
 =======
+<<<<<<< HEAD
+            <MetricCard label="Agent tokens" value={tokens?.totalTokens ?? events.reduce((sum, event) => sum + Number(event.tokens?.totalTokens ?? 0), 0)} />
+=======
+>>>>>>> origin/main
 >>>>>>> origin/main
           </>
         )}
@@ -854,6 +890,10 @@ function Pane({
 <<<<<<< HEAD
           {status === 'review' && <div role="status" style={{ marginTop: 6, color: C.amber, fontWeight: 700 }}>Needs review · proposal safely halted without a commit.</div>}
 =======
+<<<<<<< HEAD
+          {status === 'review' && <div role="status" style={{ marginTop: 6, color: C.amber, fontWeight: 700 }}>Needs review · proposal safely halted without a commit.</div>}
+=======
+>>>>>>> origin/main
 >>>>>>> origin/main
           {status === 'fail' && (
             <div style={{ color: C.red, marginBottom: 6, fontFamily: 'monospace', fontSize: '0.75rem' }}>
@@ -873,7 +913,11 @@ function Pane({
 <<<<<<< HEAD
               <TruthTable data={data} truth={truth} fields={truthFields} />
 =======
+<<<<<<< HEAD
+              <TruthTable data={data} truth={truth} fields={truthFields} />
+=======
               <TruthTable data={data} truth={truth} />
+>>>>>>> origin/main
 >>>>>>> origin/main
             </div>
           )}
@@ -980,6 +1024,10 @@ export default function DriftControl() {
 <<<<<<< HEAD
   const [specMode, setSpecMode] = useState('active');
 =======
+<<<<<<< HEAD
+  const [specMode, setSpecMode] = useState('active');
+=======
+>>>>>>> origin/main
 >>>>>>> origin/main
   const [registered, setRegistered]   = useState(false);
   const [coreConn, setCoreConn]       = useState('disconnected');
@@ -990,7 +1038,11 @@ export default function DriftControl() {
 <<<<<<< HEAD
     events: [], data: null, error: null, mode: 'llm', provider: null, model: null,
 =======
+<<<<<<< HEAD
+    events: [], data: null, error: null, mode: 'llm', provider: null, model: null,
+=======
     events: [], data: null, error: null, mode: 'scripted',
+>>>>>>> origin/main
 >>>>>>> origin/main
   });
   const [healed, setHealed] = useState({
@@ -999,11 +1051,17 @@ export default function DriftControl() {
   });
   const [truth, setTruth] = useState(null);
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
   const activeMutation = mutationCatalogue.find((item) => item.id === selectedMutation);
   const selectedTool = TOOL_BY_PATH[activeMutation?.route?.path] ?? TOOL;
   const selectedArgs = activeMutation?.fixture?.args ?? {};
   const truthFields = selectedTool.path === '/api/users/set-status' ? ['id', 'status'] : ['id', 'name', 'email'];
+<<<<<<< HEAD
 =======
+=======
+>>>>>>> origin/main
 >>>>>>> origin/main
 
   useEffect(() => {
@@ -1069,7 +1127,11 @@ export default function DriftControl() {
 <<<<<<< HEAD
           status: ev.outcome === 'completed' ? 'ok' : ev.outcome === 'halted' ? 'review' : 'fail',
 =======
+<<<<<<< HEAD
+          status: ev.outcome === 'completed' ? 'ok' : ev.outcome === 'halted' ? 'review' : 'fail',
+=======
           status: ev.outcome === 'success' ? 'ok' : 'fail',
+>>>>>>> origin/main
 >>>>>>> origin/main
           iterations: ev.iterations ?? b.iterations,
           data: ev.data ?? b.data,
@@ -1078,6 +1140,10 @@ export default function DriftControl() {
 <<<<<<< HEAD
           provider: ev.provider ?? b.provider, model: ev.model ?? b.model,
 =======
+<<<<<<< HEAD
+          provider: ev.provider ?? b.provider, model: ev.model ?? b.model,
+=======
+>>>>>>> origin/main
 >>>>>>> origin/main
         }));
       }
@@ -1102,6 +1168,167 @@ export default function DriftControl() {
     setMutation(null);
     setRegistered(false);
     setTruth(null);
+<<<<<<< HEAD
+    setBaseline({ status: 'idle', iterations: 0, elapsed: 0, events: [], data: null, error: null, mode: 'llm', provider: null, model: null });
+    setHealed({ status: 'idle', rounds: 0, elapsed: 0, events: [], data: null, error: null, ops: [], version: null });
+    setMode('idle');
+  };
+
+  const mutate = async () => {
+    const r = await fetch(`${MOCK}/admin/mutate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: selectedMutation }),
+    });
+    const j = await r.json();
+    setMutation(j.mutation);
+  };
+
+  const updateSpecMode = async (value) => {
+    setSpecMode(value);
+    await fetch(`${MOCK}/admin/config`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ specAvailable: value !== 'unavailable', specStale: value === 'stale' }) });
+  };
+
+  const registerApi = useCallback(async () => {
+    if (registered) return;
+    await fetch(`${CORE}/apis`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        apiId: API_ID,
+        baseUrl: MOCK,
+        specUrl: `${MOCK}/openapi.json`,
+        credentials: { 'X-Tenant': { env: 'TENANT_ID' } },
+        healing: { enabled: true, maxRounds: 5, tier2: true },
+        tools: [
+          {
+            name: 'get_user', method: 'POST', path: '/api/users/get',
+            risk: 'low', sideEffects: 'none',
+            parameters: { type: 'object', properties: { user_id: { type: 'string' } }, required: ['user_id'], additionalProperties: false },
+            response: { fields: {
+              id:    { path: 'result.id',    type: 'string' },
+              name:  { path: 'result.name',  type: 'string' },
+              email: { path: 'result.email', type: 'string', format: 'email' },
+            }},
+          },
+          {
+            name: 'update_user_email', method: 'POST', path: '/api/users/update-email',
+            risk: 'medium', sideEffects: 'write',
+            parameters: { type: 'object', properties: { user_id: { type: 'string' }, email: { type: 'string', format: 'email' } }, required: ['user_id', 'email'], additionalProperties: false },
+            response: { fields: {
+              id:         { path: 'result.id',         type: 'string' },
+              email:      { path: 'result.email',      type: 'string', format: 'email' },
+              updated_at: { path: 'result.updated_at', type: 'string' },
+            }},
+          },
+          {
+            name: 'set_user_status', method: 'POST', path: '/api/users/set-status',
+            risk: 'medium', sideEffects: 'write',
+            parameters: { type: 'object', properties: { user_id: { type: 'string' }, status: { type: 'string' } }, required: ['user_id', 'status'], additionalProperties: false },
+            response: { fields: {
+              id: { path: 'result.id', type: 'string' },
+              status: { path: 'result.status', type: 'string' },
+            } },
+          },
+        ],
+      }),
+    });
+    setRegistered(true);
+  }, [registered]);
+
+  // ── Run Both with Separate Independent Timers ─────────────────────────────
+  const runBoth = async () => {
+    await registerApi();
+    await fetch(`${MOCK}/admin/task`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ values: Object.values(selectedArgs) }),
+    });
+    setMode('running');
+    setTruth(null);
+
+    setBaseline((b) => ({ ...b, status: 'running', data: null, error: null, events: [], elapsed: 0 }));
+    setHealed((h) => ({ ...h, status: 'running', data: null, error: null, ops: [], version: null, events: [], elapsed: 0 }));
+
+    const bRunId = `b_${Date.now()}`;
+    const hRunId = `h_${Date.now()}`;
+    const taskPrompt = 'Fetch user 123, update their email to asha.new@example.com, then fetch the user again and report the user name and email.';
+
+    // Measure Baseline independently
+    const runBaselinePromise = (async () => {
+      const bT0 = Date.now();
+      try {
+        const res = await fetch(`${MOCK}/demo/run`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ apiId: API_ID, prompt: taskPrompt, args: selectedArgs, runId: bRunId }),
+        }).then(r => r.json());
+        const bElapsed = Date.now() - bT0;
+        setBaseline((b) => ({
+          ...b,
+          status: res.outcome === 'completed' ? 'ok' : res.outcome === 'halted' ? 'review' : 'fail',
+          iterations: res.iterations ?? res.steps ?? 0,
+          elapsed: bElapsed,
+          data: res.data ?? null,
+          error: res.error ?? null,
+          mode: res.mode ?? 'llm', provider: res.provider ?? null, model: res.model ?? null,
+        }));
+      } catch (err) {
+        const bElapsed = Date.now() - bT0;
+        setBaseline((b) => ({
+          ...b,
+          status: 'fail',
+          iterations: 0,
+          elapsed: bElapsed,
+          error: String(err?.message ?? err),
+        }));
+      }
+    })();
+
+    // Measure Healed independently
+    const runHealedPromise = (async () => {
+      const hT0 = Date.now();
+      try {
+        const res = await fetch(`${CORE}/tasks`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ apiId: API_ID, prompt: taskPrompt, wait: true, runId: hRunId }),
+        }).then(r => r.json());
+        const hElapsed = Date.now() - hT0;
+        setHealed((h) => ({
+          ...h,
+          status: res.outcome === 'completed' ? 'ok' : res.outcome === 'halted' ? 'review' : 'fail',
+          rounds: res.steps ?? 0,
+          elapsed: hElapsed,
+          data: h.data,
+          error: res.error ?? null,
+          ops: h.ops,
+          version: h.version,
+          provider: res.provider ?? null, model: res.model ?? null, tokens: res.tokens ?? null,
+        }));
+      } catch (err) {
+        const hElapsed = Date.now() - hT0;
+        setHealed((h) => ({
+          ...h,
+          status: 'fail',
+          elapsed: hElapsed,
+          error: String(err?.message ?? err),
+        }));
+      }
+    })();
+
+    await Promise.all([runBaselinePromise, runHealedPromise]);
+    setMode('done');
+  };
+
+  const running = mode === 'running';
+  const toggleTheme = () => {
+    const nextTheme = theme === 'dark' ? 'light' : 'dark';
+    setTheme(nextTheme);
+    localStorage.setItem('kintsugi-theme', nextTheme);
+    document.documentElement.classList.toggle('dark', nextTheme === 'dark');
+  };
+
+=======
 <<<<<<< HEAD
     setBaseline({ status: 'idle', iterations: 0, elapsed: 0, events: [], data: null, error: null, mode: 'llm', provider: null, model: null });
     setHealed({ status: 'idle', rounds: 0, elapsed: 0, events: [], data: null, error: null, ops: [], version: null });
@@ -1402,6 +1629,7 @@ export default function DriftControl() {
   };
 
 >>>>>>> origin/main
+>>>>>>> origin/main
   return (
     <div style={{ fontFamily: 'Inter, ui-sans-serif, system-ui, -apple-system, sans-serif', margin: 0, background: C.bg, color: C.text, minHeight: '100vh' }}>
       {/* ── Top Navigation Bar ── */}
@@ -1448,6 +1676,10 @@ export default function DriftControl() {
 <<<<<<< HEAD
           {(selectedMutation === 'M8' || selectedMutation === 'M11') && <span className="scenario-label">Tier 2 scenario</span>}
 =======
+<<<<<<< HEAD
+          {(selectedMutation === 'M8' || selectedMutation === 'M11') && <span className="scenario-label">Tier 2 scenario</span>}
+=======
+>>>>>>> origin/main
 >>>>>>> origin/main
           <div className="action-buttons">
             <Btn onClick={reset} disabled={running} color={C.teal} outline>Reset</Btn>
@@ -1461,6 +1693,10 @@ export default function DriftControl() {
 <<<<<<< HEAD
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: C.textDim, fontSize: '0.72rem' }}>Spec<select value={specMode} onChange={(event) => updateSpecMode(event.target.value)} disabled={running}><option value="active">Active</option><option value="stale">Stale</option><option value="unavailable">Unavailable</option></select></label>
 =======
+<<<<<<< HEAD
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: C.textDim, fontSize: '0.72rem' }}>Spec<select value={specMode} onChange={(event) => updateSpecMode(event.target.value)} disabled={running}><option value="active">Active</option><option value="stale">Stale</option><option value="unavailable">Unavailable</option></select></label>
+=======
+>>>>>>> origin/main
 >>>>>>> origin/main
             <Btn onClick={runBoth} disabled={running} color={C.teal}>{running ? 'Running…' : 'Run comparison'}</Btn>
           </div>
@@ -1494,9 +1730,13 @@ export default function DriftControl() {
 <<<<<<< HEAD
               const ok = matchesTruth(healed.data, truth, truthFields);
 =======
+<<<<<<< HEAD
+              const ok = matchesTruth(healed.data, truth, truthFields);
+=======
               const flat = healed.data.id !== undefined ? healed.data : (healed.data.result ?? healed.data);
               if (!flat) return '—';
               const ok = String(flat.id) === String(truth.id) && flat.name === truth.name && flat.email === truth.email;
+>>>>>>> origin/main
 >>>>>>> origin/main
               return ok ? 'MATCH' : 'MISMATCH';
             })()}
@@ -1507,9 +1747,14 @@ export default function DriftControl() {
               const ok = matchesTruth(healed.data, truth, truthFields);
               return ok === null ? C.textDim : ok ? C.green : C.amber;
 =======
+<<<<<<< HEAD
+              const ok = matchesTruth(healed.data, truth, truthFields);
+              return ok === null ? C.textDim : ok ? C.green : C.amber;
+=======
               const flat = healed.data.id !== undefined ? healed.data : (healed.data.result ?? healed.data);
               if (!flat) return C.textDim;
               return String(flat.id) === String(truth.id) && flat.name === truth.name && flat.email === truth.email ? C.green : C.amber;
+>>>>>>> origin/main
 >>>>>>> origin/main
             })()}
           />
@@ -1522,7 +1767,11 @@ export default function DriftControl() {
 <<<<<<< HEAD
           title={baseline.mode === 'llm' ? 'Baseline (same model, raw tools)' : 'Scripted retry baseline (no LLM)'}
 =======
+<<<<<<< HEAD
+          title={baseline.mode === 'llm' ? 'Baseline (same model, raw tools)' : 'Scripted retry baseline (no LLM)'}
+=======
           title="Direct baseline"
+>>>>>>> origin/main
 >>>>>>> origin/main
           accentColor={C.red}
           status={baseline.status}
@@ -1533,6 +1782,9 @@ export default function DriftControl() {
           error={baseline.error}
           truth={truth}
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
           truthFields={truthFields}
           mode={baseline.mode}
           provider={baseline.provider}
@@ -1541,12 +1793,15 @@ export default function DriftControl() {
         <Pane
           side="healed"
           title="Healed agent"
+<<<<<<< HEAD
+=======
 =======
           mode={baseline.mode}
         />
         <Pane
           side="healed"
           title="Self-healing adapter"
+>>>>>>> origin/main
 >>>>>>> origin/main
           accentColor={C.teal}
           status={healed.status}
@@ -1559,6 +1814,9 @@ export default function DriftControl() {
           version={healed.version}
           truth={truth}
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
           truthFields={truthFields}
           provider={healed.provider}
           model={healed.model}
@@ -1567,9 +1825,12 @@ export default function DriftControl() {
       </main>
       {(baseline.mode !== 'llm' || (baseline.provider && healed.provider && (baseline.provider !== healed.provider || baseline.model !== healed.model))) && <p role="status" className="not-like-for-like">Not like for like: baseline uses {baseline.mode === 'scripted' ? 'scripted calls without an LLM' : `${baseline.provider} ${baseline.model}`}; healed agent uses {healed.provider ?? 'Gemini'} {healed.model ?? 'configured model'}.</p>}
       {baseline.provider && healed.provider && (baseline.provider !== healed.provider || baseline.model !== healed.model) && <p role="status" className="not-like-for-like">Not like for like: baseline uses {baseline.provider} {baseline.model}; healed agent uses {healed.provider} {healed.model}.</p>}
+<<<<<<< HEAD
+=======
 =======
         />
       </main>
+>>>>>>> origin/main
 >>>>>>> origin/main
 
       {/* ── Footer ── */}

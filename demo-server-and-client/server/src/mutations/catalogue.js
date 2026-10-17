@@ -94,6 +94,11 @@ export const M5 = {
   fixture: { args: { user_id: '123' } },
   specVariants: specVariants(),
 =======
+<<<<<<< HEAD
+  fixture: { args: { user_id: '123' } },
+  specVariants: specVariants(),
+=======
+>>>>>>> origin/main
 >>>>>>> origin/main
   expectedOps: ['add_header', 'move_field', 'rename_field', 'coerce_type'],
   // what the mutated contract expects
@@ -152,13 +157,19 @@ export const M9 = {
   expectedOps: [],
   route: { method: 'POST', path: '/api/users/update-email' },
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
   fixture: { args: { user_id: '123', email: 'asha+demo@example.com' } },
   specVariants: specVariants(),
   headers: [
     { name: 'Authorization', required: true, status: 401, error: { error: 'missing_auth', scheme: 'Bearer', header: 'Authorization' } },
+<<<<<<< HEAD
+=======
 =======
   headers: [
     { name: 'Authorization', required: true, error: { error: 'missing_auth', scheme: 'Bearer', header: 'Authorization' } },
+>>>>>>> origin/main
 >>>>>>> origin/main
   ],
   body: {
@@ -182,6 +193,11 @@ export const M6 = {
   fixture: { args: { user_id: '123' } },
   specVariants: specVariants(),
 =======
+<<<<<<< HEAD
+  fixture: { args: { user_id: '123' } },
+  specVariants: specVariants(),
+=======
+>>>>>>> origin/main
 >>>>>>> origin/main
   headers: [],
   body: { layers: [] },
@@ -199,6 +215,11 @@ export const M10 = {
   fixture: { args: { user_id: '123' } },
   specVariants: specVariants(),
 =======
+<<<<<<< HEAD
+  fixture: { args: { user_id: '123' } },
+  specVariants: specVariants(),
+=======
+>>>>>>> origin/main
 >>>>>>> origin/main
   headers: [],
   body: { layers: [] },
@@ -207,6 +228,9 @@ export const M10 = {
 };
 
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
 export const M11 = {
   id: 'M11', label: 'update-email fields renamed to subscriber_ref and contact_address',
   category: 'request', expected: 'heal', expectedOps: ['rename_field', 'rename_field'], expectedTier: 2, llmRequired: true,
@@ -227,8 +251,11 @@ export const M11 = {
 
 
 export const CATALOGUE = { M1, M2, M3, M4, M5, M6, M7, M8, M9, M10, M11 };
+<<<<<<< HEAD
+=======
 =======
 export const CATALOGUE = { M5, M9, M6, M10 };
+>>>>>>> origin/main
 >>>>>>> origin/main
 export function get(id) {
   return CATALOGUE[id];

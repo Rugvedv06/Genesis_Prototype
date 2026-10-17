@@ -1,6 +1,9 @@
 {
   "endpoints": [
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
     {
       "method": "GET",
       "path": "/apis",
@@ -151,6 +154,8 @@
       "description": "Health check",
       "status": "live"
     }
+<<<<<<< HEAD
+=======
 =======
     { "method": "GET",    "path": "/apis",                          "description": "List registered APIs and current versions", "status": "live" },
     { "method": "GET",    "path": "/apis/:apiId",                   "description": "API detail and configuration", "status": "live" },
@@ -174,6 +179,7 @@
     { "method": "GET",    "path": "/provider/health",                "description": "Server-side configured LLM provider health", "status": "live" },
     { "method": "POST",   "path": "/dev/tamper {index}",            "description": "Dev only (ENABLE_DEV_ROUTES=1): tamper audit line at index", "status": "planned" },
     { "method": "GET",    "path": "/health",                        "description": "Health check", "status": "live" }
+>>>>>>> origin/main
 >>>>>>> origin/main
   ]
 }

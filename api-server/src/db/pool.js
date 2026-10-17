@@ -25,6 +25,9 @@ export function getPool(env = process.env) {
   if (!connectionString) throw new Error('DATABASE_URL is not configured');
   if (!pool) {
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
     const sslMode = env.DB_SSL_MODE ?? 'disable';
     if (!['disable', 'require', 'verify-full'].includes(sslMode)) throw new Error('DB_SSL_MODE must be disable, require, or verify-full');
     const ca = env.DB_SSL_CA;
@@ -34,9 +37,12 @@ export function getPool(env = process.env) {
         rejectUnauthorized: sslMode === 'verify-full',
         ...(ca ? { ca } : {}),
       },
+<<<<<<< HEAD
+=======
 =======
     pool = new Pool({
       connectionString,
+>>>>>>> origin/main
 >>>>>>> origin/main
       max: boundedInteger(env, 'DB_POOL_MAX', 10, 1, 50),
       connectionTimeoutMillis: boundedInteger(env, 'DB_CONNECT_TIMEOUT_MS', 3000, 100, 60000),
@@ -53,12 +59,18 @@ export function getPool(env = process.env) {
 }
 
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
 export function poolStatus() {
   if (!pool) return { total: 0, idle: 0, waiting: 0, max: boundedInteger(process.env, 'DB_POOL_MAX', 10, 1, 50) };
   return { total: pool.totalCount, idle: pool.idleCount, waiting: pool.waitingCount, max: pool.options.max };
 }
 
+<<<<<<< HEAD
 =======
+=======
+>>>>>>> origin/main
 >>>>>>> origin/main
 export async function closePool() {
   if (pool) { const current = pool; pool = undefined; await current.end(); }

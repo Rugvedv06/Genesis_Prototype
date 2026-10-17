@@ -5,7 +5,11 @@
 <<<<<<< HEAD
 This document defines the durable persistence layer for Healr. PostgreSQL and Redis local Compose services are configured. The application has a PostgreSQL driver, bounded pool, checksummed migration runner, schema through migration 0005, readiness checks, transaction helpers, DB-backed API/config/version/audit/invocation/event/metrics/log query paths, and a one-way importer. The current source now requires PostgreSQL at startup and does not load or write registry JSON in DB mode. The already-running process may still be the pre-cutover binary; restart is required to activate this source. The importer preserves every parseable legacy audit record, but if legacy hashes/indices are unsafe or secret/value fields are present, apply must be explicitly confirmed: it records source hashes/indices as provenance, removes unsafe material, and builds a new verifiable database chain. Redis provides disposable negative/circuit state and candidate-mirror primitives; the patch-candidate feature itself is not yet connected. The persistence milestone remains in progress until the imported state is verified and the running service is switched over.
 =======
+<<<<<<< HEAD
+This document defines the durable persistence layer for Healr. PostgreSQL and Redis local Compose services are configured. The application has a PostgreSQL driver, bounded pool, checksummed migration runner, schema through migration 0005, readiness checks, transaction helpers, DB-backed API/config/version/audit/invocation/event/metrics/log query paths, and a one-way importer. The current source now requires PostgreSQL at startup and does not load or write registry JSON in DB mode. The already-running process may still be the pre-cutover binary; restart is required to activate this source. The importer preserves every parseable legacy audit record, but if legacy hashes/indices are unsafe or secret/value fields are present, apply must be explicitly confirmed: it records source hashes/indices as provenance, removes unsafe material, and builds a new verifiable database chain. Redis provides disposable negative/circuit state and candidate-mirror primitives; the patch-candidate feature itself is not yet connected. The persistence milestone remains in progress until the imported state is verified and the running service is switched over.
+=======
 This document defines the durable persistence layer for Healr. PostgreSQL and Redis local Compose services are configured. The application now has a PostgreSQL driver, bounded pool, checksummed migration runner, schema through migration 0005, readiness check, transaction helper, initial registry/audit/invocation/event repository functions, and a dry-run file-import preflight. Those repository functions are not yet connected to routes. Runtime authority has **not** been cut over: API registry/version snapshots are still written to `api-server/data/registry.json`; audit entries and the audit-chain anchor are still written to `audit.jsonl` and `audit.head.json`. Calls, events, traces, metrics, circuits, and negative-cache state remain process-local. Redis is not connected to the application. The persistence milestone is therefore in progress, not complete.
+>>>>>>> origin/main
 >>>>>>> origin/main
 
 The target is PostgreSQL as the durable source of truth for configuration, adapter history, invocation/event history, audit decisions, and verified patch candidates. Redis is an explicitly disposable acceleration and coordination layer. Losing Redis must never lose application history or change whether an adapter is safe to apply.
@@ -244,7 +248,11 @@ Do not cache HTTP responses or write results by default. Cache values carry a sc
 <<<<<<< HEAD
 Redis outage behavior: timeout quickly; emit a bounded service-degraded signal; continue using Postgres for durable reads and candidate lookup; never trust malformed cache entries. If Redis is configured but circuit state cannot be read reliably, invocation stops before contacting the upstream; if Redis is intentionally unconfigured in single-core mode, the bounded local circuit is used. If no shared lease backend is available in a multi-replica deployment, readiness must fail or healing mutations must be disabled until safe coordination is restored.
 =======
+<<<<<<< HEAD
+Redis outage behavior: timeout quickly; emit a bounded service-degraded signal; continue using Postgres for durable reads and candidate lookup; never trust malformed cache entries. If Redis is configured but circuit state cannot be read reliably, invocation stops before contacting the upstream; if Redis is intentionally unconfigured in single-core mode, the bounded local circuit is used. If no shared lease backend is available in a multi-replica deployment, readiness must fail or healing mutations must be disabled until safe coordination is restored.
+=======
 Redis outage behavior: timeout quickly; emit a bounded service-degraded signal; continue using Postgres for durable reads and candidate lookup; avoid Redis-only coordination assumptions; do not extend stale cached safety decisions. If no shared lease backend is available in a multi-replica deployment, readiness must fail or healing mutations must be disabled until safe coordination is restored.
+>>>>>>> origin/main
 >>>>>>> origin/main
 
 ## Indexing, retention, backup, and operations
@@ -257,6 +265,9 @@ Redis outage behavior: timeout quickly; emit a bounded service-degraded signal; 
 - Health is split: liveness reports process health; readiness checks Postgres connectivity and applied migrations. Redis is optional for readiness at single-node phase, but report degraded cache; in a multi-replica phase, shared coordination health becomes readiness-critical.
 
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
 ### Implemented local operator commands
 
 The local stack now includes forward migration `0006_runtime_role.sql`. It creates the non-login `healr_runtime` role with table-level DML grants: audit entries are SELECT/INSERT only, adapter versions are SELECT/INSERT only, while the explicit retention and cache tables have only the writes their runtime paths need. Keep `DATABASE_URL` on a migration/owner login for `db:migrate`; production should use a separate login granted membership in `healr_runtime` and an explicit `CONNECT` grant if `PUBLIC` connect has been revoked. Local Compose may continue using its development owner login.
@@ -270,7 +281,10 @@ PostgreSQL TLS is configured with `DB_SSL_MODE=disable|require|verify-full`. `re
 
 The 2026-10-17 local restore drill used `backups/m15-drill-20261017.dump` and retained database `healr_restore_m15_20261017`; it verified six migrations, all 1,137 audit entries, 1 API/tool/version, 1,000 invocations, 2,000 events, zero invalid active pointers, and event cursor 2,000.
 
+<<<<<<< HEAD
 =======
+=======
+>>>>>>> origin/main
 >>>>>>> origin/main
 ## Migration from current file state
 
@@ -283,9 +297,15 @@ Do not run file and database writers in indefinite dual-write mode. Add a one-sh
 4. Import workspace, APIs, credential source references, tools, every adapter version, current pointers, timestamps, immutable history, and normalized audit records/head in one resumable migration run. Preserve public IDs, versions, timestamps, and every parseable audit entry. Preserve original audit indices/hashes in provenance when rechain is required.
 5. Verify row counts, current adapter hashes, API config (redacted), audit head/hash/verification result, and representative history reads against the source files and import manifest. The importer can be rerun safely using source file checksums and an import ledger.
 =======
+<<<<<<< HEAD
+3. Run the source audit verifier. Malformed/unparseable records stop the import. For parseable records with a broken hash/index/anchor chain or unsafe evidence/value material, require explicit `--confirm-audit-redaction-and-rechain`; preserve each source index/hash/previous hash and the file checksum in the import manifest, redact unsafe fields, and write a new sequential canonical hash chain. The original files remain byte-for-byte backups. Report source integrity and imported-chain verification separately; never imply the source chain was valid.
+4. Import workspace, APIs, credential source references, tools, every adapter version, current pointers, timestamps, immutable history, and normalized audit records/head in one resumable migration run. Preserve public IDs, versions, timestamps, and every parseable audit entry. Preserve original audit indices/hashes in provenance when rechain is required.
+5. Verify row counts, current adapter hashes, API config (redacted), audit head/hash/verification result, and representative history reads against the source files and import manifest. The importer can be rerun safely using source file checksums and an import ledger.
+=======
 3. Run existing audit verification. If malformed or hash-invalid, stop and require repair/restore; preserve the original files byte-for-byte.
 4. Import workspace, APIs, credential source references, tools, every adapter version, current pointers, audit rows/head in one resumable migration run. Preserve public IDs, versions, timestamps, audit sequence, previous hashes, and hashes exactly when the canonical format matches.
 5. Verify row counts, current adapter hashes, API config (redacted), audit head/hash/verification result, and representative history reads against the source files. The importer can be rerun safely using source file checksums and an import ledger.
+>>>>>>> origin/main
 >>>>>>> origin/main
 6. Switch repository reads/writes to Postgres. Keep the original files as a read-only backup until a tested restore/export procedure exists; never fall back to them automatically if Postgres fails.
 7. After a successful restore drill and a documented retention period, archive/remove runtime file persistence code in a separate reviewed change.

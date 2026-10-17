@@ -115,7 +115,10 @@ export function compileAdapter(adapter, resolveCredential) {
     },
     extract(json) {
       const out = {};
-      for (const [logical, path] of Object.entries(respMap)) out[logical] = getPath(json, path);
+      for (const [logical, path] of Object.entries(respMap)) {
+        const value = getPath(json, path);
+        if (value !== undefined) out[logical] = value;
+      }
       return out;
     },
     adapterHash: sha256(JSON.stringify({ request: reqOps, response: respMap })),

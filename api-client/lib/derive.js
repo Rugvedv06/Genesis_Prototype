@@ -7,7 +7,11 @@ export function newCall(e) {
 <<<<<<< HEAD
     proposals: [], ops: [], version: null, cacheHit: false, reason: null, code: null, needsReview: false, reviewOps: [],
 =======
+<<<<<<< HEAD
+    proposals: [], ops: [], version: null, cacheHit: false, reason: null, code: null, needsReview: false, reviewOps: [],
+=======
     proposals: [], ops: [], version: null, cacheHit: false, reason: null, code: null,
+>>>>>>> origin/main
 >>>>>>> origin/main
     healMs: null, upstream: [], data: null, events: [],
   };
@@ -26,7 +30,11 @@ export function foldEvent(call, e) {
 <<<<<<< HEAD
     case 'patch.proposed': c.tier = e.tier ?? c.tier; c.proposals = [...c.proposals, { round: e.round, tier: e.tier, ops: e.ops ?? [], confidence: e.confidence, evidence: e.evidence ?? [], provider: e.provider, model: e.model, usage: e.usage, latencyMs: e.latencyMs }]; break;
 =======
+<<<<<<< HEAD
+    case 'patch.proposed': c.tier = e.tier ?? c.tier; c.proposals = [...c.proposals, { round: e.round, tier: e.tier, ops: e.ops ?? [], confidence: e.confidence, evidence: e.evidence ?? [], provider: e.provider, model: e.model, usage: e.usage, latencyMs: e.latencyMs }]; break;
+=======
     case 'patch.proposed': c.tier = e.tier ?? c.tier; c.proposals = [...c.proposals, { round: e.round, tier: e.tier, ops: e.ops ?? [], confidence: e.confidence, evidence: e.evidence ?? [] }]; break;
+>>>>>>> origin/main
 >>>>>>> origin/main
     case 'patch.committed': c.version = e.version ?? c.version; c.ops = e.ops ?? c.ops; break;
     case 'cache.hit': c.cacheHit = true; break;
@@ -37,7 +45,11 @@ export function foldEvent(call, e) {
 <<<<<<< HEAD
     case 'halt': c.outcome = 'halted'; c.reason = e.reason; c.needsReview = Boolean(e.details?.needsOperator); c.reviewOps = e.details?.proposal?.ops ?? []; c.endedAt = e.ts; break;
 =======
+<<<<<<< HEAD
+    case 'halt': c.outcome = 'halted'; c.reason = e.reason; c.needsReview = Boolean(e.details?.needsOperator); c.reviewOps = e.details?.proposal?.ops ?? []; c.endedAt = e.ts; break;
+=======
     case 'halt': c.outcome = 'halted'; c.reason = e.reason; c.endedAt = e.ts; break;
+>>>>>>> origin/main
 >>>>>>> origin/main
     default: break;
   }

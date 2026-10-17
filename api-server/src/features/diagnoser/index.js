@@ -7,6 +7,11 @@ import { wrapRule, renameRule, typeRule, headerRule, enumRule, RULE_ORDER } from
 import { discover as discoverFromSpec } from './tier0-spec/index.js';
 import { propose as proposeWithLlm } from './tier2-llm/index.js';
 =======
+<<<<<<< HEAD
+import { discover as discoverFromSpec } from './tier0-spec/index.js';
+import { propose as proposeWithLlm } from './tier2-llm/index.js';
+=======
+>>>>>>> origin/main
 >>>>>>> origin/main
 
 const RULES = { wrap: wrapRule, rename: renameRule, type: typeRule, header: headerRule, enum: enumRule };

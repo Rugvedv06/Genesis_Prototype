@@ -109,6 +109,8 @@ test('enum rule maps a unique lossless case variant from the allowed list', () =
   assert.equal(proposal, null);
   const caseOnly = enumRule({ errors, request: { status: 'enabled' } });
   assert.deepStrictEqual(caseOnly.ops, [{ op: 'set_enum_map', path: 'status', map: { enabled: 'ENABLED' } }]);
+<<<<<<< HEAD
+=======
 });
 
 test('header rule uses an explicitly documented singleton value without guessing', () => {
@@ -135,6 +137,7 @@ test('enum rule maps a unique lossless case variant from the allowed list', () =
   assert.equal(proposal, null);
   const caseOnly = enumRule({ errors, request: { status: 'enabled' } });
   assert.deepStrictEqual(caseOnly.ops, [{ op: 'set_enum_map', path: 'status', map: { enabled: 'ENABLED' } }]);
+>>>>>>> origin/main
 });
 
 test('rename rule returns null when ambiguous (two equal candidates, no singleton)', () => {

@@ -1,7 +1,11 @@
 <<<<<<< HEAD
 import { LayoutDashboard, Activity, GitPullRequestArrow, Boxes, ShieldCheck, FlaskConical, Settings, ChartNoAxesCombined } from 'lucide-react';
 =======
+<<<<<<< HEAD
+import { LayoutDashboard, Activity, GitPullRequestArrow, Boxes, ShieldCheck, FlaskConical, Settings, ChartNoAxesCombined } from 'lucide-react';
+=======
 import { LayoutDashboard, Activity, GitPullRequestArrow, Boxes, ShieldCheck, FlaskConical, Settings } from 'lucide-react';
+>>>>>>> origin/main
 >>>>>>> origin/main
 export const NAV = [
   { group: 'Monitor', items: [
@@ -11,6 +15,10 @@ export const NAV = [
 <<<<<<< HEAD
     { href: '/metrics', label: 'Metrics & traces', icon: ChartNoAxesCombined },
 =======
+<<<<<<< HEAD
+    { href: '/metrics', label: 'Metrics & traces', icon: ChartNoAxesCombined },
+=======
+>>>>>>> origin/main
 >>>>>>> origin/main
   ] },
   { group: 'Registry', items: [{ href: '/apis', label: 'APIs', icon: Boxes }] },

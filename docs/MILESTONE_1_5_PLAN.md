@@ -5,6 +5,9 @@
 Move Healr's durable state from JSON files and process-local maps to PostgreSQL, and connect Redis only as a disposable cache/fanout aid. Preserve public API behavior wherever it is safe; document any unavoidable event-cursor or pagination contract change before implementing it. PostgreSQL is the sole authority for API configuration, adapter history, audit decisions, invocation summaries, gateway events, service diagnostics, and verified patch candidates. A Redis outage or eviction must never authorize a write, erase history, or cause an unverified adapter to be used.
 
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
 This is the implementation plan and checkpoint for the required Milestone 1.5 in `NEW_PLAN.md`. The PostgreSQL import and runtime cutover are now active; the full milestone is not complete until the remaining integration, operations, and verification gates below pass.
 
 ## Execution status
@@ -26,6 +29,8 @@ Syntax checks, `git diff --check`, importer dry-run/apply, live readiness and DB
 - The event bus remains an in-process notification/cache for local observers. In DB mode it writes sanitized events to PostgreSQL, and SSE polls/replays by durable decimal-string cursor with explicit reset markers.
 - DB-mode trace and metrics routes read PostgreSQL; Redis backs transient negative/circuit state when configured. Verified exact patch candidates are stored after successful replay and rechecked against current adapter/schema/API/config provenance before reuse. Reuse is limited to safe GET/HEAD read operations and a failed replay falls back to diagnosis.
 - In DB runtime, registration, config changes, deletes, commits, rollbacks, audit records, and domain events are grouped in PostgreSQL transactions. File-only mutation behavior remains for isolated tests without `DATABASE_URL`.
+<<<<<<< HEAD
+=======
 =======
 This is an implementation plan for the required Milestone 1.5 in `NEW_PLAN.md`. It is not a claim that the milestone is complete. The current repository has a PostgreSQL pool, migrations through version 0004, and a readiness route, but the runtime registry/audit remain file-backed and Redis has no client.
 
@@ -45,6 +50,7 @@ Only syntax checks, migration application, and the read-only preflight have been
 - `features/events/trace-store.js`, `features/metrics/index.js`, `features/safety/circuit.js`, and `features/patch-cache/index.js` keep state in process memory; patch cache is a stub.
 - API registration, rollback, audit append, and event emit are separate calls today. They do not share a transaction; some route handlers can respond successfully after a file write failure because registry snapshots are best effort.
 >>>>>>> origin/main
+>>>>>>> origin/main
 - `invoke.js` may send upstream writes. A process/database failure after the upstream accepted a request is an outcome-uncertainty case; it must never trigger an automatic replay.
 - M0/M1 product gates remain prerequisites and must be rerun at the final gate. Do not mix their unrelated closure work into persistence commits.
 
@@ -55,7 +61,11 @@ Only syntax checks, migration application, and the read-only preflight have been
 <<<<<<< HEAD
 3. **Audit canonical form:** preserve the full canonical record for clean, safe legacy entries. If the source chain is invalid or contains unsafe fields, explicit operator approval is required to retain source indices/hashes as provenance, redact unsafe fields, and hash a new canonical DB chain. Never present the rebuilt DB chain as verification of the old source chain.
 =======
+<<<<<<< HEAD
+3. **Audit canonical form:** preserve the full canonical record for clean, safe legacy entries. If the source chain is invalid or contains unsafe fields, explicit operator approval is required to retain source indices/hashes as provenance, redact unsafe fields, and hash a new canonical DB chain. Never present the rebuilt DB chain as verification of the old source chain.
+=======
 3. **Audit canonical form:** store the complete canonical record (including legacy fields and a hash-format version) alongside query columns, so imported hashes can be reproduced exactly. Never compute legacy hashes from only the relational projection.
+>>>>>>> origin/main
 >>>>>>> origin/main
 4. **Event cursor wire type:** use decimal-string IDs on the wire; accept legacy safe-integer numeric IDs during transition. Update both clients and `Last-Event-ID` parsing together; reject unsafe numeric values rather than silently rounding them.
 5. **Invocation ambiguity:** add an explicit `outcome_uncertain` terminal state when a write may have reached upstream but durable completion failed. A stale `running` invocation is not automatically equivalent to a known failure.
@@ -104,12 +114,17 @@ Only syntax checks, migration application, and the read-only preflight have been
 - Preflight `registry.json`: distinguish missing from empty; malformed JSON is fatal, never an empty registry. Validate API/tool shapes, duplicate names, current pointer membership, version uniqueness/order, adapter compilation, canonical adapter hashes, base URLs, credentials as references, and all timestamps. Detect secrets/raw values in registry/config/change metadata and refuse or require a reviewed redaction mapping; do not silently transform history.
 - Preflight audit JSONL and head anchor independently: malformed line, duplicate/gapped index, invalid shape, hash mismatch, prev-hash mismatch, anchor ahead/behind/tampered, empty-file-with-anchor, absent anchor, trailing newline/partial final line, and backup-only data. Run current audit verification and report exact failure location. Never import a partial chain or reset it to empty.
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
 - Import atomically and resumably, preserving public IDs, epochs available in source, current versions, timestamps, immutable history, and every parseable audit record. For a clean/safe audit source, preserve canonical hashes; for an explicitly approved unsafe/broken source, preserve source hashes/indices as provenance and rechain sanitized canonical records. Persist checksums and importer/schema versions in a per-source ledger so retry after process crash is idempotent; a changed source checksum must stop, not mix snapshots.
 - Report irrecoverable history loss caused by the current re-registration reset. Do not invent missing versions or claim a full historical import.
 - After apply, compare counts, all current pointers, adapter hashes, config after redaction, audit record count/new sequence/new head, source provenance hashes, and sample/history endpoints. Keep source files read-only and byte-identical. No automatic importer on normal server startup.
 - Cutover only after preflight and import checks pass. Enable Postgres-backed routes as the only authority; remove file writes from normal paths. On DB failure return unavailable/uncertain responses, never fallback to files. Preserve files as offline backup until restore/export is proven.
 
 **Gate:** dry run is side-effect-free; repeated apply and crash/restart resume safely; malformed and concurrently changing sources stop with originals untouched; recoverable audit forks require explicit approval and remain visible in provenance; exact checksums and a redaction/rechain report are produced.
+<<<<<<< HEAD
+=======
 =======
 - Import atomically and resumably, preserving public IDs, epochs available in source, current versions, timestamps, immutable history, canonical audit records/hashes, and head. Persist a per-source checksum ledger so retry after process crash is idempotent; a changed source checksum after partial import must stop, not mix two snapshots.
 - Report irrecoverable history loss caused by the current re-registration reset. Do not invent missing versions or claim a full historical import.
@@ -118,6 +133,7 @@ Only syntax checks, migration application, and the read-only preflight have been
 
 **Gate:** dry run is side-effect-free; repeated apply and crash/restart resume safely; corrupted and concurrently changing sources stop with originals untouched; exact checksums and a documented data-loss report are produced.
 >>>>>>> origin/main
+>>>>>>> origin/main
 
 ### WP4 — Audit chain in PostgreSQL
 
@@ -125,7 +141,11 @@ Only syntax checks, migration application, and the read-only preflight have been
 <<<<<<< HEAD
 - Preserve complete canonical records so optional fields, null/omitted fields, and timestamps survive import/export. Clean legacy records retain their source hashes; redacted/rechained records retain original hashes/indices as provenance and use the explicit imported hash format.
 =======
+<<<<<<< HEAD
+- Preserve complete canonical records so optional fields, null/omitted fields, and timestamps survive import/export. Clean legacy records retain their source hashes; redacted/rechained records retain original hashes/indices as provenance and use the explicit imported hash format.
+=======
 - Preserve complete canonical records so optional fields, key order canonicalization, null/omitted fields, timestamps, and legacy hashes survive import and export. Version the hash format before any future change.
+>>>>>>> origin/main
 >>>>>>> origin/main
 - Enforce append-only policy in DB privileges and trigger/constraint design; ordinary runtime roles cannot UPDATE/DELETE audit entries or reset heads. Tamper and restore endpoints remain explicitly development-only and must still produce a verifiable outcome.
 - Concurrent append tests must prove unique contiguous sequences, no forks, one canonical head, and safe retry behavior after serialization/deadlock/connection failures. A retry must not duplicate an already committed append; use a durable idempotency key or resolve uncertain commit by query.
@@ -134,7 +154,11 @@ Only syntax checks, migration application, and the read-only preflight have been
 <<<<<<< HEAD
 **Gate:** the imported DB chain verifies; clean source hashes match exactly, or an approved rechain is explicitly identified with source provenance; parallel writers preserve one chain; failed append never reports success; all prior audit routes remain contract-compatible.
 =======
+<<<<<<< HEAD
+**Gate:** the imported DB chain verifies; clean source hashes match exactly, or an approved rechain is explicitly identified with source provenance; parallel writers preserve one chain; failed append never reports success; all prior audit routes remain contract-compatible.
+=======
 **Gate:** imported chain verifies identically; parallel writers preserve one chain; failed append never reports success; all prior audit routes remain contract-compatible.
+>>>>>>> origin/main
 >>>>>>> origin/main
 
 ### WP5 — Durable invocation lifecycle, events, SSE, and traces
