@@ -56,6 +56,20 @@ test('OpenAPI import preview includes supported JSON body operations and respons
   assert.equal(preview.tools[0].response.fields.id.required, true);
 });
 
+test('OpenAPI import carries an explicitly declared idempotency header into tool configuration', async () => {
+  const { previewOpenApi } = await import('../src/features/apis/import/openapi-import.js');
+  const operation = {
+    operationId: 'create-payment',
+    parameters: [{ name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string' } }],
+    requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { amount: { type: 'number' } } } } } },
+    responses: { 201: { description: 'Created' } },
+  };
+  const preview = previewOpenApi({ openapi: '3.0.3', info: { title: 'Payments' }, paths: { '/payments': { post: operation } } });
+  assert.equal(preview.tools.length, 1);
+  assert.equal(preview.tools[0].idempotencyKeyHeader, 'Idempotency-Key');
+  assert.equal(preview.tools[0].sideEffects, 'write');
+});
+
 test('OpenAPI importer rejects unsupported formats and malformed schemas safely', async () => {
   const { previewOpenApi } = await import('../src/features/apis/import/openapi-import.js');
   assert.throws(() => previewOpenApi({ swagger: '2.0', info: {}, paths: {} }), /Swagger 2\.0/);
@@ -97,6 +111,8 @@ test('an imported API heals an M1 rename through Tier 0 and invokes successfully
   bodySchema.properties = { userId: { type: 'string' } }; bodySchema.required = ['userId'];
   const preview = previewOpenApi(baseline);
   assert.equal(preview.tools[0].response.fields.id.required, true);
+  // This POST endpoint is semantically read-only even though OpenAPI uses POST.
+  preview.tools[0].sideEffects = 'none';
   registryStore.reset();
   registryStore.registerApi('imported-m1', { baseUrl: 'https://import.example.test', specUrl: 'https://import.example.test/openapi.json', healing: { enabled: true, maxRounds: 3 }, tools: preview.tools });
   const originalFetch = globalThis.fetch;

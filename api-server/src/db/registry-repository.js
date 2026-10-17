@@ -3,6 +3,7 @@ import { compileAdapter } from '../features/registry/compile.js';
 import Ajv from 'ajv';
 import addFormats from 'ajv-formats';
 import { getLocalWorkspaceId } from './workspace.js';
+import { validateVariantConfig } from '../features/response-variants/index.js';
 import { sanitizePatchExplanation } from '../features/audit/explanation.js';
 
 const clone = (value) => value == null ? value : structuredClone(value);
@@ -182,6 +183,7 @@ function buildRegisteredAdapter(tool) {
   if (tool.risk !== undefined && !['low', 'medium', 'high', 'critical'].includes(tool.risk)) throw new TypeError('unsupported tool risk');
   if (tool.sideEffects !== undefined && !['read', 'write', 'none'].includes(tool.sideEffects)) throw new TypeError('sideEffects must be read, write, or none');
   const fields = tool.response?.fields ?? {};
+  const responseVariants = validateVariantConfig(tool.response?.variants);
   if (!fields || typeof fields !== 'object' || Array.isArray(fields)) throw new TypeError('response fields must be an object');
   for (const [field, definition] of Object.entries(fields)) {
     if (!field.trim() || !definition || typeof definition !== 'object' || Array.isArray(definition)
@@ -215,6 +217,8 @@ function buildRegisteredAdapter(tool) {
     method,
     logicalSchema: clone(tool.parameters),
     responseSchema,
+    responseVariants,
+    allowEmptyResponse: tool.response?.allowEmptyResponse === true,
     risk: tool.risk ?? 'low',
     sideEffects,
     identity: clone(tool.identity ?? {}),

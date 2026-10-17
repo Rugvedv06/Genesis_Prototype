@@ -29,6 +29,9 @@ import { negativeHit, negativeResult, cacheNegative, recordHalt, negativeHitAsyn
 import { validateUpstreamUrl } from '../http/url-policy.js';
 import { checkResponse } from '../drift-detector/index.js';
 import { log } from '../../lib/log.js';
+import { classifyUpstream, isRetryableOperation, retryDelayMs } from '../upstream-classifier/index.js';
+import { findKnownVariant, structuralFingerprint } from '../response-variants/index.js';
+import { observeQuarantine } from '../response-variants/quarantine.js';
 import { buildPatchExplanation } from '../audit/explanation.js';
 
 const ajv = new Ajv({ allErrors: true, strict: false });
@@ -169,15 +172,29 @@ async function send(tool, args, resolveCredential, parentSignal) {
     });
     clearTimeout(timeout);
     parentSignal?.removeEventListener('abort', onParentAbort);
-    let json;
-    try { json = await resp.json(); } catch { json = null; }
-    return { ok: resp.ok, status: resp.status, json, headers: { link: resp.headers.get('link') ?? '' }, text: resp.status === 204 ? '' : JSON.stringify(json ?? null) };
+    const bodyText = resp.status === 204 ? '' : await resp.text();
+    let json = null;
+    if (bodyText.trim() !== '') {
+      try { json = JSON.parse(bodyText); } catch { json = null; }
+    }
+    return {
+      ok: resp.ok,
+      status: resp.status,
+      json,
+      headers: {
+        link: resp.headers.get('link') ?? '',
+        'content-type': resp.headers.get('content-type') ?? '',
+        'retry-after': resp.headers.get('retry-after') ?? '',
+      },
+      bodyText,
+      text: bodyText,
+    };
   } catch (err) {
     clearTimeout(timeout);
     parentSignal?.removeEventListener('abort', onParentAbort);
     // Re-throw domain errors (provenance, credential, config) so the caller can map them.
     if (err instanceof ProvenanceError || err instanceof NotLossless || err instanceof MissingCredential || err instanceof ConfigError) throw err;
-    return { ok: false, status: 0, json: null, text: err.message, error: err };
+    return { ok: false, status: 0, json: null, text: err.message, bodyText: '', error: err };
   }
 }
 
@@ -185,16 +202,19 @@ function matchesLogicalResponse(tool, response) {
   return response.ok && validateResponse(tool, response).ok;
 }
 
-function matchesIdentity(tool, args, response) {
+function matchesIdentityData(tool, args, data) {
   const identity = tool.versionObj?.meta?.identity ?? {};
-  const extracted = tool.compiled.extract(response.json ?? {});
   return Object.entries(identity).every(([arg, field]) => {
     const expected = args?.[arg];
-    const actual = extracted[field];
+    const actual = data?.[field];
     const scalar = (value) => value !== null && value !== undefined
       && ['string', 'number', 'boolean'].includes(typeof value);
     return scalar(expected) && scalar(actual) && String(actual) === String(expected);
   });
+}
+
+function matchesIdentity(tool, args, response) {
+  return matchesIdentityData(tool, args, tool.compiled.extract(response.json ?? {}));
 }
 
 export function matchesWriteEcho(tool, args, response, tier = 2, resolveCredential) {
@@ -231,7 +251,7 @@ function failure(code, message, retryable, details) {
 function success(tool, response, meta) {
   return {
     ok: true,
-    data: tool.compiled.extract(response.json ?? {}),
+    data: meta.data ?? tool.compiled.extract(response.json ?? {}),
     meta: {
       version: tool.version,
       healed: meta.healed ?? false,
@@ -312,7 +332,9 @@ async function withHealLock(apiId, toolName, healFn, args, context) {
     const resolvedCredential = credentialResolver(apiId);
     const tool = { ...current, apiId, name: toolName };
     try {
-      const r = await send(tool, args, resolvedCredential);
+      const policy = replayPolicy(tool);
+      if (!policy.replaySafe) return { follower: true, result: failure('outcome_uncertain', 'The original write may have completed; automatic replay is disabled without an upstream idempotency contract.', false, { reason: 'unsafe_write_replay' }) };
+      const r = await send(tool, args, resolvedCredential, undefined, context.idempotencyKey);
       if (r.ok && matchesLogicalResponse(tool, r)) {
         // The call only succeeded because the leader's heal landed — report it
         // as healed with the committed change so callers see consistent meta.
@@ -845,6 +867,78 @@ async function invokeCore({ apiId, toolName, args, runId, callId = newId('c'), t
     return reportDomainHalt({ tool, result, callId, runId, t0 });
   }
 
+  let upstreamClassification = classifyUpstream(first);
+  let retryCount = 0;
+  const recordClassification = (classification) => emitCall('upstream.classified', {
+    classification: classification.classification,
+    status: classification.status,
+    schemaDiagnosisAttempted: false,
+    patchProposed: false,
+    patchCommitted: false,
+    retryCount,
+    elapsedMs: Date.now() - t0,
+    reason: classification.reason,
+  });
+  if (upstreamClassification.classification !== 'successful_response') {
+    recordClassification(upstreamClassification);
+  }
+
+  while (upstreamClassification.classification !== 'successful_response'
+    && upstreamClassification.classification !== 'valid_empty_response'
+    && upstreamClassification.classification !== 'request_contract_drift'
+    && upstreamClassification.retryable
+    && retryCount < Number(apiConfig.retry?.maxRetries ?? 1)
+    && isRetryableOperation(tool)) {
+    const delay = retryDelayMs(upstreamClassification, retryCount, {
+      maxDelayMs: Number(apiConfig.retry?.maxDelayMs ?? 5000),
+    });
+    if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
+    retryCount += 1;
+    try {
+      first = await send(tool, args, resolveCredential, signal);
+    } catch (err) {
+      const result = mapDomainError(err, tool, args, first);
+      return reportDomainHalt({ tool, result, callId, runId, t0 });
+    }
+    upstreamClassification = classifyUpstream(first);
+    recordClassification(upstreamClassification);
+  }
+
+  const classificationDetails = {
+    classification: upstreamClassification.classification,
+    status: upstreamClassification.status,
+    retryCount,
+    elapsedMs: Date.now() - t0,
+    reason: upstreamClassification.reason,
+  };
+  if (upstreamClassification.classification === 'valid_empty_response') {
+    const required = tool.versionObj?.meta?.responseSchema?.required ?? [];
+    if (required.length > 0 && tool.versionObj?.meta?.allowEmptyResponse !== true) {
+      const details = { ...classificationDetails, classification: 'contract_violation', reason: 'empty response is not allowed by the registered contract' };
+      emitCall('call.failed', { code: 'contract_violation', ...details });
+      return failure('contract_violation', 'Upstream returned an empty response where fields are required', false, details);
+    }
+    emitCall('call.succeeded', { version: tool.version, healed: false, classification: 'valid_empty_response', data: {} });
+    return success(tool, { ...first, json: first.json ?? {} }, { healed: false, rounds: 0, tier: 0, latencyMs: Date.now() - t0, classification: 'valid_empty_response', retryCount });
+  }
+  if (upstreamClassification.classification === 'invalid_upstream_response'
+    && !(tool.versionObj.origin === 'dev' && !first.ok)) {
+    emitCall('call.failed', { code: 'invalid_upstream_response', ...classificationDetails });
+    return failure('invalid_upstream_response', 'Upstream returned an invalid or unexpected response', false, classificationDetails);
+  }
+  if (['transport_error', 'rate_limited', 'upstream_error'].includes(upstreamClassification.classification)
+    && !(tool.versionObj.origin === 'dev' && !first.ok)) {
+    const code = upstreamClassification.classification === 'transport_error'
+      ? 'transport_error' : upstreamClassification.classification;
+    emitCall('call.failed', { code, ...classificationDetails });
+    return failure(code, upstreamClassification.reason, upstreamClassification.retryable && retryCount < Number(apiConfig.retry?.maxRetries ?? 1), classificationDetails);
+  }
+  if (upstreamClassification.classification === 'request_error'
+    && !(tool.versionObj.origin === 'dev' && !first.ok)) {
+    emitCall('call.failed', { code: 'request_error', ...classificationDetails });
+    return failure('request_error', 'Upstream rejected the request', false, classificationDetails);
+  }
+
   if (first.ok && matchesLogicalResponse(tool, first)) {
     if (!matchesIdentity(tool, args, first)) {
       const reason = 'response_identity_mismatch';
@@ -856,8 +950,82 @@ async function invokeCore({ apiId, toolName, args, runId, callId = newId('c'), t
       await appendAudit({ decision: 'halt', apiId, tool: toolName, versionBefore: tool.version, reason, responseOnly: true, callId });
       return halt(reason, details);
     }
+    emitCall('upstream.classified', {
+      classification: 'no_drift',
+      status: first.status,
+      schemaDiagnosisAttempted: false,
+      patchProposed: false,
+      patchCommitted: false,
+      retryCount,
+      elapsedMs: Date.now() - t0,
+      reason: 'response matches the configured contract',
+    });
     emitCall('call.succeeded', { version: tool.version, healed: false, data: tool.compiled.extract(first.json ?? {}) });
-    return success(tool, first, { healed: false, rounds: 0, tier: 0, latencyMs: Date.now() - t0 });
+    return success(tool, first, { healed: false, rounds: 0, tier: 0, latencyMs: Date.now() - t0, classification: 'no_drift', retryCount });
+  }
+
+  if (first.ok) {
+    const variants = tool.versionObj?.meta?.responseVariants ?? [];
+    if (variants.length > 0) {
+      const variantResult = findKnownVariant(first.json, variants, tool.versionObj?.meta?.responseSchema ?? {}, {
+        args,
+        headers: first.headers,
+      });
+      const fingerprint = structuralFingerprint(first.json);
+      if (variantResult.kind === 'known_variant') {
+        if (!matchesIdentityData(tool, args, variantResult.data)) {
+          const reason = 'response_identity_mismatch';
+          const details = {
+            reason,
+            classification: 'verification_failed',
+            variantId: variantResult.variant.id,
+            fingerprint,
+            status: first.status,
+            retryCount,
+          };
+          emitCall('upstream.classified', {
+            classification: 'verification_failed',
+            variantId: variantResult.variant.id,
+            fingerprint,
+            status: first.status,
+            schemaDiagnosisAttempted: false,
+            patchProposed: false,
+            patchCommitted: false,
+            retryCount,
+            elapsedMs: Date.now() - t0,
+            reason,
+          });
+          emitCall('call.failed', { code: 'tool_unavailable', ...details });
+          emit({ type: 'halt', callId, runId, apiId, tool: toolName, reason, retryable: false });
+          emit({ type: 'heal.finished', callId, runId, healId: callId, apiId, tool: toolName, outcome: 'halted', rounds: 0, ms: Date.now() - t0, tier: 0, tokens: { input: 0, output: 0 } });
+          await appendAudit({ decision: 'halt', apiId, tool: toolName, versionBefore: tool.version, reason, responseOnly: true, variantId: variantResult.variant.id, callId });
+          return halt(reason, details);
+        }
+        emitCall('upstream.classified', {
+          classification: 'known_variant',
+          variantId: variantResult.variant.id,
+          fingerprint,
+          status: first.status,
+          schemaDiagnosisAttempted: false,
+          patchProposed: false,
+          patchCommitted: false,
+          retryCount,
+          elapsedMs: Date.now() - t0,
+          reason: 'response matched a verified registered variant',
+        });
+        emitCall('call.succeeded', { version: tool.version, healed: false, variantId: variantResult.variant.id, data: variantResult.data });
+        return success(tool, first, {
+          healed: false, rounds: 0, tier: 0, variantId: variantResult.variant.id,
+          classification: 'known_variant', fingerprint, retryCount,
+          latencyMs: Date.now() - t0, data: variantResult.data,
+        });
+      }
+      if (variantResult.kind === 'ambiguous_variant') {
+        const details = { classification: 'ambiguous_variant', fingerprint, variants: variantResult.matches, status: first.status, retryCount };
+        emitCall('call.failed', { code: 'ambiguous_variant', ...details });
+        return failure('ambiguous_variant', 'Multiple verified response variants match the upstream response', false, details);
+      }
+    }
   }
 
   // A 200 response has already happened, so response-only drift is diagnosed
@@ -865,6 +1033,26 @@ async function invokeCore({ apiId, toolName, args, runId, callId = newId('c'), t
   if (first.ok) {
     const responseCheck = validateResponse(tool, first);
     const proposal = checkResponse({ tool, response: first });
+    const fingerprint = structuralFingerprint(first.json);
+    const quarantine = observeQuarantine({
+      apiId,
+      tool: toolName,
+      version: tool.version,
+      fingerprint,
+      classification: 'response_drift',
+    });
+    emitCall('upstream.classified', {
+      classification: 'response_drift',
+      status: first.status,
+      fingerprint,
+      quarantineCount: quarantine.count,
+      schemaDiagnosisAttempted: true,
+      patchProposed: proposal.ok,
+      patchCommitted: false,
+      retryCount,
+      elapsedMs: Date.now() - t0,
+      reason: proposal.ok ? 'successful response differs from the configured contract' : (proposal.reason ?? 'response contract mismatch'),
+    });
     const mode = apiConfig.healing?.mode ?? 'enforce';
     const fields = { callId, runId, apiId, tool: toolName };
     if (proposal.ok) {
@@ -920,6 +1108,7 @@ async function invokeCore({ apiId, toolName, args, runId, callId = newId('c'), t
 
   let errors = parseErrors(first.json ?? first.text, first.status);
   let kind = classify(errors, first.status);
+  if (upstreamClassification.classification === 'auth_error') kind = 'auth4xx';
   if (first.ok) {
     const responseCheck = validateResponse(tool, first);
     if (!responseCheck.ok) {
@@ -961,13 +1150,12 @@ async function invokeCore({ apiId, toolName, args, runId, callId = newId('c'), t
   }
 
   if (kind === 'transient') {
-    // G13: retry once only for reads (sideEffects !== 'write').
-    const sideEffects = tool.versionObj?.adapter?.sideEffects ?? 'write';
-    if (sideEffects !== 'write') {
+    const policy = replayPolicy(tool);
+    if (policy.replaySafe) {
       await new Promise((res) => setTimeout(res, 300));
       let r;
       try {
-        r = await send(tool, args, resolveCredential);
+        r = await send(tool, args, resolveCredential, undefined, idempotencyKey);
       } catch (err) {
         return reportDomainHalt({ tool, result: mapDomainError(err, tool, args, first), callId, runId, t0 });
       }
@@ -980,7 +1168,14 @@ async function invokeCore({ apiId, toolName, args, runId, callId = newId('c'), t
     return failure('upstream_error', 'Transient upstream failure after retry', false);
   }
   if (kind === 'auth4xx') {
-    const details = { signature, message: 'The upstream requires credentials not configured for this tool' };
+    const details = {
+      signature,
+      message: 'The upstream requires credentials not configured for this tool',
+      classification: upstreamClassification.classification,
+      status: upstreamClassification.status,
+      retryCount,
+      elapsedMs: Date.now() - t0,
+    };
     if (process.env.DATABASE_URL) await cacheNegativeAsync(requestKey, { reason: 'credential_unavailable', details });
     else cacheNegative(requestKey, { reason: 'credential_unavailable', details });
     const result = halt('credential_unavailable', details);

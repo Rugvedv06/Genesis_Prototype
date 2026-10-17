@@ -10,6 +10,7 @@ import { compileAdapter } from './compile.js';
 import { cfg } from '../../config.js';
 import { clearNegativeForApi } from '../safety/circuit.js';
 import { resolveDataDir } from '../../lib/data-dir.js';
+import { validateVariantConfig } from '../response-variants/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -53,8 +54,7 @@ function loadRegistry() {
 
 export class RegistryStore {
   constructor() {
-    this.databaseAuthoritative = Boolean(process.env.DATABASE_URL);
-    this._byApi = this.databaseAuthoritative ? {} : loadRegistry(); // DB mode is hydrated before listening.
+    this._byApi = loadRegistry(); // { apiId: { tools: { toolName: { versions, current } }, config, epoch } }
     this._compiled = new Map(); // key: `${apiId}:${tool}:v${version}` -> compiled adapter
     this._hydrateCompiled();
   }
@@ -131,6 +131,11 @@ export class RegistryStore {
     const epoch = (existing?.epoch ?? 0) + 1;
     const apiEntry = { tools: {}, config: { baseUrl, specUrl, credentials, healing }, epoch };
     for (const tool of tools) {
+      if (tool.idempotencyKeyHeader !== undefined && (typeof tool.idempotencyKeyHeader !== 'string'
+        || !/^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,128}$/.test(tool.idempotencyKeyHeader))) {
+        throw new TypeError('idempotencyKeyHeader must be a valid HTTP header name');
+      }
+      const responseVariants = validateVariantConfig(tool.response?.variants);
       const responseMap = tool.response
         ? Object.fromEntries(Object.entries(tool.response.fields ?? {}).map(([k, v]) => [k, v.path]))
         : {};
@@ -162,8 +167,11 @@ export class RegistryStore {
           method: tool.method ?? 'POST',
           logicalSchema: tool.parameters,
           responseSchema,
+          responseVariants,
+          allowEmptyResponse: tool.response?.allowEmptyResponse === true,
           risk: tool.risk ?? 'low',
           sideEffects: tool.sideEffects ?? 'write',
+          ...(tool.idempotencyKeyHeader ? { idempotencyKeyHeader: tool.idempotencyKeyHeader } : {}),
           identity: tool.identity ?? {},
         },
         origin: 'register',
@@ -222,8 +230,6 @@ export class RegistryStore {
     const cur = entry.current;
     return {
       epoch: this._byApi[apiId].epoch ?? 0,
-      configRevision: this._byApi[apiId].configRevision ?? 1,
-      credentialRevision: this._byApi[apiId].credentialRevision ?? 1,
       version: cur.version,
       versionObj: copy(cur),
       compiled: (() => {
@@ -358,9 +364,6 @@ export class RegistryStore {
   }
 
   _snapshot() {
-    if (this.databaseAuthoritative) {
-      throw new Error('Registry mutations must use PostgreSQL transactions when DATABASE_URL is configured');
-    }
     try {
       ensureDir();
       const tempFile = `${REGISTRY_FILE}.tmp`;
@@ -375,13 +378,6 @@ export class RegistryStore {
   reset() {
     this._byApi = {};
     this._compiled = new Map();
-  }
-
-  replaceFromDatabase(registry) {
-    if (!this.databaseAuthoritative) throw new Error('Database registry hydration requires DATABASE_URL');
-    this._byApi = copy(registry);
-    this._compiled = new Map();
-    this._hydrateCompiled();
   }
 }
 

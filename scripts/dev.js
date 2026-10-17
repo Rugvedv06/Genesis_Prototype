@@ -65,7 +65,6 @@ const procs = APPS.map((app) => {
     cwd: app.cwd,
     env: { ...process.env, ...app.env },
     shell: process.platform === 'win32' && app.cmd.endsWith('.cmd'),
-    detached: process.platform !== 'win32',
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   p.stdout.on('data', (d) => process.stdout.write(`[${app.name}] ${d}`));
@@ -78,21 +77,9 @@ const procs = APPS.map((app) => {
   return p;
 });
 
-let shuttingDown = false;
 function shutdown() {
-  if (shuttingDown) return;
-  shuttingDown = true;
-  for (const p of procs) {
-    if (p.killed || p.exitCode !== null) continue;
-    if (process.platform !== 'win32') {
-      try { process.kill(-p.pid, 'SIGTERM'); } catch (error) {
-        if (error.code !== 'ESRCH') throw error;
-      }
-    } else {
-      p.kill('SIGTERM');
-    }
-  }
-  setTimeout(() => process.exit(0), 500);
+  procs.forEach((p) => p.kill('SIGTERM'));
+  process.exit(0);
 }
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);

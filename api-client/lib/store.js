@@ -12,7 +12,7 @@ const s = {
   conn: 'connecting',          // connecting | live | reconnecting | offline
   bootstrapped: false,
   error: null,
-  lastId: '0',
+  lastId: 0,
   events: [],                  // newest first
   calls: new Map(),            // callId -> call
   order: [],                   // callIds, newest first
@@ -24,17 +24,6 @@ let pending = [];
 let flushTimer = null;
 let refreshTimer = null;
 let started = false;
-let sseStarted = false;
-
-function decimalCursor(value) {
-  if (typeof value === 'number') return Number.isSafeInteger(value) && value >= 0 ? String(value) : '0';
-  return typeof value === 'string' && /^\d{1,19}$/.test(value) ? value : '0';
-}
-
-function newerCursor(left, right) {
-  try { return BigInt(decimalCursor(right)) > BigInt(decimalCursor(left)) ? decimalCursor(right) : decimalCursor(left); }
-  catch { return decimalCursor(left); }
-}
 
 const publish = () => { snapshot = { ...s }; listeners.forEach((l) => l()); };
 
@@ -44,7 +33,7 @@ function flush() {
   const batch = pending; pending = [];
   let needRefresh = false;
   for (const e of batch) {
-    s.lastId = newerCursor(s.lastId, e.id);
+    s.lastId = Math.max(s.lastId, e.id ?? 0);
     if (REFRESH_ON.has(e.type)) needRefresh = true;
     if (e.callId) {
       const prev = s.calls.get(e.callId);
@@ -57,29 +46,10 @@ function flush() {
   if (needRefresh) scheduleRefresh(400);
 }
 
-async function refresh(includeHistory = false) {
+async function refresh() {
   try {
-    const [st, history] = await Promise.all([
-      api.state(),
-      sseStarted && !includeHistory ? Promise.resolve(null) : api.recentEvents(),
-    ]);
+    const st = await api.state();
     Object.assign(s, { apis: st.apis ?? [], metrics: st.metrics ?? null, audit: st.audit ?? null, cache: st.cache ?? null, circuit: st.circuit ?? [], bootstrapped: true, error: null });
-    if (history) {
-      const calls = new Map();
-      const order = [];
-      for (const event of history.events ?? []) {
-        if (!event.callId) continue;
-        const previous = calls.get(event.callId);
-        if (!previous) order.push(event.callId);
-        calls.set(event.callId, foldEvent(previous ?? newCall(event), event));
-      }
-      order.reverse();
-      while (order.length > MAX_CALLS) calls.delete(order.pop());
-      s.calls = calls;
-      s.order = order;
-      s.events = [...(history.events ?? [])].reverse().slice(0, MAX_EVENTS);
-      s.lastId = decimalCursor(history.lastEventId);
-    }
     if (s.conn === 'offline') s.conn = 'reconnecting';
   } catch (err) {
     s.error = err.message; s.conn = 'offline'; s.bootstrapped = true;
@@ -91,18 +61,14 @@ function scheduleRefresh(ms) { clearTimeout(refreshTimer); refreshTimer = setTim
 export function startStore() {
   if (started || typeof window === 'undefined') return;
   started = true;
+  refresh();
   setInterval(refresh, 5000);
-  refresh().finally(() => {
-    if (sseStarted) return;
-    sseStarted = true;
-    connectSSE({
-      url: `${CORE}/events`,
-      getLastId: () => s.lastId,
-      onOpen: () => { s.conn = 'live'; publish(); },
-      onError: () => { if (s.conn !== 'offline') s.conn = 'reconnecting'; publish(); },
-      onEvent: (e) => { pending.push(e); if (!flushTimer) flushTimer = setTimeout(flush, 120); },
-      onReset: (_data, eventId) => { s.lastId = decimalCursor(eventId); pending = []; refresh(true); },
-    });
+  connectSSE({
+    url: `${CORE}/events`,
+    getLastId: () => s.lastId,                 // 0 on first connect: replay the ring buffer (G4)
+    onOpen: () => { s.conn = 'live'; publish(); },
+    onError: () => { if (s.conn !== 'offline') s.conn = 'reconnecting'; publish(); },
+    onEvent: (e) => { pending.push(e); if (!flushTimer) flushTimer = setTimeout(flush, 120); },
   });
 }
 

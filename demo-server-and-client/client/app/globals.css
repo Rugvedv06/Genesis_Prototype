@@ -57,7 +57,6 @@ button:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 .workspace-actions { display:flex; align-items:flex-end; gap:14px; flex-shrink:0; }
 .mutation-label { display:grid; gap:2px; padding:0 0 2px; color:var(--warning); font-size:10px; }
 .mutation-label strong { color:var(--foreground); font-size:12px; font-weight:600; }
-.scenario-label,.not-like-for-like { color:var(--warning); font-size:11px; }
 .healthy-run-note { margin:12px 0 0; padding:10px 12px; border:1px solid color-mix(in srgb,var(--success) 45%,var(--border)); border-radius:8px; background:var(--success-muted); color:var(--foreground); font-size:12px; }
 .healthy-exchange { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; padding:12px 14px; }
 .healthy-exchange section { min-width:0; overflow:hidden; border:1px solid var(--border); border-radius:8px; background:var(--background); }
@@ -69,7 +68,6 @@ button:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 .healthy-exchange pre { max-height:250px; overflow:auto; margin:0; padding:11px; color:var(--foreground); font:11px/1.55 var(--font-mono); white-space:pre-wrap; overflow-wrap:anywhere; }
 .healthy-exchange pre[data-error='true'] { color:var(--destructive); }
 @media(max-width:720px) { .healthy-exchange { grid-template-columns:minmax(0,1fr); } }
-.not-like-for-like { max-width:1600px; margin:0 auto; padding:0 32px 12px; }
 .action-buttons { display:flex; align-items:center; gap:8px; }
 .demo-summary { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; max-width:1600px; margin:0 auto; padding:0 32px 18px; }
 .summary-card { min-width:0!important; padding:13px 15px!important; border-radius:7px!important; }

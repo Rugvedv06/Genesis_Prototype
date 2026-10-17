@@ -39,13 +39,13 @@ export const api = {
   state: () => strict(CORE, '/state'),
   metrics: () => strict(CORE, '/metrics'),
   recentEvents: (limit = 5000) => strict(CORE, `/events/recent?limit=${limit}`),
-  series: (windowSec = 300, step = 5) => strict(CORE, `/metrics/timeseries?window=${windowSec}&step=${step}`),
   cache: ({ limit = 100, cursor } = {}) => {
     const query = new URLSearchParams({ limit: String(limit), ...(cursor && { cursor }) });
     return strict(CORE, `/cache?${query}`);
   },
   invalidateCacheKey: (cacheKey) => strict(CORE, `/cache/${e(cacheKey)}`, { method: 'DELETE' }),
   clearCache: () => strict(CORE, '/cache', { method: 'DELETE' }),
+  series: (windowSec = 300, step = 5) => strict(CORE, `/metrics/timeseries?window=${windowSec}&step=${step}`),
   patchCandidate: (id) => strict(CORE, `/patch-candidates/${e(id)}`),
   rolloutCandidate: (id, state, reason, metrics) => strict(CORE, `/patch-candidates/${e(id)}/rollout`, { method: 'POST', body: { state, reason, metrics } }),
   promoteCandidate: (id) => strict(CORE, `/patch-candidates/${e(id)}/promote`, { method: 'POST' }),

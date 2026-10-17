@@ -1,14 +1,14 @@
 import { on } from '../events/bus.js';
 
 const buckets = [];
-const totals = { calls: 0, ok: 0, healed: 0, halted: 0, rejected: 0, cacheHits: 0, tokensIn: 0, tokensOut: 0, tokensByTier: {}, tokensByRole: {}, tier2Outcomes: { accepted: 0, rejectedQuote: 0, rejectedSchema: 0, timeout: 0, unavailable: 0, noProposal: 0 } };
+const totals = { calls: 0, ok: 0, healed: 0, halted: 0, rejected: 0, cacheHits: 0, tokensIn: 0, tokensOut: 0 };
 const MAX_BUCKETS = 3600;
 
 function bucket() {
   const t = Math.floor(Date.now() / 1000);
   let current = buckets.at(-1);
   if (!current || current.t !== t) {
-    current = { t, calls: 0, ok: 0, healed: 0, halted: 0, rejected: 0, cacheHits: 0, tokensIn: 0, tokensOut: 0, tokensByTier: {}, tokensByRole: {}, healMsSamples: [] };
+    current = { t, calls: 0, ok: 0, healed: 0, halted: 0, rejected: 0, cacheHits: 0, tokensIn: 0, tokensOut: 0, healMsSamples: [] };
     buckets.push(current);
     while (buckets.length > MAX_BUCKETS) buckets.shift();
   }
@@ -27,42 +27,6 @@ on((event) => {
     if (event.code === 'upstream_rejected') { current.rejected += 1; totals.rejected += 1; }
   }
   if (event.type === 'cache.hit') { current.cacheHits += 1; totals.cacheHits += 1; }
-  if (event.type === 'heal.finished') {
-    const input = Number(event.tokens?.input ?? event.tokens?.inputTokens ?? 0);
-    const output = Number(event.tokens?.output ?? event.tokens?.outputTokens ?? 0);
-    current.tokensIn += input; current.tokensOut += output;
-    totals.tokensIn += input; totals.tokensOut += output;
-    const tier = String(event.tier ?? 0);
-    const byTier = totals.tokensByTier[tier] ??= { input: 0, output: 0 };
-    byTier.input += input; byTier.output += output;
-    const bucketTier = current.tokensByTier[tier] ??= { input: 0, output: 0 };
-    bucketTier.input += input; bucketTier.output += output;
-    for (const [role, usage] of Object.entries(event.tokensByRole ?? {})) {
-      const roleInput = Number(usage?.input ?? 0); const roleOutput = Number(usage?.output ?? 0);
-      const totalRole = totals.tokensByRole[role] ??= { input: 0, output: 0 };
-      totalRole.input += roleInput; totalRole.output += roleOutput;
-      const bucketRole = current.tokensByRole[role] ??= { input: 0, output: 0 };
-      bucketRole.input += roleInput; bucketRole.output += roleOutput;
-    }
-  }
-  if (event.type === 'agent.final') {
-    const input = Number(event.tokens?.input ?? event.tokens?.inputTokens ?? 0);
-    const output = Number(event.tokens?.output ?? event.tokens?.outputTokens ?? 0);
-    current.tokensIn += input; current.tokensOut += output;
-    totals.tokensIn += input; totals.tokensOut += output;
-    const totalRole = totals.tokensByRole.agent ??= { input: 0, output: 0 };
-    totalRole.input += input; totalRole.output += output;
-    const bucketRole = current.tokensByRole.agent ??= { input: 0, output: 0 };
-    bucketRole.input += input; bucketRole.output += output;
-  }
-  if (event.type === 'patch.committed' && event.tier === 2) totals.tier2Outcomes.accepted += 1;
-  if (event.type === 'halt' && event.reason === 'tier2_timeout') totals.tier2Outcomes.timeout += 1;
-  if (event.type === 'halt' && event.reason === 'tier2_unavailable') totals.tier2Outcomes.unavailable += 1;
-  if (event.type === 'halt' && event.reason === 'tier2_no_proposal') totals.tier2Outcomes.noProposal += 1;
-  if (event.type === 'halt' && event.reason === 'tier2_invalid_output') {
-    if (event.details?.detailReason === 'evidence_not_quoted') totals.tier2Outcomes.rejectedQuote += 1;
-    else totals.tier2Outcomes.rejectedSchema += 1;
-  }
 });
 
 export function record() {
@@ -70,7 +34,7 @@ export function record() {
 }
 
 export function snapshot() {
-  return { ...totals, tokensByTier: structuredClone(totals.tokensByTier), tokensByRole: structuredClone(totals.tokensByRole), tier2Outcomes: { ...totals.tier2Outcomes }, buckets: buckets.map((item) => ({ ...item, tokensByTier: structuredClone(item.tokensByTier), tokensByRole: structuredClone(item.tokensByRole), healMsSamples: [...item.healMsSamples] })) };
+  return { ...totals, buckets: buckets.map((item) => ({ ...item, healMsSamples: [...item.healMsSamples] })) };
 }
 
 export function timeseries(window = 300, step = 5) {
@@ -79,8 +43,8 @@ export function timeseries(window = 300, step = 5) {
   const grouped = new Map();
   for (const item of selected) {
     const key = Math.floor(item.t / step) * step;
-    const target = grouped.get(key) ?? { t: key, calls: 0, ok: 0, healed: 0, halted: 0, rejected: 0, cacheHits: 0, tokensIn: 0, tokensOut: 0 };
-    for (const field of ['calls', 'ok', 'healed', 'halted', 'rejected', 'cacheHits', 'tokensIn', 'tokensOut']) target[field] += item[field];
+    const target = grouped.get(key) ?? { t: key, calls: 0, ok: 0, healed: 0, halted: 0, rejected: 0, cacheHits: 0 };
+    for (const field of ['calls', 'ok', 'healed', 'halted', 'rejected', 'cacheHits']) target[field] += item[field];
     grouped.set(key, target);
   }
   return [...grouped.values()];

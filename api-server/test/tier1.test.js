@@ -111,6 +111,32 @@ test('enum rule maps a unique lossless case variant from the allowed list', () =
   assert.deepStrictEqual(caseOnly.ops, [{ op: 'set_enum_map', path: 'status', map: { enabled: 'ENABLED' } }]);
 });
 
+test('header rule uses an explicitly documented singleton value without guessing', () => {
+  const errors = parseErrors({ error: 'missing_header', header: 'X-API-Version', allowed: ['2'] }, 400);
+  const proposal = headerRule({ errors, request: baseReq });
+  assert.deepStrictEqual(proposal.ops[0].source, { type: 'error_enum', value: '2' });
+  assert.deepStrictEqual(proposal.ops[0].evidence.allowed, ['2']);
+});
+
+test('header rule does not choose between multiple allowed values', () => {
+  const errors = parseErrors({ error: 'missing_header', header: 'X-API-Version', allowed: ['2', '3'] }, 400);
+  const proposal = headerRule({ errors, request: baseReq });
+  assert.deepStrictEqual(proposal.ops[0].source, { type: 'credential', ref: 'X-API-Version' });
+});
+
+test('enum rule maps a unique lossless case variant from the allowed list', () => {
+  const errors = parseErrors({ detail: [{
+    loc: ['body', 'status'], msg: 'Input should be ENABLED or DISABLED',
+    type: 'enum', ctx: { allowed_values: ['ENABLED', 'DISABLED'] },
+  }] }, 422);
+  assert.equal(errors[0].kind, 'enum');
+  const proposal = enumRule({ errors, request: { status: 'active' } });
+  // Semantic changes are not guessed: active -> ENABLED must remain unresolved.
+  assert.equal(proposal, null);
+  const caseOnly = enumRule({ errors, request: { status: 'enabled' } });
+  assert.deepStrictEqual(caseOnly.ops, [{ op: 'set_enum_map', path: 'status', map: { enabled: 'ENABLED' } }]);
+});
+
 test('rename rule returns null when ambiguous (two equal candidates, no singleton)', () => {
   const errors = [
     { kind: 'missing', path: ['userId'], raw: {} },

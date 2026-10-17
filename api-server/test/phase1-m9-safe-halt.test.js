@@ -7,7 +7,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
-import { createIsolatedDatabase } from './helpers/isolated-database.js';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const CORE_ENTRY = join(ROOT, 'api-server/src/server.js');
@@ -102,19 +101,8 @@ async function waitForHealth(url, children) {
   throw new Error(`Timed out waiting for ${url}/health`);
 }
 
-test('M9 authorization and approval-code failures halt safely and remain write-free on repeat', {
-  skip: !process.env.HEALR_TEST_DATABASE_URL && 'set HEALR_TEST_DATABASE_URL to run isolated PostgreSQL runtime coverage',
-}, async (t) => {
-  const isolatedDb = await createIsolatedDatabase('m9');
-  let dataDir;
-  let core;
-  let mock;
-  t.after(async () => {
-    await Promise.all([stop(core), stop(mock)]);
-    if (dataDir) rmSync(dataDir, { recursive: true, force: true });
-    assert.deepEqual(await isolatedDb.drop(), { dropped: true, databaseExists: false }, 'isolated M9 database is dropped');
-  });
-  dataDir = mkdtempSync(join(tmpdir(), 'healr-m9-safe-halt-'));
+test('M9 authorization and approval-code failures halt safely and remain write-free on repeat', async (t) => {
+  const dataDir = mkdtempSync(join(tmpdir(), 'healr-m9-safe-halt-'));
   const corePort = await freePort();
   const mockPort = await freePort([corePort]);
   const coreUrl = `http://127.0.0.1:${corePort}`;
@@ -124,9 +112,6 @@ test('M9 authorization and approval-code failures halt safely and remain write-f
   delete baseEnv.M9_MISSING_BEARER;
   const env = {
     ...baseEnv,
-    DATABASE_URL: isolatedDb.url,
-    REDIS_URL: '',
-    HEALR_TEST_DATABASE_URL: '',
     PORT: String(corePort),
     CORE_URL: coreUrl,
     MOCK_URL: mockUrl,
@@ -136,8 +121,12 @@ test('M9 authorization and approval-code failures halt safely and remain write-f
     HEAL_TIMEOUT_MS: '2000',
     M9_TEST_BEARER: 'test-only-bearer',
   };
-  core = start(CORE_ENTRY, join(ROOT, 'api-server'), env);
-  mock = start(MOCK_ENTRY, join(ROOT, 'demo-server-and-client/server'), { ...env, PORT: String(mockPort) });
+  const core = start(CORE_ENTRY, join(ROOT, 'api-server'), env);
+  const mock = start(MOCK_ENTRY, join(ROOT, 'demo-server-and-client/server'), { ...env, PORT: String(mockPort) });
+  t.after(async () => {
+    await Promise.all([stop(core), stop(mock)]);
+    rmSync(dataDir, { recursive: true, force: true });
+  });
 
   await Promise.all([waitForHealth(coreUrl, [core]), waitForHealth(mockUrl, [mock])]);
   await post(`${mockUrl}/admin/reset`, {});
@@ -204,9 +193,8 @@ test('M9 authorization and approval-code failures halt safely and remain write-f
   assert.ok(authRepeatMs < 50, `cached missing credential halt took ${authRepeatMs.toFixed(1)}ms`);
 
   const authAudit = await request(`${coreUrl}/audit?apiId=m9-missing-auth`);
-  const authHalts = authAudit.body.records.filter((record) => record.decision === 'halt');
-  assert.equal(authHalts.length, 2, 'each missing credential attempt should have a halt decision');
-  assert.ok(authHalts.every((record) => record.reason === 'credential_unavailable'));
+  assert.equal(authAudit.body.records.length, 2, 'each missing credential halt should be audited');
+  assert.ok(authAudit.body.records.every((record) => record.decision === 'halt' && record.reason === 'credential_unavailable'));
   assert.equal((await request(`${coreUrl}/audit/verify`)).body.ok, true);
   const authEvents = await readEventSnapshot(`${coreUrl}/events?apiId=m9-missing-auth&types=halt`, 'credential_unavailable');
   assert.equal((authEvents.match(/"reason":"credential_unavailable"/g) ?? []).length, 2, 'each missing credential halt should emit an event');
@@ -253,9 +241,8 @@ test('M9 authorization and approval-code failures halt safely and remain write-f
   }
   assert.ok(approvalRepeatMs < 50, `cached approval-code halt took ${approvalRepeatMs.toFixed(1)}ms`);
   const approvalAudit = await request(`${coreUrl}/audit?apiId=m9-missing-approval`);
-  const approvalHalts = approvalAudit.body.records.filter((record) => record.decision === 'halt');
-  assert.equal(approvalHalts.length, 2, 'each approval-code attempt should have a halt decision');
-  assert.ok(approvalHalts.every((record) => record.reason === 'no_diagnosis'));
+  assert.equal(approvalAudit.body.records.length, 2, 'each approval-code halt should be audited');
+  assert.ok(approvalAudit.body.records.every((record) => record.decision === 'halt' && record.reason === 'no_diagnosis'));
   const approvalEvents = await readEventSnapshot(`${coreUrl}/events?apiId=m9-missing-approval&types=halt`, 'no_diagnosis');
   assert.equal((approvalEvents.match(/"reason":"no_diagnosis"/g) ?? []).length, 2, 'each approval-code halt should emit an event');
   assert.equal((approvalEvents.match(/"type":"heal\.finished"/g) ?? []).length, 2, 'each cached approval-code halt should finish its lifecycle');

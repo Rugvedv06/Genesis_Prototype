@@ -4,7 +4,7 @@ export function newCall(e) {
     callId: e.callId, runId: e.runId ?? null, apiId: e.apiId, tool: e.tool,
     startedAt: e.ts, endedAt: null, outcome: 'inflight',
     drift: false, driftKind: null, silent: false, rounds: 0, tier: null,
-    proposals: [], ops: [], version: null, cacheHit: false, reason: null, code: null, needsReview: false, reviewOps: [],
+    proposals: [], ops: [], version: null, cacheHit: false, reason: null, code: null,
     healMs: null, upstream: [], data: null, events: [],
   };
 }
@@ -19,14 +19,14 @@ export function foldEvent(call, e) {
       break;
     case 'drift.silent': c.drift = true; c.silent = true; break;
     case 'diagnosis.started': c.rounds = Math.max(c.rounds, e.round ?? 0); break;
-    case 'patch.proposed': c.tier = e.tier ?? c.tier; c.proposals = [...c.proposals, { round: e.round, tier: e.tier, ops: e.ops ?? [], confidence: e.confidence, evidence: e.evidence ?? [], provider: e.provider, model: e.model, usage: e.usage, latencyMs: e.latencyMs }]; break;
+    case 'patch.proposed': c.tier = e.tier ?? c.tier; c.proposals = [...c.proposals, { round: e.round, tier: e.tier, ops: e.ops ?? [], confidence: e.confidence, evidence: e.evidence ?? [] }]; break;
     case 'patch.committed': c.version = e.version ?? c.version; c.ops = e.ops ?? c.ops; break;
     case 'cache.hit': c.cacheHit = true; break;
     case 'heal.finished': c.healMs = e.ms ?? c.healMs; c.tier = e.tier ?? c.tier; c.rounds = e.rounds ?? c.rounds; break;
     case 'call.succeeded':
       c.outcome = c.cacheHit ? 'cache' : e.healed ? 'healed' : 'passthrough';
       c.version = e.version ?? c.version; c.rounds = e.rounds ?? c.rounds; c.data = e.data ?? null; c.endedAt = e.ts; break;
-    case 'halt': c.outcome = 'halted'; c.reason = e.reason; c.needsReview = Boolean(e.details?.needsOperator); c.reviewOps = e.details?.proposal?.ops ?? []; c.endedAt = e.ts; break;
+    case 'halt': c.outcome = 'halted'; c.reason = e.reason; c.endedAt = e.ts; break;
     default: break;
   }
   return c;
