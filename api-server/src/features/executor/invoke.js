@@ -30,6 +30,8 @@ import { validateUpstreamUrl } from '../http/url-policy.js';
 import { checkResponse } from '../drift-detector/index.js';
 import { log } from '../../lib/log.js';
 import { classifyUpstream, isRetryableOperation, retryDelayMs } from '../upstream-classifier/index.js';
+import { findKnownVariant, structuralFingerprint } from '../response-variants/index.js';
+import { observeQuarantine } from '../response-variants/quarantine.js';
 
 const ajv = new Ajv({ allErrors: true, strict: false });
 addFormats(ajv);
@@ -245,7 +247,7 @@ function failure(code, message, retryable, details) {
 function success(tool, response, meta) {
   return {
     ok: true,
-    data: tool.compiled.extract(response.json ?? {}),
+    data: meta.data ?? tool.compiled.extract(response.json ?? {}),
     meta: {
       version: tool.version,
       healed: meta.healed ?? false,
@@ -831,6 +833,12 @@ async function invokeCore({ apiId, toolName, args, runId, callId = newId('c'), t
     reason: upstreamClassification.reason,
   };
   if (upstreamClassification.classification === 'valid_empty_response') {
+    const required = tool.versionObj?.meta?.responseSchema?.required ?? [];
+    if (required.length > 0 && tool.versionObj?.meta?.allowEmptyResponse !== true) {
+      const details = { ...classificationDetails, classification: 'contract_violation', reason: 'empty response is not allowed by the registered contract' };
+      emitCall('call.failed', { code: 'contract_violation', ...details });
+      return failure('contract_violation', 'Upstream returned an empty response where fields are required', false, details);
+    }
     emitCall('call.succeeded', { version: tool.version, healed: false, classification: 'valid_empty_response', data: {} });
     return success(tool, { ...first, json: first.json ?? {} }, { healed: false, rounds: 0, tier: 0, latencyMs: Date.now() - t0, classification: 'valid_empty_response', retryCount });
   }
@@ -877,14 +885,60 @@ async function invokeCore({ apiId, toolName, args, runId, callId = newId('c'), t
     return success(tool, first, { healed: false, rounds: 0, tier: 0, latencyMs: Date.now() - t0, classification: 'no_drift', retryCount });
   }
 
+  if (first.ok) {
+    const variants = tool.versionObj?.meta?.responseVariants ?? [];
+    if (variants.length > 0) {
+      const variantResult = findKnownVariant(first.json, variants, tool.versionObj?.meta?.responseSchema ?? {}, {
+        args,
+        headers: first.headers,
+      });
+      const fingerprint = structuralFingerprint(first.json);
+      if (variantResult.kind === 'known_variant') {
+        emitCall('upstream.classified', {
+          classification: 'known_variant',
+          variantId: variantResult.variant.id,
+          fingerprint,
+          status: first.status,
+          schemaDiagnosisAttempted: false,
+          patchProposed: false,
+          patchCommitted: false,
+          retryCount,
+          elapsedMs: Date.now() - t0,
+          reason: 'response matched a verified registered variant',
+        });
+        emitCall('call.succeeded', { version: tool.version, healed: false, variantId: variantResult.variant.id, data: variantResult.data });
+        return success(tool, first, {
+          healed: false, rounds: 0, tier: 0, variantId: variantResult.variant.id,
+          classification: 'known_variant', fingerprint, retryCount,
+          latencyMs: Date.now() - t0, data: variantResult.data,
+        });
+      }
+      if (variantResult.kind === 'ambiguous_variant') {
+        const details = { classification: 'ambiguous_variant', fingerprint, variants: variantResult.matches, status: first.status, retryCount };
+        emitCall('call.failed', { code: 'ambiguous_variant', ...details });
+        return failure('ambiguous_variant', 'Multiple verified response variants match the upstream response', false, details);
+      }
+    }
+  }
+
   // A 200 response has already happened, so response-only drift is diagnosed
   // from that payload and is never replayed (especially for writes).
   if (first.ok) {
     const responseCheck = validateResponse(tool, first);
     const proposal = checkResponse({ tool, response: first });
+    const fingerprint = structuralFingerprint(first.json);
+    const quarantine = observeQuarantine({
+      apiId,
+      tool: toolName,
+      version: tool.version,
+      fingerprint,
+      classification: 'response_drift',
+    });
     emitCall('upstream.classified', {
       classification: 'response_drift',
       status: first.status,
+      fingerprint,
+      quarantineCount: quarantine.count,
       schemaDiagnosisAttempted: true,
       patchProposed: proposal.ok,
       patchCommitted: false,

@@ -13,7 +13,7 @@ const [{ invoke }, { registryStore }, { bus }] = await Promise.all([
 test.after(() => rmSync(dataDir, { recursive: true, force: true }));
 process.env.HEALR_DATA_DIR = dataDir;
 
-function register(apiId, { method = 'GET', sideEffects = 'none', fields = { value: { path: 'value', type: 'string', required: true } } } = {}) {
+function register(apiId, { method = 'GET', sideEffects = 'none', fields = { value: { path: 'value', type: 'string', required: true } }, allowEmptyResponse = false } = {}) {
   registryStore.reset();
   bus.clear();
   registryStore.registerApi(apiId, {
@@ -27,7 +27,7 @@ function register(apiId, { method = 'GET', sideEffects = 'none', fields = { valu
       path: '/value',
       sideEffects,
       parameters: { type: 'object', properties: {}, additionalProperties: false },
-      response: { fields },
+      response: { fields, allowEmptyResponse },
     }],
   });
 }
@@ -63,7 +63,7 @@ test('transient upstream failures never enter schema healing or increment versio
 });
 
 test('empty success is not drift and valid responses are reported as no drift', async () => {
-  register('empty-response');
+  register('empty-response', { allowEmptyResponse: true });
   const empty = await invokeWith(async () => new Response(null, { status: 204 }), 'empty-response');
   assert.equal(empty.ok, true);
   assert.equal(empty.meta.classification, 'valid_empty_response');

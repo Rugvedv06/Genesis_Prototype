@@ -10,6 +10,7 @@ import { compileAdapter } from './compile.js';
 import { cfg } from '../../config.js';
 import { clearNegativeForApi } from '../safety/circuit.js';
 import { resolveDataDir } from '../../lib/data-dir.js';
+import { validateVariantConfig } from '../response-variants/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -131,6 +132,7 @@ export class RegistryStore {
     const epoch = (existing?.epoch ?? 0) + 1;
     const apiEntry = { tools: {}, config: { baseUrl, specUrl, credentials, healing }, epoch };
     for (const tool of tools) {
+      const responseVariants = validateVariantConfig(tool.response?.variants);
       const responseMap = tool.response
         ? Object.fromEntries(Object.entries(tool.response.fields ?? {}).map(([k, v]) => [k, v.path]))
         : {};
@@ -162,6 +164,8 @@ export class RegistryStore {
           method: tool.method ?? 'POST',
           logicalSchema: tool.parameters,
           responseSchema,
+          responseVariants,
+          allowEmptyResponse: tool.response?.allowEmptyResponse === true,
           risk: tool.risk ?? 'low',
           sideEffects: tool.sideEffects ?? 'write',
           identity: tool.identity ?? {},
