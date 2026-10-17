@@ -12,7 +12,15 @@ const s = {
   conn: 'connecting',          // connecting | live | reconnecting | offline
   bootstrapped: false,
   error: null,
+<<<<<<< HEAD
   lastId: '0',
+=======
+<<<<<<< HEAD
+  lastId: '0',
+=======
+  lastId: 0,
+>>>>>>> origin/main
+>>>>>>> origin/main
   events: [],                  // newest first
   calls: new Map(),            // callId -> call
   order: [],                   // callIds, newest first
@@ -24,6 +32,10 @@ let pending = [];
 let flushTimer = null;
 let refreshTimer = null;
 let started = false;
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
 let sseStarted = false;
 
 function decimalCursor(value) {
@@ -35,6 +47,11 @@ function newerCursor(left, right) {
   try { return BigInt(decimalCursor(right)) > BigInt(decimalCursor(left)) ? decimalCursor(right) : decimalCursor(left); }
   catch { return decimalCursor(left); }
 }
+<<<<<<< HEAD
+=======
+=======
+>>>>>>> origin/main
+>>>>>>> origin/main
 
 const publish = () => { snapshot = { ...s }; listeners.forEach((l) => l()); };
 
@@ -44,7 +61,15 @@ function flush() {
   const batch = pending; pending = [];
   let needRefresh = false;
   for (const e of batch) {
+<<<<<<< HEAD
     s.lastId = newerCursor(s.lastId, e.id);
+=======
+<<<<<<< HEAD
+    s.lastId = newerCursor(s.lastId, e.id);
+=======
+    s.lastId = Math.max(s.lastId, e.id ?? 0);
+>>>>>>> origin/main
+>>>>>>> origin/main
     if (REFRESH_ON.has(e.type)) needRefresh = true;
     if (e.callId) {
       const prev = s.calls.get(e.callId);
@@ -57,6 +82,10 @@ function flush() {
   if (needRefresh) scheduleRefresh(400);
 }
 
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
 async function refresh(includeHistory = false) {
   try {
     const [st, history] = await Promise.all([
@@ -80,6 +109,15 @@ async function refresh(includeHistory = false) {
       s.events = [...(history.events ?? [])].reverse().slice(0, MAX_EVENTS);
       s.lastId = decimalCursor(history.lastEventId);
     }
+<<<<<<< HEAD
+=======
+=======
+async function refresh() {
+  try {
+    const st = await api.state();
+    Object.assign(s, { apis: st.apis ?? [], metrics: st.metrics ?? null, audit: st.audit ?? null, cache: st.cache ?? null, circuit: st.circuit ?? [], bootstrapped: true, error: null });
+>>>>>>> origin/main
+>>>>>>> origin/main
     if (s.conn === 'offline') s.conn = 'reconnecting';
   } catch (err) {
     s.error = err.message; s.conn = 'offline'; s.bootstrapped = true;
@@ -91,6 +129,10 @@ function scheduleRefresh(ms) { clearTimeout(refreshTimer); refreshTimer = setTim
 export function startStore() {
   if (started || typeof window === 'undefined') return;
   started = true;
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
   setInterval(refresh, 5000);
   refresh().finally(() => {
     if (sseStarted) return;
@@ -103,6 +145,19 @@ export function startStore() {
       onEvent: (e) => { pending.push(e); if (!flushTimer) flushTimer = setTimeout(flush, 120); },
       onReset: (_data, eventId) => { s.lastId = decimalCursor(eventId); pending = []; refresh(true); },
     });
+<<<<<<< HEAD
+=======
+=======
+  refresh();
+  setInterval(refresh, 5000);
+  connectSSE({
+    url: `${CORE}/events`,
+    getLastId: () => s.lastId,                 // 0 on first connect: replay the ring buffer (G4)
+    onOpen: () => { s.conn = 'live'; publish(); },
+    onError: () => { if (s.conn !== 'offline') s.conn = 'reconnecting'; publish(); },
+    onEvent: (e) => { pending.push(e); if (!flushTimer) flushTimer = setTimeout(flush, 120); },
+>>>>>>> origin/main
+>>>>>>> origin/main
   });
 }
 

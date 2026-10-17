@@ -3,17 +3,34 @@ const failures = new Map();
 const negative = new Map();
 const WINDOW_MS = 60_000;
 const OPEN_MS = 30_000;
+<<<<<<< HEAD
 const MAX_LOCAL_SAFETY_KEYS = 1000;
 import { readRedisCircuitOpenUntil, recordRedisCircuitFailure, readRedisState, writeRedisState, deleteRedisState, redisMirrorStatus } from '../patch-cache/redis-mirror.js';
+=======
+<<<<<<< HEAD
+const MAX_LOCAL_SAFETY_KEYS = 1000;
+import { readRedisCircuitOpenUntil, recordRedisCircuitFailure, readRedisState, writeRedisState, deleteRedisState, redisMirrorStatus } from '../patch-cache/redis-mirror.js';
+=======
+>>>>>>> origin/main
+>>>>>>> origin/main
 
 function key(apiId, tool) {
   return `${apiId}:${tool}`;
 }
 
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
 function boundMap(map) {
   while (map.size > MAX_LOCAL_SAFETY_KEYS) map.delete(map.keys().next().value);
 }
 
+<<<<<<< HEAD
+=======
+=======
+>>>>>>> origin/main
+>>>>>>> origin/main
 export function check(apiId, tool) {
   const state = states.get(key(apiId, tool));
   if (!state) return { ok: true };
@@ -22,6 +39,10 @@ export function check(apiId, tool) {
   return { ok: true, probe: true };
 }
 
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
 export async function checkAsync(apiId, tool) {
   if (process.env.REDIS_URL) {
     const until = await readRedisCircuitOpenUntil(key(apiId, tool));
@@ -37,21 +58,41 @@ export async function checkAsync(apiId, tool) {
   return check(apiId, tool);
 }
 
+<<<<<<< HEAD
+=======
+=======
+>>>>>>> origin/main
+>>>>>>> origin/main
 export function recordHalt(apiId, tool) {
   const k = key(apiId, tool);
   const now = Date.now();
   const recent = (failures.get(k) ?? []).filter((ts) => now - ts < WINDOW_MS);
   recent.push(now);
   failures.set(k, recent);
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
   boundMap(failures);
   if (recent.length >= 3) {
     states.set(k, { until: now + OPEN_MS });
     boundMap(states);
+<<<<<<< HEAD
+=======
+=======
+  if (recent.length >= 3) {
+    states.set(k, { until: now + OPEN_MS });
+>>>>>>> origin/main
+>>>>>>> origin/main
     return now + OPEN_MS;
   }
   return null;
 }
 
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
 export async function recordHaltAsync(apiId, tool) {
   if (process.env.REDIS_URL) {
     const until = await recordRedisCircuitFailure(key(apiId, tool), Date.now(), WINDOW_MS, OPEN_MS);
@@ -65,6 +106,11 @@ export async function recordHaltAsync(apiId, tool) {
   return recordHalt(apiId, tool);
 }
 
+<<<<<<< HEAD
+=======
+=======
+>>>>>>> origin/main
+>>>>>>> origin/main
 export function negativeHit(signature) {
   const cached = negative.get(signature);
   if (!cached) return false;
@@ -75,6 +121,10 @@ export function negativeHit(signature) {
   return true;
 }
 
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
 export async function negativeResultAsync(signature) {
   if (process.env.REDIS_URL) {
     const cached = await readRedisState('negative', signature);
@@ -87,6 +137,11 @@ export async function negativeHitAsync(signature) {
   return (await negativeResultAsync(signature)) !== null;
 }
 
+<<<<<<< HEAD
+=======
+=======
+>>>>>>> origin/main
+>>>>>>> origin/main
 export function negativeResult(signature) {
   const cached = negative.get(signature);
   return cached && cached.until > Date.now() ? cached.result : null;
@@ -94,6 +149,10 @@ export function negativeResult(signature) {
 
 export function cacheNegative(signature, result = { reason: 'unfixable_contract' }) {
   negative.set(signature, { until: Date.now() + WINDOW_MS, result: structuredClone(result) });
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
   boundMap(negative);
 }
 
@@ -107,6 +166,11 @@ export async function cacheNegativeAsync(signature, result = { reason: 'unfixabl
       && !/(password|secret|token|authorization|cookie)/i.test(value))),
   };
   await writeRedisState('negative', signature, { until: Date.now() + WINDOW_MS, result: safe }, Math.ceil(WINDOW_MS / 1000));
+<<<<<<< HEAD
+=======
+=======
+>>>>>>> origin/main
+>>>>>>> origin/main
 }
 
 export function clearNegativeForApi(apiId) {
@@ -116,6 +180,10 @@ export function clearNegativeForApi(apiId) {
   }
 }
 
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
 export async function clearNegativeForApiAsync(apiId) {
   clearNegativeForApi(apiId);
   // Keys are one-way hashed, so old Redis entries expire naturally. Revisions in
@@ -123,6 +191,11 @@ export async function clearNegativeForApiAsync(apiId) {
   void deleteRedisState('negative-api-marker', apiId).catch(() => {});
 }
 
+<<<<<<< HEAD
+=======
+=======
+>>>>>>> origin/main
+>>>>>>> origin/main
 export function reset() {
   states.clear();
   failures.clear();

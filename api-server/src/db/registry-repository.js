@@ -1,13 +1,28 @@
 import { sha256, stableStringify } from '../lib/hash.js';
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
 import { compileAdapter } from '../features/registry/compile.js';
 import Ajv from 'ajv';
 import addFormats from 'ajv-formats';
 import { getLocalWorkspaceId } from './workspace.js';
+<<<<<<< HEAD
 import { validateVariantConfig } from '../features/response-variants/index.js';
+=======
+>>>>>>> origin/main
 
 const clone = (value) => value == null ? value : structuredClone(value);
 const schemaAjv = new Ajv({ allErrors: true, strict: false });
 addFormats(schemaAjv);
+<<<<<<< HEAD
+=======
+=======
+import { getLocalWorkspaceId } from './workspace.js';
+
+const clone = (value) => value == null ? value : structuredClone(value);
+>>>>>>> origin/main
+>>>>>>> origin/main
 
 function requireSafeUrl(value, field, optional = false) {
   if (value == null && optional) return null;
@@ -42,6 +57,10 @@ function assertSafeConfig(value, path = 'config') {
   }
 }
 
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
 function validateApiOptions(options) {
   if (options.confidenceThreshold !== undefined
     && (typeof options.confidenceThreshold !== 'number' || !Number.isFinite(options.confidenceThreshold)
@@ -124,6 +143,11 @@ export function validateAdapterForStorage(adapter) {
   return adapter;
 }
 
+<<<<<<< HEAD
+=======
+=======
+>>>>>>> origin/main
+>>>>>>> origin/main
 function safeChangeForStorage(change) {
   if (!change || typeof change !== 'object' || Array.isArray(change)) return null;
   const safe = {};
@@ -135,6 +159,10 @@ function safeChangeForStorage(change) {
       if (!op || typeof op !== 'object' || Array.isArray(op)) return { op: 'unknown' };
       const operation = {};
       for (const key of ['op', 'path', 'from', 'to', 'type', 'name']) {
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
         if (typeof op[key] === 'string' && op[key].length <= 256
           && /^[A-Za-z0-9_$.[\]{}\/-]+$/.test(op[key]) && !/\d{4,}/.test(op[key])
           && !/(secret|token|password|credential|apikey|authorization|cookie)/i.test(op[key])) operation[key] = op[key];
@@ -144,6 +172,15 @@ function safeChangeForStorage(change) {
           && /^[A-Za-z_][A-Za-z0-9_.:-]{0,127}$/.test(op.source[key])
           && !/(secret|token|password|credential|apikey|authorization|cookie)/i.test(op.source[key]))
           .map((key) => [key, op.source[key]]));
+<<<<<<< HEAD
+=======
+=======
+        if (typeof op[key] === 'string') operation[key] = op[key];
+      }
+      if (op.source && typeof op.source === 'object') {
+        operation.source = Object.fromEntries(['type', 'ref'].filter((key) => typeof op.source[key] === 'string').map((key) => [key, op.source[key]]));
+>>>>>>> origin/main
+>>>>>>> origin/main
       }
       return operation;
     });
@@ -162,7 +199,14 @@ function apiOptions(payload) {
     if (payload[key] !== undefined) options[key] = clone(payload[key]);
   }
   assertSafeConfig(options);
+<<<<<<< HEAD
   validateApiOptions(options);
+=======
+<<<<<<< HEAD
+  validateApiOptions(options);
+=======
+>>>>>>> origin/main
+>>>>>>> origin/main
   return options;
 }
 
@@ -174,13 +218,25 @@ function buildRegisteredAdapter(tool) {
   const method = String(tool.method ?? 'POST').toUpperCase();
   if (!['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'].includes(method)) throw new TypeError('unsupported tool HTTP method');
   if (!tool.parameters || typeof tool.parameters !== 'object' || Array.isArray(tool.parameters)) throw new TypeError('tool parameters must be a JSON schema object');
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
   try { schemaAjv.compile(tool.parameters); } catch { throw new TypeError('tool parameters contain an invalid JSON schema'); }
   if (tool.adapter?.request !== undefined && !Array.isArray(tool.adapter.request)) throw new TypeError('adapter request operations must be an array');
   validateRequestOperations(tool.adapter?.request ?? []);
   if (tool.risk !== undefined && !['low', 'medium', 'high', 'critical'].includes(tool.risk)) throw new TypeError('unsupported tool risk');
   if (tool.sideEffects !== undefined && !['read', 'write', 'none'].includes(tool.sideEffects)) throw new TypeError('sideEffects must be read, write, or none');
+<<<<<<< HEAD
   const fields = tool.response?.fields ?? {};
   const responseVariants = validateVariantConfig(tool.response?.variants);
+=======
+  if (tool.idempotencyKeyHeader !== undefined && (typeof tool.idempotencyKeyHeader !== 'string'
+    || !/^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,128}$/.test(tool.idempotencyKeyHeader))) {
+    throw new TypeError('idempotencyKeyHeader must be a valid HTTP header name');
+  }
+  const fields = tool.response?.fields ?? {};
+>>>>>>> origin/main
   if (!fields || typeof fields !== 'object' || Array.isArray(fields)) throw new TypeError('response fields must be an object');
   for (const [field, definition] of Object.entries(fields)) {
     if (!field.trim() || !definition || typeof definition !== 'object' || Array.isArray(definition)
@@ -189,6 +245,16 @@ function buildRegisteredAdapter(tool) {
       throw new TypeError('response field definitions are invalid');
     }
   }
+<<<<<<< HEAD
+=======
+=======
+  if (tool.adapter?.request !== undefined && !Array.isArray(tool.adapter.request)) throw new TypeError('adapter request operations must be an array');
+  if (tool.risk !== undefined && !['low', 'medium', 'high', 'critical'].includes(tool.risk)) throw new TypeError('unsupported tool risk');
+  if (tool.sideEffects !== undefined && !['read', 'write', 'none'].includes(tool.sideEffects)) throw new TypeError('sideEffects must be read, write, or none');
+  const fields = tool.response?.fields ?? {};
+  if (!fields || typeof fields !== 'object' || Array.isArray(fields)) throw new TypeError('response fields must be an object');
+>>>>>>> origin/main
+>>>>>>> origin/main
   const responseMap = Object.fromEntries(Object.entries(fields).map(([key, value]) => [key, value.path]));
   const responseSchema = tool.response ? {
     type: 'object',
@@ -199,25 +265,50 @@ function buildRegisteredAdapter(tool) {
     required: Object.entries(fields).filter(([, value]) => value.required).map(([key]) => key),
     additionalProperties: true,
   } : null;
+<<<<<<< HEAD
   if (responseSchema) {
     try { schemaAjv.compile(responseSchema); } catch { throw new TypeError('tool response fields contain an invalid JSON schema'); }
   }
+=======
+<<<<<<< HEAD
+  if (responseSchema) {
+    try { schemaAjv.compile(responseSchema); } catch { throw new TypeError('tool response fields contain an invalid JSON schema'); }
+  }
+=======
+>>>>>>> origin/main
+>>>>>>> origin/main
   const sideEffects = tool.sideEffects ?? 'write';
   const adapter = {
     request: clone(tool.adapter?.request ?? []),
     response: { map: responseMap },
     sideEffects,
   };
+<<<<<<< HEAD
   validateAdapterForStorage(adapter);
+=======
+<<<<<<< HEAD
+  validateAdapterForStorage(adapter);
+=======
+>>>>>>> origin/main
+>>>>>>> origin/main
   const metadata = {
     path: tool.path,
     method,
     logicalSchema: clone(tool.parameters),
     responseSchema,
+<<<<<<< HEAD
     responseVariants,
     allowEmptyResponse: tool.response?.allowEmptyResponse === true,
     risk: tool.risk ?? 'low',
     sideEffects,
+=======
+    risk: tool.risk ?? 'low',
+    sideEffects,
+<<<<<<< HEAD
+    ...(tool.idempotencyKeyHeader ? { idempotencyKeyHeader: tool.idempotencyKeyHeader } : {}),
+=======
+>>>>>>> origin/main
+>>>>>>> origin/main
     identity: clone(tool.identity ?? {}),
   };
   return { adapter, metadata, risk: metadata.risk, sideEffects };
@@ -243,7 +334,15 @@ function toVersion(row) {
 export async function getApiConfig(queryable, apiId) {
   const workspaceId = await getLocalWorkspaceId(queryable);
   const { rows } = await queryable.query(
+<<<<<<< HEAD
     `SELECT api_id, base_url, spec_url, config, epoch, config_revision
+=======
+<<<<<<< HEAD
+    `SELECT api_id, base_url, spec_url, config, epoch, config_revision
+=======
+    `SELECT api_id, base_url, spec_url, config, epoch
+>>>>>>> origin/main
+>>>>>>> origin/main
      FROM apis WHERE workspace_id = $1 AND api_id = $2 AND deleted_at IS NULL`,
     [workspaceId, apiId],
   );
@@ -284,7 +383,14 @@ export async function updateApiConfigInTransaction(client, apiId, inputPatch) {
     ...(tier2 !== undefined ? { tier2 } : {}),
     ...(healing !== undefined || mode !== undefined ? { healing: { ...(config.healing ?? {}), ...(healing ?? {}), ...(mode !== undefined ? { mode } : {}) } } : {}),
   };
+<<<<<<< HEAD
   validateApiOptions(next);
+=======
+<<<<<<< HEAD
+  validateApiOptions(next);
+=======
+>>>>>>> origin/main
+>>>>>>> origin/main
   if (stableStringify(next) !== stableStringify(config)) {
     await client.query(
       `UPDATE apis SET config = $3::jsonb, config_revision = config_revision + 1, updated_at = now()
@@ -307,6 +413,10 @@ export async function listApiTools(queryable) {
   return rows.map((row) => ({ apiId: row.api_id, tool: row.tool_name, version: row.current_version, risk: row.risk, epoch: row.epoch }));
 }
 
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
 /** Build the disposable process cache from PostgreSQL; never read the JSON snapshot in DB mode. */
 export async function loadRegistryFromDatabase(queryable) {
   const workspaceId = await getLocalWorkspaceId(queryable);
@@ -361,6 +471,11 @@ export async function getApiRevisions(queryable, apiId) {
   return rows[0] ?? null;
 }
 
+<<<<<<< HEAD
+=======
+=======
+>>>>>>> origin/main
+>>>>>>> origin/main
 export async function getCurrentToolVersion(queryable, apiId, toolName) {
   const workspaceId = await getLocalWorkspaceId(queryable);
   const { rows } = await queryable.query(
@@ -397,27 +512,62 @@ export class StaleAdapterError extends Error {
 
 /** Append a verified adapter and advance its pointer within the caller's UoW. */
 export async function commitAdapterInTransaction(client, {
+<<<<<<< HEAD
   apiId, toolName, adapter, change, origin = 'heal', expectedVersion, expectedEpoch, expectedConfigRevision, expectedCredentialRevision,
+=======
+<<<<<<< HEAD
+  apiId, toolName, adapter, change, origin = 'heal', expectedVersion, expectedEpoch, expectedConfigRevision, expectedCredentialRevision,
+=======
+  apiId, toolName, adapter, change, origin = 'heal', expectedVersion, expectedEpoch, expectedConfigRevision,
+>>>>>>> origin/main
+>>>>>>> origin/main
 }) {
   const workspaceId = await getLocalWorkspaceId(client);
   // All mutation paths lock API first and tool second, preventing stale drafts
   // from racing re-registration or another commit.
   const { rows: apiRows } = await client.query(
+<<<<<<< HEAD
     `SELECT epoch, config_revision, credential_revision, deleted_at FROM apis
+=======
+<<<<<<< HEAD
+    `SELECT epoch, config_revision, credential_revision, deleted_at FROM apis
+=======
+    `SELECT epoch, config_revision, deleted_at FROM apis
+>>>>>>> origin/main
+>>>>>>> origin/main
      WHERE workspace_id = $1 AND api_id = $2 FOR UPDATE`,
     [workspaceId, apiId],
   );
   const api = apiRows[0];
+<<<<<<< HEAD
   if (!api || api.deleted_at) throw new StaleAdapterError();
+=======
+<<<<<<< HEAD
+  if (!api || api.deleted_at) throw new StaleAdapterError();
+=======
+  if (!api || api.deleted_at) throw new Error('API is not registered');
+>>>>>>> origin/main
+>>>>>>> origin/main
   const { rows: toolRows } = await client.query(
     `SELECT current_version, deleted_at FROM tools
      WHERE workspace_id = $1 AND api_id = $2 AND tool_name = $3 FOR UPDATE`,
     [workspaceId, apiId, toolName],
   );
   const tool = toolRows[0];
+<<<<<<< HEAD
   if (!tool || tool.deleted_at) throw new StaleAdapterError();
   if (tool.current_version !== expectedVersion || api.epoch !== expectedEpoch || api.config_revision !== expectedConfigRevision
     || (expectedCredentialRevision !== undefined && api.credential_revision !== expectedCredentialRevision)) {
+=======
+<<<<<<< HEAD
+  if (!tool || tool.deleted_at) throw new StaleAdapterError();
+  if (tool.current_version !== expectedVersion || api.epoch !== expectedEpoch || api.config_revision !== expectedConfigRevision
+    || (expectedCredentialRevision !== undefined && api.credential_revision !== expectedCredentialRevision)) {
+=======
+  if (!tool || tool.deleted_at) throw new Error('Tool is not registered');
+  if (tool.current_version !== expectedVersion || api.epoch !== expectedEpoch || api.config_revision !== expectedConfigRevision) {
+>>>>>>> origin/main
+>>>>>>> origin/main
     throw new StaleAdapterError();
   }
   const { rows: currentRows } = await client.query(
@@ -435,7 +585,14 @@ export async function commitAdapterInTransaction(client, {
   );
   const version = Number(nextRows[0].version);
   const adapterCopy = clone(adapter);
+<<<<<<< HEAD
   validateAdapterForStorage(adapterCopy);
+=======
+<<<<<<< HEAD
+  validateAdapterForStorage(adapterCopy);
+=======
+>>>>>>> origin/main
+>>>>>>> origin/main
   const adapterHash = sha256(stableStringify(adapterCopy));
   await client.query(
     `INSERT INTO adapter_versions

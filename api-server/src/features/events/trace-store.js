@@ -39,6 +39,10 @@ export function get(callId) {
   return trace ? structuredClone(trace) : null;
 }
 
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
 export function traceFromEvents(callId, events, { cursor = 0, hasMore = false, nextCursor = null } = {}) {
   if (!events.length) return null;
   const first = events.find((event) => event.type === 'call.started');
@@ -76,6 +80,11 @@ export function traceFromEvents(callId, events, { cursor = 0, hasMore = false, n
   };
 }
 
+<<<<<<< HEAD
+=======
+=======
+>>>>>>> origin/main
+>>>>>>> origin/main
 export function clear() {
   traces.clear();
 }

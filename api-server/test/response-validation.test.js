@@ -1,5 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -19,6 +23,14 @@ test.after(() => {
   else process.env.HEALR_DATA_DIR = previousDataDir;
   rmSync(dataDir, { recursive: true, force: true });
 });
+<<<<<<< HEAD
+=======
+=======
+import { invoke, validateResponse } from '../src/features/executor/invoke.js';
+import { registryStore } from '../src/features/registry/store.js';
+import { compileAdapter } from '../src/features/registry/compile.js';
+>>>>>>> origin/main
+>>>>>>> origin/main
 
 function registerResponseContract() {
   registryStore.reset();
@@ -54,7 +66,15 @@ test('inconclusive HTTP 200 response drift halts without replacing the active ad
     const result = await invoke({ apiId: 'response-test', toolName: 'get', args: {} });
     assert.equal(result.ok, false);
     assert.equal(result.error.code, 'tool_unavailable');
+<<<<<<< HEAD
     assert.equal(result.error.details.reason, 'response_mapping_unresolved');
+=======
+<<<<<<< HEAD
+    assert.equal(result.error.details.reason, 'response_mapping_unresolved');
+=======
+    assert.equal(result.error.details.reason, 'response_mapping_ambiguous');
+>>>>>>> origin/main
+>>>>>>> origin/main
     assert.equal(calls, 1);
     assert.equal(registryStore.versions('response-test', 'get').length, 1);
   } finally {
@@ -70,7 +90,14 @@ test('HTTP 200 read response remaps a unique compatible field without a second r
     return new Response(JSON.stringify({ id: '1', full_name: 'Asha Rao' }), { status: 200 });
   };
   try {
+<<<<<<< HEAD
     bus.clear();
+=======
+<<<<<<< HEAD
+    bus.clear();
+=======
+>>>>>>> origin/main
+>>>>>>> origin/main
     registryStore.reset();
     registryStore.registerApi('response-remap-test', {
       baseUrl: 'https://api.example.com',
@@ -128,6 +155,10 @@ test('response remap with a mismatched identity echo halts without committing', 
   }
 });
 
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
 test('schema-valid HTTP 200 with a mismatched identity echo halts before returning success', async () => {
   const originalFetch = globalThis.fetch;
   let calls = 0;
@@ -342,6 +373,11 @@ test('M3.1 equal-ranked compatible response paths remain explicitly ambiguous', 
   }
 });
 
+<<<<<<< HEAD
+=======
+=======
+>>>>>>> origin/main
+>>>>>>> origin/main
 test('valid typed response passes logical response validation', () => {
   const tool = {
     apiId: 'response-test',

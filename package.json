@@ -13,6 +13,10 @@
   ],
   "scripts": {
     "dev": "node scripts/dev.js",
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
     "test": "node --test \"api-server/test/**/*.test.js\" \"demo-server-and-client/server/test/**/*.test.js\" \"packages/llm/test/**/*.test.js\" \"scripts/**/*.test.js\"",
     "verify:p01": "node scripts/verify-phase01.mjs",
     "verify:m5:live": "node scripts/verify-m5-live.mjs",
@@ -23,6 +27,16 @@
     "db:retention": "node api-server/src/db/retention.js",
     "db:backup": "sh scripts/db-backup.sh",
     "db:restore:drill": "sh scripts/db-restore-drill.sh"
+<<<<<<< HEAD
+=======
+=======
+    "test": "node --test \"api-server/test/**/*.test.js\" \"demo-server-and-client/server/test/**/*.test.js\"",
+    "verify:p01": "node scripts/verify-phase01.mjs",
+    "db:migrate": "npm --workspace=api-server run db:migrate",
+    "db:import": "node api-server/src/db/importer/preflight-cli.js",
+    "db:import:dry-run": "node api-server/src/db/importer/preflight-cli.js --dry-run"
+>>>>>>> origin/main
+>>>>>>> origin/main
   },
   "engines": {
     "node": ">=20"

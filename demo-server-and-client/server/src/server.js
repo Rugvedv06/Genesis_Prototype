@@ -8,7 +8,14 @@ import express from 'express';
 import cors from 'cors';
 import { get as getMutation, ids as mutationIds } from './mutations/catalogue.js';
 import { validateRequest, applyResponseMutation } from './mutations/validator.js';
+<<<<<<< HEAD
 import { buildOpenApi } from './mutations/openapi.js';
+=======
+<<<<<<< HEAD
+import { buildOpenApi } from './mutations/openapi.js';
+=======
+>>>>>>> origin/main
+>>>>>>> origin/main
 import { eventsRoute } from './events/routes.js';
 import { baselineRoutes } from './baseline-agent/routes.js';
 
@@ -54,7 +61,15 @@ app.get('/admin/mutations', (_req, res) => {
       return {
         id, label: m.label, category: m.category ?? 'contract', route: m.route,
         recoverable: (m.expected ?? 'heal') !== 'halt', expected: m.expected ?? 'heal',
+<<<<<<< HEAD
         expectedOps: m.expectedOps ?? [], expectedTier: m.id === 'M8' ? (state.specAvailable && !state.specStale ? 0 : 2) : m.expectedTier, llmRequired: m.id === 'M8' ? !(state.specAvailable && !state.specStale) : (m.llmRequired ?? false), fixture: m.fixture, specVariants: m.specVariants ?? [],
+=======
+<<<<<<< HEAD
+        expectedOps: m.expectedOps ?? [], expectedTier: m.id === 'M8' ? (state.specAvailable && !state.specStale ? 0 : 2) : m.expectedTier, llmRequired: m.id === 'M8' ? !(state.specAvailable && !state.specStale) : (m.llmRequired ?? false), fixture: m.fixture, specVariants: m.specVariants ?? [],
+=======
+        expectedOps: m.expectedOps ?? [],
+>>>>>>> origin/main
+>>>>>>> origin/main
       };
     }),
   });
@@ -71,7 +86,15 @@ app.post('/admin/mutate', (req, res) => {
 });
 
 app.post('/admin/reset', (_req, res) => {
+<<<<<<< HEAD
   state = { mutation: null, errorStyle: 'pydantic-v1', specAvailable: true, specStale: false, writes: [], lastRequests: [], taskValues: new Set() };
+=======
+<<<<<<< HEAD
+  state = { mutation: null, errorStyle: 'pydantic-v1', specAvailable: true, specStale: false, writes: [], lastRequests: [], taskValues: new Set() };
+=======
+  state = { mutation: null, errorStyle: 'pydantic-v1', specAvailable: true, writes: [], lastRequests: [], taskValues: new Set() };
+>>>>>>> origin/main
+>>>>>>> origin/main
   log({ admin: 'reset' });
   res.json({ ok: true });
 });

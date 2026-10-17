@@ -22,6 +22,13 @@ export function headerRule({ errors, request, resolveCredential }) {
     confidence: 0.95,
     ops: [{
       op: 'add_header', name, source,
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+=======
+      evidence: { kind: 'error', ref: `header ${name} required`, ...(allowed ? { allowed } : {}) },
+>>>>>>> origin/main
+>>>>>>> origin/main
     }],
     evidence: [err.raw],
   };

@@ -11,13 +11,27 @@ import { apisRoutes } from './features/apis/routes.js';
 import { eventsRoute } from './features/events/routes.js';
 import { invoke } from './features/executor/invoke.js';
 import { registryStore } from './features/registry/store.js';
+<<<<<<< HEAD
 import { bus, configureEventPersistence } from './features/events/bus.js';
 import { get as getTrace, traceFromEvents } from './features/events/trace-store.js';
+=======
+<<<<<<< HEAD
+import { bus, configureEventPersistence } from './features/events/bus.js';
+import { get as getTrace, traceFromEvents } from './features/events/trace-store.js';
+=======
+import { bus } from './features/events/bus.js';
+import { get as getTrace } from './features/events/trace-store.js';
+>>>>>>> origin/main
+>>>>>>> origin/main
 import { auditRoutes } from './features/audit/routes.js';
 import { snapshot as metricsSnapshot, timeseries as metricsTimeseries } from './features/metrics/index.js';
 import { head as auditHead } from './features/audit/index.js';
 import { snapshot as circuitSnapshot } from './features/safety/circuit.js';
 import { getProvider } from './features/llm/provider.js';
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
 import { closePool, databaseStatus, getPool, poolStatus } from './db/pool.js';
 import { migrationStatus } from './db/migrate.js';
 import { refreshRegistryCache } from './db/registry-service.js';
@@ -56,12 +70,23 @@ const recoveredInvocations = await reconcileStaleInvocations();
 if (recoveredInvocations.reconciled) {
   log({ level: 'warn', service: 'api-server', code: 'stale_invocations_reconciled', count: recoveredInvocations.reconciled });
 }
+<<<<<<< HEAD
+=======
+=======
+import { closePool, databaseStatus } from './db/pool.js';
+import { migrationStatus } from './db/migrate.js';
+>>>>>>> origin/main
+>>>>>>> origin/main
 
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '1100kb' }));
 
 app.get('/health', (_req, res) => {
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
   res.json({ ok: true, service: 'api-server', port: cfg.port, version: '0.1.0', apis: registryStore.list().length, time: new Date().toISOString() });
 });
 
@@ -96,6 +121,28 @@ app.get('/logs', async (req, res, next) => {
 
 app.get('/state', async (_req, res, next) => {
   try {
+<<<<<<< HEAD
+=======
+=======
+  res.json({ ok: true, service: 'api-server', port: cfg.port, version: '0.1.0', apis: registryStore.list().length, auditHead: auditHead(), time: new Date().toISOString() });
+});
+
+app.get('/ready', async (_req, res) => {
+  if (!process.env.DATABASE_URL) return res.json({ ok: true, database: { configured: false, required: false } });
+  const database = await databaseStatus();
+  if (!database.ok) return res.status(503).json({ ok: false, database });
+  try {
+    const migrations = await migrationStatus();
+    const ok = migrations.ok;
+    return res.status(ok ? 200 : 503).json({ ok, database: { configured: true, ok: true }, migrations });
+  } catch {
+    return res.status(503).json({ ok: false, database: { configured: true, ok: true }, migrations: { ok: false, code: 'migration_state_unavailable' } });
+  }
+});
+
+app.get('/state', (_req, res) => {
+>>>>>>> origin/main
+>>>>>>> origin/main
   const apis = registryStore.list();
   const safety = circuitSnapshot();
   const grouped = new Map();
@@ -110,6 +157,10 @@ app.get('/state', async (_req, res, next) => {
       sideEffects: current?.versionObj?.meta?.sideEffects ?? current?.versionObj?.adapter?.sideEffects ?? 'write',
     });
   }
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
   const [metrics, audit, eventCursor] = process.env.DATABASE_URL
     ? await Promise.all([snapshotMetrics(getPool()), getAuditHead(getPool()), getEventCursor(getPool())])
     : [metricsSnapshot(), auditHead(), { last_event_id: String(bus.since(0).at(-1)?.id ?? 0) }];
@@ -195,11 +246,31 @@ app.get('/provider/health', async (_req, res) => {
     const [agent, diagnoser] = await Promise.all([getProvider('agent').health(), getProvider('diagnoser').health()]);
     const result = { ...diagnoser, roles: { agent, diagnoser } };
     res.status(agent.ok && diagnoser.ok ? 200 : 503).json(result);
+<<<<<<< HEAD
+=======
+=======
+  res.json({ lastEventId: bus.since(0).at(-1)?.id ?? 0, apis: [...grouped.values()], metrics: metricsSnapshot(), audit: auditHead(), cache: { entries: safety.negativeEntries, hits: 0 }, circuit: safety.open });
+});
+
+app.get('/metrics', (_req, res) => res.json(metricsSnapshot()));
+app.get('/metrics/timeseries', (req, res) => res.json({ series: metricsTimeseries(Number(req.query.window ?? 300), Number(req.query.step ?? 5)) }));
+
+app.get('/provider/health', async (_req, res) => {
+  try {
+    const provider = getProvider('diagnoser');
+    const result = await provider.health();
+    res.status(result.ok ? 200 : 503).json(result);
+>>>>>>> origin/main
+>>>>>>> origin/main
   } catch (error) {
     res.status(503).json({ ok: false, code: 'provider_configuration_error', message: error.message });
   }
 });
 
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
 app.get('/traces/:callId', async (req, res, next) => {
   const rawLimit = req.query.limit;
   const rawCursor = req.query.cursor;
@@ -231,6 +302,13 @@ app.get('/traces/:callId', async (req, res, next) => {
       trace = getTrace(req.params.callId);
     }
   } catch (error) { return next(error); }
+<<<<<<< HEAD
+=======
+=======
+app.get('/traces/:callId', (req, res) => {
+  const trace = getTrace(req.params.callId);
+>>>>>>> origin/main
+>>>>>>> origin/main
   if (!trace) return res.status(404).json({ ok: false, error: 'not_found' });
   res.json(trace);
 });
@@ -244,8 +322,12 @@ app.post('/apis/:apiId/tools/:tool/invoke', async (req, res) => {
   const { apiId, tool } = req.params;
   const { args, runId: bodyRunId } = req.body ?? {};
   const runId = bodyRunId ?? req.get('x-run-id');
+  const idempotencyKey = req.get('idempotency-key');
+  if (idempotencyKey !== undefined && (!idempotencyKey.trim() || idempotencyKey.length > 255 || /[\u0000-\u001f\u007f]/.test(idempotencyKey))) {
+    return res.status(400).json({ ok: false, error: { code: 'invalid_idempotency_key', retryable: false } });
+  }
   try {
-    const result = await invoke({ apiId, toolName: tool, args, runId });
+    const result = await invoke({ apiId, toolName: tool, args, runId, idempotencyKey });
     if (result.ok) return res.json({ ok: true, data: result.data, meta: result.meta });
     if (['outcome_uncertain', 'persistence_unavailable'].includes(result.error.code)) return res.status(503).json({ ok: false, error: result.error });
     const status = result.error.retryable === false && result.error.code === 'invalid_arguments' ? 400 : 200;
@@ -294,6 +376,10 @@ async function shutdown(signal) {
     forceCloseTimer.unref();
     await httpClosed;
     clearTimeout(forceCloseTimer);
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
     try { await flushDurableEvents(); }
     catch { log({ level: 'warn', service: 'api-server', code: 'event_queue_flush_failed' }); }
     try { await closeRedisMirror(); }
@@ -310,6 +396,14 @@ async function shutdown(signal) {
     }
     try { await closePool(); }
     catch { log({ level: 'error', service: 'api-server', code: 'postgres_pool_shutdown_error' }); }
+<<<<<<< HEAD
+=======
+=======
+    try { await closePool(); }
+    catch { log({ level: 'error', service: 'api-server', code: 'postgres_pool_shutdown_error' }); }
+    log({ level: 'info', service: 'api-server', code: 'shutdown_complete' });
+>>>>>>> origin/main
+>>>>>>> origin/main
   })();
   return shutdownPromise;
 }

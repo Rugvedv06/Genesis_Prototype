@@ -10,7 +10,10 @@ import { compileAdapter } from './compile.js';
 import { cfg } from '../../config.js';
 import { clearNegativeForApi } from '../safety/circuit.js';
 import { resolveDataDir } from '../../lib/data-dir.js';
+<<<<<<< HEAD
 import { validateVariantConfig } from '../response-variants/index.js';
+=======
+>>>>>>> origin/main
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -84,9 +87,19 @@ export class RegistryStore {
 
   // Register a single tool within an existing or new API. Used internally by
   // registerApi; kept for backward compatibility.
+<<<<<<< HEAD
+  register(apiId, tool, adapter, risk = 'low', config = {}, toolMetadata = {}) {
+    adapter = copy(adapter);
+    config = copy(config);
+    toolMetadata = copy(toolMetadata);
+=======
   register(apiId, tool, adapter, risk = 'low', config = {}) {
     adapter = copy(adapter);
     config = copy(config);
+<<<<<<< HEAD
+=======
+>>>>>>> origin/main
+>>>>>>> origin/main
     ensureDir();
     if (!this._byApi[apiId]) this._byApi[apiId] = { tools: {}, config, epoch: 0 };
     if (!this._byApi[apiId].tools) this._byApi[apiId].tools = {};
@@ -107,6 +120,13 @@ export class RegistryStore {
         risk,
         sideEffects: adapter.sideEffects ?? 'write',
         identity: {},
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+        ...(toolMetadata.idempotencyKeyHeader ? { idempotencyKeyHeader: toolMetadata.idempotencyKeyHeader } : {}),
+=======
+>>>>>>> origin/main
+>>>>>>> origin/main
       },
       origin: 'register',
       change: null,
@@ -132,7 +152,14 @@ export class RegistryStore {
     const epoch = (existing?.epoch ?? 0) + 1;
     const apiEntry = { tools: {}, config: { baseUrl, specUrl, credentials, healing }, epoch };
     for (const tool of tools) {
+<<<<<<< HEAD
       const responseVariants = validateVariantConfig(tool.response?.variants);
+=======
+      if (tool.idempotencyKeyHeader !== undefined && (typeof tool.idempotencyKeyHeader !== 'string'
+        || !/^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,128}$/.test(tool.idempotencyKeyHeader))) {
+        throw new TypeError('idempotencyKeyHeader must be a valid HTTP header name');
+      }
+>>>>>>> origin/main
       const responseMap = tool.response
         ? Object.fromEntries(Object.entries(tool.response.fields ?? {}).map(([k, v]) => [k, v.path]))
         : {};
@@ -164,10 +191,19 @@ export class RegistryStore {
           method: tool.method ?? 'POST',
           logicalSchema: tool.parameters,
           responseSchema,
+<<<<<<< HEAD
           responseVariants,
           allowEmptyResponse: tool.response?.allowEmptyResponse === true,
           risk: tool.risk ?? 'low',
           sideEffects: tool.sideEffects ?? 'write',
+=======
+          risk: tool.risk ?? 'low',
+          sideEffects: tool.sideEffects ?? 'write',
+<<<<<<< HEAD
+          ...(tool.idempotencyKeyHeader ? { idempotencyKeyHeader: tool.idempotencyKeyHeader } : {}),
+=======
+>>>>>>> origin/main
+>>>>>>> origin/main
           identity: tool.identity ?? {},
         },
         origin: 'register',
@@ -226,8 +262,16 @@ export class RegistryStore {
     const cur = entry.current;
     return {
       epoch: this._byApi[apiId].epoch ?? 0,
+<<<<<<< HEAD
       configRevision: this._byApi[apiId].configRevision ?? 1,
       credentialRevision: this._byApi[apiId].credentialRevision ?? 1,
+=======
+<<<<<<< HEAD
+      configRevision: this._byApi[apiId].configRevision ?? 1,
+      credentialRevision: this._byApi[apiId].credentialRevision ?? 1,
+=======
+>>>>>>> origin/main
+>>>>>>> origin/main
       version: cur.version,
       versionObj: copy(cur),
       compiled: (() => {

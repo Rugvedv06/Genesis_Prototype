@@ -527,6 +527,10 @@ This section records implementation progress as changes land. A milestone is mar
 - The mock applies response operations through one shared transformer, leaving the truth record unchanged. The core remains independent of mock implementation details.
 - The demo now loads mutation choices from `/admin/mutations`, so M6/M10 can be selected without a duplicated client-side catalogue.
 - Focused mock verification: `npm --workspace=@healr/demo-server test` — **8/8 passed**, including response mutation isolation and catalogue metadata. Full M6/M10 gateway and truth UI acceptance remains pending.
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
 
 ## Resume — user confirmed Milestone 1.5 complete
 
@@ -894,3 +898,9 @@ This section records implementation progress as changes land. A milestone is mar
 - **Acceptance:** production client build succeeds; implementation uses bounded existing endpoints, exposes trace completion/incomplete reason and cursor, and lets an operator invalidate one or all verified candidates. No browser verification in this ticket.
 - **Implementation:** added a Metrics & traces page and nav entry. It fetches the persisted `/metrics` snapshot and one-hour, one-minute `/metrics/timeseries` buckets, displays outcome bars and durable rounds/tier/latency/token counters, and fetches `/traces/:callId` by bounded cursor. The trace panel labels complete/incomplete state, shows the API's reason and retention floor, renders spans, and offers continuation when a next cursor exists. The same page lists candidate metadata in 100-row pages, shows Redis readiness, and provides single and confirmed clear-all invalidation actions. API helpers accept bounded cache and trace parameters; existing overview panels were left alone.
 - **Verification:** `api-client` `npm run build` passed after adding metrics, trace, and cache management UI and generated the `/metrics` route; `git diff --check` passed. Per the user's instruction, no browser verification was run; M4 dashboard interaction evidence remains open until the instructed walkthrough.
+<<<<<<< HEAD
+=======
+=======
+- Integrated checks after adding M6/M10 selection: elevated `npm test` — **92/92 passed**; `npm --workspace=@healr/demo-client run build` succeeded; elevated `npm run verify:p01` — **17/17 passed**; `git diff --check` passed. Sandboxed runs intermittently cannot bind test ports (`EPERM` / `could not find free port`); elevated reruns pass.
+>>>>>>> origin/main
+>>>>>>> origin/main
