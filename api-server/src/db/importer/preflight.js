@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { validateAdapterForStorage } from '../registry-repository.js';
+import { sanitizePatchExplanation } from '../../features/audit/explanation.js';
 import { sha256, stableStringify } from '../../lib/hash.js';
 import { resolveDataDir } from '../../lib/data-dir.js';
 
@@ -147,7 +148,7 @@ function hasUnsafeAuditMaterial(value, key = '') {
 
 function auditNeedsRedaction(record) {
   const allowed = new Set(['index', 'ts', 'prevHash', 'hash', 'decision', 'apiId', 'tool', 'callId', 'healId',
-    'version', 'versionBefore', 'versionAfter', 'tier', 'rounds', 'latencyMs', 'confidence', 'responseOnly', 'reason', 'ops', 'evidence']);
+    'version', 'versionBefore', 'versionAfter', 'tier', 'rounds', 'latencyMs', 'confidence', 'responseOnly', 'reason', 'ops', 'evidence', 'explanation']);
   if (Object.keys(record).some((key) => !allowed.has(key)) || hasUnsafeAuditMaterial(record)) return true;
   for (const key of ['apiId', 'tool', 'callId', 'healId']) {
     if (record[key] !== undefined && record[key] !== null
@@ -182,12 +183,14 @@ function auditNeedsRedaction(record) {
   }
   if (record.confidence !== undefined && (typeof record.confidence !== 'number' || !Number.isFinite(record.confidence) || record.confidence < 0 || record.confidence > 1)) return true;
   if (record.responseOnly !== undefined && typeof record.responseOnly !== 'boolean') return true;
+  if (record.explanation !== undefined && !sanitizePatchExplanation(record.explanation)) return true;
   return false;
 }
 
 function changeNeedsRedaction(change) {
   if (hasUnsafeAuditMaterial(change)) return true;
   if (!change || typeof change !== 'object' || !Array.isArray(change.ops)) return false;
+  if (change.explanation !== undefined && !sanitizePatchExplanation(change.explanation)) return true;
   return change.ops.some((operation) => {
     if (!operation || typeof operation !== 'object' || Array.isArray(operation)) return true;
     const allowed = new Set(['op', 'path', 'from', 'to', 'type', 'name', 'source']);

@@ -2,6 +2,7 @@ import { sha256, stableStringify } from '../../lib/hash.js';
 import { getLocalWorkspaceId } from '../workspace.js';
 import { withTransaction } from '../transaction.js';
 import { inspectImportSources } from './preflight.js';
+import { sanitizePatchExplanation } from '../../features/audit/explanation.js';
 
 const FINGERPRINT_VERSION = 'file-import-v2-audit-redacted-rechain';
 
@@ -29,6 +30,8 @@ function safeChange(change) {
     });
   }
   if (change.evidence !== undefined) out.evidenceCount = Array.isArray(change.evidence) ? change.evidence.length : 1;
+  const explanation = sanitizePatchExplanation(change.explanation);
+  if (explanation) out.explanation = explanation;
   return out;
 }
 
@@ -116,9 +119,14 @@ function normalizeAuditRecords(sourceRecords) {
       record.evidenceCount = Array.isArray(source.evidence) ? source.evidence.length : 1;
       removed.add('evidence');
     }
+    if (source.explanation !== undefined) {
+      const explanation = sanitizePatchExplanation(source.explanation);
+      if (explanation) record.explanation = explanation;
+      else removed.add('explanation');
+    }
     for (const key of Object.keys(source)) {
       if (!['index', 'ts', 'prevHash', 'hash', 'decision', 'apiId', 'tool', 'callId', 'healId',
-        'versionBefore', 'versionAfter', 'tier', 'rounds', 'latencyMs', 'confidence', 'responseOnly', 'reason', 'ops', 'evidence'].includes(key)) {
+        'versionBefore', 'versionAfter', 'tier', 'rounds', 'latencyMs', 'confidence', 'responseOnly', 'reason', 'ops', 'evidence', 'explanation'].includes(key)) {
         removed.add(key);
       }
     }

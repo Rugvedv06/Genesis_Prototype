@@ -3,6 +3,7 @@ import { compileAdapter } from '../features/registry/compile.js';
 import Ajv from 'ajv';
 import addFormats from 'ajv-formats';
 import { getLocalWorkspaceId } from './workspace.js';
+import { sanitizePatchExplanation } from '../features/audit/explanation.js';
 
 const clone = (value) => value == null ? value : structuredClone(value);
 const schemaAjv = new Ajv({ allErrors: true, strict: false });
@@ -148,6 +149,8 @@ function safeChangeForStorage(change) {
     });
   }
   if (change.evidence !== undefined) safe.evidenceCount = Array.isArray(change.evidence) ? change.evidence.length : 1;
+  const explanation = sanitizePatchExplanation(change.explanation);
+  if (explanation) safe.explanation = explanation;
   return safe;
 }
 
@@ -433,12 +436,17 @@ export async function commitAdapterInTransaction(client, {
   const adapterCopy = clone(adapter);
   validateAdapterForStorage(adapterCopy);
   const adapterHash = sha256(stableStringify(adapterCopy));
+  const committedChange = clone(change);
+  if (committedChange?.explanation?.adapter) {
+    committedChange.explanation.adapter.beforeVersion = tool.current_version;
+    committedChange.explanation.adapter.afterVersion = version;
+  }
   await client.query(
     `INSERT INTO adapter_versions
      (workspace_id, api_id, tool_name, version, api_epoch, parent_version, origin, adapter, metadata, change, adapter_hash)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10::jsonb, $11)`,
     [workspaceId, apiId, toolName, version, api.epoch, tool.current_version, origin,
-      JSON.stringify(adapterCopy), JSON.stringify(metadata), JSON.stringify(safeChangeForStorage(change)), adapterHash],
+      JSON.stringify(adapterCopy), JSON.stringify(metadata), JSON.stringify(safeChangeForStorage(committedChange)), adapterHash],
   );
   await client.query(
     `UPDATE tools SET current_version = $4, updated_at = now()
@@ -448,7 +456,7 @@ export async function commitAdapterInTransaction(client, {
   return {
     workspaceId, apiId, tool: toolName, version, apiEpoch: api.epoch,
     parent: tool.current_version, adapter: adapterCopy, meta: metadata,
-    change: change ?? null, origin, adapterHash,
+    change: committedChange ?? null, origin, adapterHash,
   };
 }
 

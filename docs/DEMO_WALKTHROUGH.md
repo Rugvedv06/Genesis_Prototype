@@ -1,6 +1,6 @@
 # Current App Demo Walkthrough
 
-This guide describes the app as it is implemented today. It focuses on the local demo API and distinguishes deterministic gateway healing from the LLM-backed agent comparison. The UI walkthrough has not been browser-verified; these steps are based on the current routes, controls, mutation catalogue, and automated acceptance checks.
+This guide describes the app as it is implemented today. It focuses on the local demo API and distinguishes deterministic gateway healing from the LLM-backed agent comparison. It also covers immutable rollback and the persisted repair explanation attached to committed adapter versions. The UI walkthrough has not been browser-verified; these steps are based on the current routes, controls, mutation catalogue, and automated acceptance checks.
 
 ## What the demo shows
 
@@ -44,6 +44,7 @@ Use the API client Playground for a gateway call that does not depend on Gemini 
 5. The gateway should preserve the caller's logical input, derive the request adapter from the available evidence, verify the adapted request, and return the user. With the matching active mock spec, Tier 0 may derive the operations together; without a usable spec, Tier 1 resolves the layered M5 errors over four rounds. The plan's regression anchor specifically checks the four operations: add `X-Tenant`, move the field under `target`, rename it to `id`, and coerce it to an integer.
 6. Read the result panel before calling the run successful. Check the returned payload, `Healed`, `Rounds`, `Tier`, and adapter version. A transport success and a truth match are separate facts.
 7. Follow the run ID link to **Live traffic**. Open the call to inspect the event sequence. Then open **Drift events** to review the decision and adapter version, and **Audit chain** to verify the persisted record.
+8. In **Drift events**, open the committed record. Its detail view should contain **Repair explanation**, including the adapter transition and hashes, normalized before/after paths, evidence/provenance, policy decision, assumptions, and replay/logical-response/identity/write-echo checks. A verified patch-cache commit uses the same explanation shape and identifies the cache scope as evidence.
 
 The M5 repair is request-side. The same logical arguments remain valid for the caller; the adapter translates them for the changed upstream contract. The raw mock mutation controls affect only the local demo service.
 
@@ -95,11 +96,79 @@ After producing a gateway call, use the sidebar to inspect the corresponding ope
 - **Audit chain**: inspect decisions and hashes, run chain verification, and export NDJSON.
 - **Settings**: view connection/provider status and key-pool slot states without revealing key material; configure per-API healing mode, confidence threshold, round cap, and Tier 2 allowance.
 
+## Version history, live version, and rollback
+
+Use this flow after a committed heal so the tool has at least two adapter versions:
+
+1. Open **Drift events** and filter to the API/tool and `Commit` decisions. Each record shows its adapter hash. Only the record matching the tool's current registry pointer is marked **Live**; historical occurrences of the same hash are not treated as live.
+2. Select an older committed record. The **Rollback** button is available only when that record resolves to a concrete version that is not already live.
+3. Review the approval dialog. It displays the target version/hash and explains that rollback creates a new immutable version rather than deleting history. Click **Approve rollback**.
+4. Confirm the new `rollback` record appears. The new version is the only live version, its `rollbackOf` points to the selected target, and the earlier versions remain visible.
+5. Refresh the page or reopen the tool detail view. The current version and live marker must remain consistent after reload.
+
+The tool detail view under **APIs → [API] → [tool]** provides the complementary version timeline. It marks the current version as **Current**, labels rollback-origin versions, and shows the restored source version. Rollback is also available from that timeline when an older version is selected.
+
+## Verification checklist
+
+Run the following from the repository root before the manual walkthrough:
+
+```sh
+npm run db:migrate
+npm run test -- --test-name-pattern='patch explanation|rollback|audit'
+node --test api-server/test/patch-explanation.test.js
+npm --prefix api-client run build
+```
+
+If the repository's full test command does not accept the name filter, run the focused test directly and then run the full suite:
+
+```sh
+node --test api-server/test/patch-explanation.test.js
+npm test
+```
+
+Start the local stack:
+
+```sh
+npm run dev
+curl -fsS http://localhost:8000/health
+curl -fsS http://localhost:5001/health
+```
+
+For a deterministic manual verification:
+
+1. Register `demo-users`, apply mock mutation **M5**, invoke `get_user` with `{ "user_id": "123" }`, and confirm the call succeeds with `healed: true` and a newer adapter version.
+2. Open the committed Drift event and verify the **Repair explanation** fields described above. Confirm that no request body, response body, credential value, token, or raw diagnostic payload appears in the explanation.
+3. Open **Audit chain**, click **Verify chain**, and confirm the chain reports valid.
+4. Return to **Drift events**, select the previous version, approve rollback, and confirm exactly one record is marked **Live** after the refresh.
+5. Confirm the rollback created a new version and did not rewrite or remove the original heal record.
+
+The backend endpoints provide a direct verification path when UI behavior needs to be isolated:
+
+```sh
+curl -fsS http://localhost:8000/audit/verify
+curl -fsS 'http://localhost:8000/audit?limit=50'
+curl -fsS 'http://localhost:8000/apis/demo-users/tools/get_user/versions'
+```
+
+The exact version-history route is also used by the API client; if a deployment exposes it through a different compatibility route, use **APIs → demo-users → get_user** as the authoritative version-history check. For rollback, the API contract is:
+
+```sh
+curl -fsS -X POST \
+  http://localhost:8000/apis/demo-users/tools/get_user/rollback \
+  -H 'content-type: application/json' \
+  --data '{"toVersion": 1}'
+```
+
+Do not use the rollback command until the target version is confirmed from the version history. The UI approval step is the preferred operator workflow.
+
 ## Presenter guardrails
 
 - Say **committed** only when the result shows a verified adapter version and the audit record agrees.
 - Say **recovered** only when the returned data also matches the independent mock truth. HTTP 200 alone is not enough.
 - Explain a halt as a safety result when proof, credentials, policy, or budget is insufficient; do not present it as a successful patch.
 - A Tier 2 proposal is evidence-checked and replay-verified before commit. High-risk changes are flagged for operator review rather than auto-applied.
+- A committed repair explanation is sanitized again at every persistence boundary. It is safe structured metadata, not a raw request/response transcript.
+- A verified patch-cache hit is still a committed heal: it receives a repair explanation with cache provenance and replay checks.
+- Rollback is immutable. It creates a new version pointing to the restored version; it never deletes history. Only the registry's current pointer determines which version is live.
 - The four Gemini keys rotate credentials; keys from one Google Cloud project do not multiply that project's quota.
 - The browser walkthrough itself remains unverified in the current evidence ledger. Automated tests and production builds passed, but they do not replace a manual UI review.

@@ -2,6 +2,8 @@
 // Phase 0: boots all four apps in parallel so tracks can code independently.
 // Usage: npm run dev  (health: :8000/health, :5001/health, :3000, :3001)
 import { spawn } from 'node:child_process';
+import { existsSync, rmSync } from 'node:fs';
+import { createConnection } from 'node:net';
 import { join } from 'node:path';
 import { loadEnv } from '../api-server/src/lib/env.js';
 
@@ -26,6 +28,37 @@ const APPS = [
   { name: 'api-client', cwd: 'api-client', cmd: bin('api-client', 'next'), args: ['dev', '-p', '3000'], env: { PORT: '3000' }, port: 3000 },
   { name: 'demo-client', cwd: 'demo-server-and-client/client', cmd: bin('demo-server-and-client/client', 'next'), args: ['dev', '-p', '3001'], env: { PORT: '3001' }, port: 3001 },
 ];
+
+function portInUse(port) {
+  return new Promise((resolve, reject) => {
+    const socket = createConnection({ host: '127.0.0.1', port });
+    socket.once('connect', () => {
+      socket.destroy();
+      resolve(true);
+    });
+    socket.once('error', (error) => {
+      socket.destroy();
+      if (error.code === 'ECONNREFUSED') resolve(false);
+      else reject(error);
+    });
+  });
+}
+
+async function prepareDevRuntime() {
+  const occupied = [];
+  for (const app of APPS) {
+    if (await portInUse(app.port)) occupied.push(`${app.name}:${app.port}`);
+  }
+  if (occupied.length) {
+    throw new Error(`development ports are already in use (${occupied.join(', ')}); stop the existing stack before running npm run dev`);
+  }
+  for (const cwd of ['api-client', 'demo-server-and-client/client']) {
+    const nextDir = join(process.cwd(), cwd, '.next');
+    if (existsSync(nextDir)) rmSync(nextDir, { recursive: true, force: true });
+  }
+}
+
+await prepareDevRuntime();
 
 const procs = APPS.map((app) => {
   const p = spawn(app.cmd, app.args, {

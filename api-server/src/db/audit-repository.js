@@ -1,8 +1,10 @@
 import { sha256, stableStringify } from '../lib/hash.js';
 import { getLocalWorkspaceId } from './workspace.js';
+import { sanitizePatchExplanation } from '../features/audit/explanation.js';
 
 function prepare(value, key = '') {
   if (value === undefined) return undefined;
+  if (key === 'explanation') return sanitizePatchExplanation(value) ?? undefined;
   const normalizedKey = key.replace(/[^a-z0-9]/gi, '').toLowerCase();
   if (['args', 'arguments', 'data', 'request', 'requestbody', 'response', 'responsebody', 'body', 'prompt', 'headers', 'cookies', 'error', 'message', 'raw']
     .includes(normalizedKey)) return undefined;

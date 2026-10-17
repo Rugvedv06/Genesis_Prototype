@@ -13,7 +13,7 @@
   ],
   "scripts": {
     "dev": "node scripts/dev.js",
-    "test": "node --test \"api-server/test/**/*.test.js\" \"demo-server-and-client/server/test/**/*.test.js\" \"packages/llm/test/**/*.test.js\" \"scripts/**/*.test.js\"",
+    "test": "node --import ./scripts/test-env.mjs --test \"api-server/test/**/*.test.js\" \"demo-server-and-client/server/test/**/*.test.js\" \"packages/llm/test/**/*.test.js\" \"scripts/**/*.test.js\"",
     "verify:p01": "node scripts/verify-phase01.mjs",
     "verify:m5:live": "node scripts/verify-m5-live.mjs",
     "db:migrate": "npm --workspace=api-server run db:migrate",

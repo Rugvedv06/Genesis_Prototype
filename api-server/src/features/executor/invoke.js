@@ -29,6 +29,7 @@ import { negativeHit, negativeResult, cacheNegative, recordHalt, negativeHitAsyn
 import { validateUpstreamUrl } from '../http/url-policy.js';
 import { checkResponse } from '../drift-detector/index.js';
 import { log } from '../../lib/log.js';
+import { buildPatchExplanation } from '../audit/explanation.js';
 
 const ajv = new Ajv({ allErrors: true, strict: false });
 addFormats(ajv);
@@ -528,7 +529,24 @@ async function replayVerifiedCandidate({ tool, args, signature, failure, resolve
       result: halt('stale_cache_candidate', { revisionChanged: true }),
     });
   }
-  const change = { ops, tier, confidence, evidence: [], rounds: 0, cacheHit: true, callId, runId };
+  const change = {
+    ops, tier, confidence, evidence: [{ kind: 'verified_patch_cache', source: candidate.scope }],
+    rounds: 0, cacheHit: true, callId, runId,
+    explanation: buildPatchExplanation({
+      beforeAdapter: tool.versionObj.adapter,
+      afterAdapter: adapter,
+      beforeVersion: tool.version,
+      afterVersion: tool.version + 1,
+      proposal: { ...proposal, evidence: [{ kind: 'verified_patch_cache', source: candidate.scope }] },
+      gate,
+      verification: { replay: true, logicalResponse: true, identity: true },
+      policy: {
+        mode: apiConfig.healing?.mode ?? 'enforce',
+        threshold: apiConfig.confidenceThreshold ?? apiConfig.healing?.confidenceThreshold ?? 0.85,
+        risk: tool.versionObj.meta?.risk ?? tool.risk ?? 'low',
+      },
+    }),
+  };
   let committed;
   try {
     committed = process.env.DATABASE_URL
@@ -620,12 +638,33 @@ async function healAndRetry({ tool, args, first, kind, callId, runId, t0, resolv
       return reportDomainHalt({ tool: nextDraft, result: mapDomainError(err, nextDraft, args, first), callId, runId, t0 });
     }
 
-    if (r.ok && matchesLogicalResponse(nextDraft, r) && matchesIdentity(nextDraft, args, r) && matchesWriteEcho(nextDraft, args, r, proposal.tier, resolveCredential)) {
+    const replayVerification = {
+      replay: r.ok,
+      logicalResponse: r.ok && matchesLogicalResponse(nextDraft, r),
+      identity: r.ok && matchesIdentity(nextDraft, args, r),
+      writeEcho: r.ok && matchesWriteEcho(nextDraft, args, r, proposal.tier, resolveCredential),
+    };
+    if (replayVerification.replay && replayVerification.logicalResponse && replayVerification.identity && replayVerification.writeEcho) {
       const commitOps = applied.concat(proposal.ops);
       const change = {
         ops: commitOps, tier: proposal.tier, confidence: proposal.confidence,
         evidence: proposal.evidence, provider: proposal.provider, model: proposal.model, keySlot: proposal.keySlot, usage: proposal.usage, rounds, latencyMs: Date.now() - t0, callId, runId,
       };
+      change.explanation = buildPatchExplanation({
+        beforeAdapter: tool.versionObj.adapter,
+        afterAdapter: newAdapter,
+        beforeVersion: tool.version,
+        afterVersion: tool.version + 1,
+        proposal: { ...proposal, ops: commitOps },
+        gate,
+        verification: replayVerification,
+        policy: {
+          mode: healing.mode ?? 'enforce',
+          threshold: apiConfig.confidenceThreshold ?? healing.confidenceThreshold ?? 0.85,
+          risk: tool.versionObj.meta?.risk ?? tool.risk ?? 'low',
+        },
+        provenance: { observedNames: proposal.tier === 2 },
+      });
       const committed = process.env.DATABASE_URL
         ? (await commitFromCache({ apiId: tool.apiId, toolName: tool.name, adapter: newAdapter, change, origin: 'heal', current: tool })).value
         : registryStore.commit(tool.apiId, tool.name, newAdapter, change);
@@ -637,7 +676,7 @@ async function healAndRetry({ tool, args, first, kind, callId, runId, t0, resolv
         versionBefore: tool.version, versionAfter: committed.version,
         tier: proposal.tier, ops: commitOps, confidence: proposal.confidence,
         evidence: proposal.evidence, provider: proposal.provider, model: proposal.model, keySlot: proposal.keySlot, usage: proposal.usage, healId: callId, callId,
-        latencyMs: Date.now() - t0,
+        latencyMs: Date.now() - t0, explanation: change.explanation,
       });
       if (process.env.DATABASE_URL && rounds === 1 && !applied.length
         && ['GET', 'HEAD'].includes(String(tool.versionObj.meta?.method ?? 'POST').toUpperCase())
@@ -803,13 +842,27 @@ async function invokeCore({ apiId, toolName, args, runId, callId = newId('c'), t
             ops: proposal.ops, tier: 1, confidence: 0.9, evidence: proposal.evidence,
             rounds: 0, responseOnly: true, verified: true, callId, runId,
           };
+          change.explanation = buildPatchExplanation({
+            beforeAdapter: tool.versionObj.adapter,
+            afterAdapter: proposal.adapter,
+            beforeVersion: tool.version,
+            afterVersion: tool.version + 1,
+            proposal: { ...proposal, tier: 1 },
+            gate,
+            verification: { replay: true, logicalResponse: true, identity: true },
+            policy: {
+              mode,
+              threshold: apiConfig.confidenceThreshold ?? apiConfig.healing?.confidenceThreshold ?? 0.85,
+              risk: tool.versionObj.meta?.risk ?? tool.risk ?? 'low',
+            },
+          });
           const committed = process.env.DATABASE_URL
             ? (await commitFromCache({ apiId, toolName, adapter: proposal.adapter, change, origin: 'heal', current })).value
             : registryStore.commit(apiId, toolName, proposal.adapter, change);
           emit({ type: 'drift.silent', ...fields, ops: proposal.ops, errors: responseCheck.errors ?? [] });
           emit({ type: 'patch.verified', ...fields, status: first.status, responseOnly: true });
           emit({ type: 'patch.committed', ...fields, version: committed.version, ops: proposal.ops, responseOnly: true });
-          if (!process.env.DATABASE_URL) await appendAudit({ decision: 'commit', apiId, tool: toolName, versionBefore: tool.version, versionAfter: committed.version, tier: 1, ops: proposal.ops, evidence: proposal.evidence, responseOnly: true, callId });
+          if (!process.env.DATABASE_URL) await appendAudit({ decision: 'commit', apiId, tool: toolName, versionBefore: tool.version, versionAfter: committed.version, tier: 1, ops: proposal.ops, evidence: proposal.evidence, responseOnly: true, callId, explanation: change.explanation });
           emitCall('call.succeeded', { version: committed.version, healed: true, rounds: 0, data: remapped.compiled.extract(first.json) });
           return success({ ...remapped, version: committed.version }, first, {
             healed: true, rounds: 0, tier: 1, cacheHit: false, latencyMs: Date.now() - t0,

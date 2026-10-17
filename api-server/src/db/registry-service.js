@@ -87,7 +87,18 @@ export async function commitAdapter({ apiId, toolName, adapter, change, origin =
       return committed;
     },
     {
-      audit: (committed) => ({ decision: 'commit', apiId, tool: toolName, versionBefore: committed.parent, versionAfter: committed.version, adapterHash: committed.adapterHash, origin, ops: change?.ops, evidence: change?.evidence }),
+      audit: (committed) => ({
+        decision: 'commit',
+        apiId,
+        tool: toolName,
+        versionBefore: committed.parent,
+        versionAfter: committed.version,
+        adapterHash: committed.adapterHash,
+        origin,
+        ops: committed.change?.ops ?? change?.ops,
+        evidence: committed.change?.evidence ?? change?.evidence,
+        explanation: committed.change?.explanation ?? change?.explanation,
+      }),
       event: (committed) => ({ type: 'patch.committed', apiId, tool: toolName, callId: change?.callId, runId: change?.runId, version: committed.version, ops: change?.ops, origin }),
     },
   );
