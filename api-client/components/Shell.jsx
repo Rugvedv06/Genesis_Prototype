@@ -19,6 +19,7 @@ export default function Shell({ children }) {
   const path = usePathname();
   const { conn, audit, apis } = useStore();
   const { theme, setTheme } = useTheme();
+  if (path === '/landing') return <>{children}<Toaster position="bottom-right" richColors /></>;
   const active = (href) => (href === '/' ? path === '/' : path.startsWith(href));
   const crumb = NAV.flatMap((g) => g.items).find((i) => active(i.href) && (i.href !== '/' || path === '/'))?.label ?? 'healr';
   return (

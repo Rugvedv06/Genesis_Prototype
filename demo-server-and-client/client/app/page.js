@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * KINTSUGI — Drift Control Dashboard
+ * HEALER — Drift Control Dashboard
  * Live developer observability dashboard for runtime API drift healing.
  *
  * Real measurements:
@@ -1117,7 +1117,7 @@ export default function DriftControl() {
         position: 'sticky', top: 0, zIndex: 100,
       }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-          <span style={{ fontSize: '1.1rem', fontWeight: 800, color: C.teal, letterSpacing: '-0.02em' }}>KINTSUGI</span>
+          <span style={{ fontSize: '1.1rem', fontWeight: 800, color: C.teal, letterSpacing: '-0.02em' }}>HEALER</span>
           <span style={{ fontSize: '0.72rem', color: C.textDim, fontWeight: 400 }}>Drift Control</span>
         </div>
 
@@ -1239,7 +1239,7 @@ export default function DriftControl() {
         fontSize: '0.7rem', color: C.textDim,
         display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center',
       }}>
-        <span>KINTSUGI Drift Control Engine</span>
+        <span>Healer Drift Control Engine</span>
         <span>•</span>
         <span>Core :8000</span>
         <span>•</span>
