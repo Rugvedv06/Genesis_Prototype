@@ -13,7 +13,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { runUnmutatedComparison } from '../lib/comparison';
+import { describeAgentFinal, describeFailureNotice, runHealthyComparison } from '../lib/comparison';
 
 const CORE = process.env.NEXT_PUBLIC_CORE_URL || 'http://localhost:8000';
 const MOCK = process.env.NEXT_PUBLIC_MOCK_URL || 'http://localhost:5001';
@@ -170,17 +170,13 @@ function buildTimeline(events) {
         detail = ev.tokens?.totalTokens ? `Token usage: ${ev.tokens.totalTokens} tokens` : 'Raw HTTP (no adapter)';
         kind = 'info';
         break;
-      case 'agent.final':
-        label = ev.mode === 'direct'
-          ? (ev.outcome === 'success' ? 'Direct baseline request accepted' : 'Direct baseline request failed')
-          : ev.outcome === 'success'
-            ? `Baseline Completed in ${ev.iterations} iterations`
-            : `Baseline Agent Failed: Reached Iteration Limit (${ev.iterations ?? 10}/${ev.iterations ?? 10})`;
-        detail = ev.mode === 'direct'
-          ? `Raw API request · HTTP ${ev.status ?? 0}`
-          : ev.error?.text ? `Terminal error: ${ev.error.text}` : 'All retry attempts rejected by target API';
-        kind = ev.outcome === 'success' ? 'ok' : 'err';
+      case 'agent.final': {
+        const final = describeAgentFinal(ev);
+        label = final.label;
+        detail = final.detail;
+        kind = final.success ? 'ok' : 'err';
         break;
+      }
       default:
         break;
     }
@@ -597,6 +593,8 @@ function Pane({
   status,
   iterations,
   rounds,
+  gatewayCalls,
+  statusCode,
   elapsed,
   events,
   data,
@@ -609,6 +607,7 @@ function Pane({
   provider,
   model,
   tokens,
+  request,
 }) {
   const [tab, setTab] = useState('timeline'); // timeline | diff | patches | raw
 
@@ -662,30 +661,33 @@ function Pane({
       <div style={{ padding: '12px 16px', display: 'flex', gap: 8, flexWrap: 'wrap', borderBottom: `1px solid ${C.border}` }}>
         {side === 'baseline' ? (
           <>
-            <MetricCard label="Iterations" value={iterations > 0 ? (mode === 'direct' ? `${iterations} direct` : `${iterations} / 10`) : '—'} />
+            <MetricCard label={mode === 'direct' ? 'Raw requests' : 'Iterations'} value={iterations > 0 ? (mode === 'direct' ? `${iterations} / 1` : `${iterations} / 10`) : '—'} />
             <MetricCard label="Outcome" value={status === 'ok' ? 'OK' : status === 'review' ? 'NEEDS REVIEW' : status === 'fail' ? 'FAILED' : status === 'running' ? 'RUNNING' : '—'} color={status === 'ok' ? C.green : status === 'review' ? C.amber : status === 'fail' ? C.red : C.textDim} />
             <MetricCard label="Latency" value={elapsed > 0 ? elapsed : '—'} unit={elapsed > 0 ? 'ms' : ''} />
             <MetricCard label="Tokens" value={events.reduce((sum, event) => sum + Number(event.tokens?.totalTokens ?? 0), 0)} />
           </>
         ) : (
           <>
-            <MetricCard label="Heal Rounds" value={rounds > 0 ? rounds : '—'} color={C.teal} />
+            <MetricCard label={mode === 'gateway' ? 'Gateway calls' : 'Heal Rounds'} value={mode === 'gateway' ? (status === 'ok' ? gatewayCalls ?? 1 : '—') : rounds > 0 ? rounds : '—'} color={C.teal} />
             <MetricCard label="Version" value={version != null ? `v${version}` : '—'} color={C.slate} />
             <MetricCard label="Patch Ops" value={ops?.length > 0 ? ops.length : '—'} color={C.amber} />
             <MetricCard label="Latency" value={elapsed > 0 ? elapsed : '—'} unit={elapsed > 0 ? 'ms' : ''} />
-            <MetricCard label="Agent tokens" value={tokens?.totalTokens ?? events.reduce((sum, event) => sum + Number(event.tokens?.totalTokens ?? 0), 0)} />
+            <MetricCard label={mode === 'gateway' ? 'LLM tokens' : 'Agent tokens'} value={tokens?.totalTokens ?? events.reduce((sum, event) => sum + Number(event.tokens?.totalTokens ?? 0), 0)} />
           </>
         )}
       </div>
 
       {/* Visual Pipeline (healed side only) */}
-      {side === 'healed' && events.length > 0 && (
+      {side === 'healed' && mode !== 'gateway' && events.length > 0 && (
         <HealingPipeline events={events} outcome={status} />
       )}
 
+      {mode === 'direct' || mode === 'gateway' ? (
+        <HealthyExchange request={request} response={data} error={error} status={status} statusCode={statusCode} />
+      ) : <>
       {/* Navigation Tabs */}
       <div style={{ display: 'flex', borderBottom: `1px solid ${C.border}`, background: C.bg }}>
-        {(side === 'healed' ? ['timeline', 'diff', 'patches', 'raw'] : ['timeline', 'raw']).map(t => (
+        {(side === 'healed' && mode !== 'gateway' ? ['timeline', 'diff', 'patches', 'raw'] : ['timeline', 'raw']).map(t => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -737,12 +739,14 @@ function Pane({
 
         {tab === 'raw' && (
           <div>
+            {request && <RawSection label="Request" value={request} />}
             <RawSection label="Raw SSE Event Stream" value={events} />
             {data && <RawSection label="Extracted Logical Response" value={data} />}
             {error && <RawSection label="Raw Error Payload" value={error} isError />}
           </div>
         )}
       </div>
+      </>}
 
       {/* Footer Outcome & Ground Truth */}
       {status !== 'idle' && (
@@ -789,7 +793,9 @@ function Pane({
               fontWeight: 700, fontSize: '0.8rem',
             }}>
               {side === 'healed'
-                ? (recoveredOk ? '✔ RECOVERED — schema repaired and truth check passed' : '⚠ HEALED (HTTP) — data truth check mismatch')
+                ? (mode === 'gateway'
+                  ? (recoveredOk ? '✔ HEALTHY — same request accepted through gateway; no repair needed' : '⚠ GATEWAY (HTTP) — data truth check mismatch')
+                  : (recoveredOk ? '✔ RECOVERED — schema repaired and truth check passed' : '⚠ HEALED (HTTP) — data truth check mismatch'))
                 : (recoveredOk ? '✔ BASELINE SUCCEEDED' : '⚠ BASELINE MISMATCH')}
             </div>
           )}
@@ -804,13 +810,29 @@ function Pane({
               fontWeight: 700, fontSize: '0.8rem',
             }}>
               {side === 'baseline'
-                ? '✖ BASELINE FAILED — 10 retries exhausted without wire-format adapter'
-                : '✖ HEALING HALTED — safety policy prevented commit'}
+                ? `✖ BASELINE NOT COMPLETED — ${describeFailureNotice(error, side, mode)}`
+                : `✖ HEALING STOPPED — ${describeFailureNotice(error, side, mode)}`}
             </div>
           )}
         </div>
       )}
     </section>
+  );
+}
+
+function HealthyExchange({ request, response, error, status, statusCode }) {
+  const path = request?.logicalPath ?? (request?.url ? new URL(request.url).pathname : '');
+  return (
+    <div className="healthy-exchange">
+      <section>
+        <div className="healthy-exchange-head"><strong>Request</strong><span>{request?.logicalMethod ?? request?.method} {path}</span></div>
+        <pre>{JSON.stringify(request ?? {}, null, 2)}</pre>
+      </section>
+      <section>
+        <div className="healthy-exchange-head"><strong>Response</strong><span data-ok={status === 'ok'}>{status === 'ok' ? `HTTP ${statusCode || 200} · accepted` : `HTTP ${statusCode || '—'} · failed`}</span></div>
+        <pre data-error={status !== 'ok'}>{JSON.stringify(error ? { error } : response ?? null, null, 2)}</pre>
+      </section>
+    </div>
   );
 }
 
@@ -1074,6 +1096,9 @@ export default function DriftControl() {
   // ── Run Both with Separate Independent Timers ─────────────────────────────
   const runBoth = async ({ forceHealthy = false } = {}) => {
     setMode('running');
+    setTruth(null);
+    setBaseline((b) => ({ ...b, status: 'running', iterations: 0, data: null, error: null, events: [], elapsed: 0, mode: 'llm', provider: null, model: null }));
+    setHealed((h) => ({ ...h, status: 'running', rounds: 0, data: null, error: null, ops: [], version: null, events: [], elapsed: 0, mode: null, gatewayCalls: 0, request: null, provider: null, model: null, tokens: null }));
     try {
       if (forceHealthy) {
         const resetResponse = await fetch(`${MOCK}/admin/reset`, { method: 'POST' });
@@ -1119,7 +1144,7 @@ export default function DriftControl() {
       const bRunId = `b_${Date.now()}`;
       const hRunId = `h_${Date.now()}`;
       try {
-        const result = await runUnmutatedComparison({
+        const result = await runHealthyComparison({
           mockUrl: MOCK, coreUrl: CORE, apiId: API_ID, tool: selectedTool,
           args: selectedArgs, baselineRunId: bRunId, healedRunId: hRunId,
         });
@@ -1208,6 +1233,12 @@ export default function DriftControl() {
   const runHealthyDemo = () => runBoth({ forceHealthy: true });
 
   const running = mode === 'running';
+  const healthyPassed = healed.mode === 'gateway'
+    && baseline.status === 'ok'
+    && healed.status === 'ok'
+    && truth !== null && !truth.error
+    && matchesTruth(baseline.data, truth, truthFields) === true
+    && matchesTruth(healed.data, truth, truthFields) === true;
   const toggleTheme = () => {
     const nextTheme = theme === 'dark' ? 'light' : 'dark';
     setTheme(nextTheme);
@@ -1280,14 +1311,14 @@ export default function DriftControl() {
           <SummaryCard
             label="Baseline Outcome"
             value={baseline.status === 'idle' ? 'READY' : baseline.status === 'ok' ? 'OK' : baseline.status === 'fail' ? 'FAILED' : 'RUNNING…'}
-            sub={baseline.status === 'fail' ? (baseline.mode === 'direct' ? 'direct upstream request failed' : '10 iterations exhausted without fix') : baseline.status === 'ok' ? (baseline.mode === 'direct' ? 'raw request accepted' : 'succeeded unadapted') : ''}
+            sub={baseline.status === 'fail' ? describeFailureNotice(baseline.error, 'baseline', baseline.mode) : baseline.status === 'ok' ? (baseline.mode === 'direct' ? 'raw request accepted' : 'succeeded unadapted') : ''}
             color={baseline.status === 'ok' ? C.green : baseline.status === 'fail' ? C.red : C.textDim}
           />
           <SummaryCard
-            label="Healed Outcome"
-            value={healed.status === 'idle' ? 'READY' : healed.status === 'ok' ? 'RECOVERED' : healed.status === 'fail' ? 'HALTED' : 'RUNNING…'}
-            sub={healed.status === 'ok' ? `${healed.rounds} heal round(s) · dynamic adapter v${healed.version ?? 2}` : ''}
-            color={healed.status === 'ok' ? C.green : healed.status === 'fail' ? C.red : C.textDim}
+            label={healed.mode === 'gateway' ? 'Healthy Demo' : 'Healed Outcome'}
+            value={healed.status === 'idle' ? 'READY' : healed.mode === 'gateway' ? (healed.status === 'fail' ? 'FAILED' : truth === null ? 'VERIFYING…' : truth.error ? 'TRUTH UNAVAILABLE' : healthyPassed ? 'PASSED' : 'CHECK DATA') : healed.status === 'ok' ? 'RECOVERED' : healed.status === 'fail' ? 'HALTED' : 'RUNNING…'}
+            sub={healed.status === 'ok' ? (healed.mode === 'gateway' ? (truth === null ? 'both requests accepted · checking mock truth' : truth.error ? 'both requests accepted · mock truth unavailable' : healthyPassed ? 'both responses match the mock truth' : 'request accepted · response truth mismatch') : `${healed.rounds} heal round(s) · dynamic adapter v${healed.version ?? 2}`) : ''}
+            color={healed.mode === 'gateway' ? (healthyPassed ? C.green : healed.status === 'fail' ? C.red : truth?.error ? C.textDim : C.amber) : healed.status === 'ok' ? C.green : healed.status === 'fail' ? C.red : C.textDim}
           />
           <SummaryCard
             label="Active Patches"
@@ -1315,29 +1346,33 @@ export default function DriftControl() {
       <main className="demo-main">
         <Pane
           side="baseline"
-          title={baseline.mode === 'llm' ? 'Baseline (same model, raw tools)' : baseline.mode === 'direct' ? 'Baseline (direct raw request)' : 'Scripted retry baseline (no LLM)'}
+          title={baseline.mode === 'llm' ? 'Baseline (same model, raw tools)' : baseline.mode === 'direct' ? 'Healthy baseline (direct request)' : 'Scripted retry baseline (no LLM)'}
           accentColor={C.red}
           status={baseline.status}
           iterations={baseline.iterations}
           elapsed={baseline.elapsed}
           events={baseline.events}
           data={baseline.data}
+          statusCode={baseline.statusCode}
           error={baseline.error}
           truth={truth}
           truthFields={truthFields}
           mode={baseline.mode}
+          request={baseline.request}
           provider={baseline.provider}
           model={baseline.model}
         />
         <Pane
           side="healed"
-          title="Healed agent"
+          title={healed.mode === 'gateway' ? 'Gateway passthrough (healthy)' : 'Healed agent'}
           accentColor={C.teal}
           status={healed.status}
           rounds={healed.rounds}
+          gatewayCalls={healed.gatewayCalls}
           elapsed={healed.elapsed}
           events={healed.events}
           data={healed.data}
+          statusCode={healed.statusCode}
           error={healed.error}
           ops={healed.ops}
           version={healed.version}
@@ -1346,9 +1381,12 @@ export default function DriftControl() {
           provider={healed.provider}
           model={healed.model}
           tokens={healed.tokens}
+          mode={healed.mode}
+          request={healed.request}
         />
       </main>
-      {(baseline.mode === 'direct' || baseline.mode === 'scripted' || (baseline.provider && healed.provider && (baseline.provider !== healed.provider || baseline.model !== healed.model))) && <p role="status" className="not-like-for-like">Not like for like: baseline uses {baseline.mode === 'direct' ? 'one direct raw API request because no mutation is active' : baseline.mode === 'scripted' ? 'scripted calls without an LLM' : `${baseline.provider} ${baseline.model}`}; healed path uses {healed.provider ?? 'the core task runner'} {healed.model ?? ''}.</p>}
+      {healed.mode === 'gateway' && <p role="status" className="healthy-run-note">Healthy comparison · identical logical tool and arguments sent directly and through the gateway; LLM retries and healing patches are not involved.</p>}
+      {(baseline.mode === 'scripted' || (baseline.provider && healed.provider && (baseline.provider !== healed.provider || baseline.model !== healed.model))) && <p role="status" className="not-like-for-like">Not like for like: baseline uses {baseline.mode === 'scripted' ? 'scripted calls without an LLM' : `${baseline.provider} ${baseline.model}`}; healed path uses {healed.provider ?? 'the core task runner'} {healed.model ?? ''}.</p>}
       {baseline.provider && healed.provider && (baseline.provider !== healed.provider || baseline.model !== healed.model) && <p role="status" className="not-like-for-like">Not like for like: baseline uses {baseline.provider} {baseline.model}; healed agent uses {healed.provider} {healed.model}.</p>}
 
       {/* ── Footer ── */}

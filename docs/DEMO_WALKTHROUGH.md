@@ -54,7 +54,7 @@ Drift Control checks the mock server's active mutation before choosing the compa
 
 1. Open `http://localhost:3001`. Confirm both connection pills are connected.
 2. Select **M5** and leave **Spec** set to **Active** for the standard run.
-3. Press **Healthy demo** to reset the mock and registered adapter, then show a direct raw request alongside the core's deterministic three-call healthy task. Both should be accepted without patches. To exercise recovery, select **M5**, press **Mutate API**, then **Run comparison**. The app registers the demo API if needed, supplies fixture values to the mock, and starts the baseline and healed agent workflows with separate run IDs.
+3. Press **Healthy demo** to reset the mock and re-register the API, then send the same tool arguments once directly and once through the gateway. Both request/response pairs should succeed without an LLM call or repair patch. To exercise recovery, select **M5**, press **Mutate API**, then **Run comparison**. The app registers the demo API if needed, supplies fixture values to the mock, and starts the baseline and healed agent workflows with separate run IDs.
 4. Compare the panes:
    - The baseline always calls the raw mock API without a healing adapter. On the healthy path this is one direct request; with a mutation active it runs the raw-tool agent.
    - With a mutation active, the healed agent calls through the gateway. Its timeline shows drift, diagnosis, verification, and commit or halt events. On the healthy path, the core task runner should complete without healing.
