@@ -86,15 +86,7 @@ Implement this milestone using the sequenced work packages and edge-case gates i
 - Add PostgreSQL access through one `DATABASE_URL`, versioned/checksummed migrations, readiness checks, bounded pool/timeouts, and repositories. Local dependencies use the root Compose file (`postgres:18-alpine`, `redis:8-alpine`). Redis uses its separate `REDIS_URL`.
 - Persist workspaces, API/config records, credential source references, tools, immutable adapter versions, current pointers, invocations, sanitized gateway events, audit chain/head, service diagnostics, and verified patch candidates using the constraints in `DB.md`.
 - Make registration/config updates, adapter commit/rollback, audit append, and terminal invocation/event writes transactional where specified. Never hold a database transaction during provider or upstream network calls.
-<<<<<<< HEAD
-- Replace file-backed registry/audit authority with Postgres. Add a dry-run, idempotent importer for registry JSON and audit JSONL/HEAD; preserve all parseable records and source hashes/indices, require explicit confirmation before redacting/rechaining unsafe or invalid legacy audit chains, and stop on malformed/unparseable source data. No silent fallback to files or in-memory state.
-=======
-<<<<<<< HEAD
-- Replace file-backed registry/audit authority with Postgres. Add a dry-run, idempotent importer for registry JSON and audit JSONL/HEAD; preserve all parseable records and source hashes/indices, require explicit confirmation before redacting/rechaining unsafe or invalid legacy audit chains, and stop on malformed/unparseable source data. No silent fallback to files or in-memory state.
-=======
 - Replace file-backed registry/audit authority with Postgres. Add a dry-run, idempotent importer for existing registry JSON and audit JSONL/HEAD; preserve version/hash history and stop on invalid source data. No silent fallback to files or in-memory state.
->>>>>>> origin/main
->>>>>>> origin/main
 - Add Redis-backed bounded negative cache, circuit counters/state, adapter/config hot cache, and patch-candidate mirror with explicit keys, TTLs, version fingerprints, and post-commit invalidation. Redis is disposable and not the only authority for distributed commits or locks.
 - Add database event replay for SSE, historical query paths for traffic/traces/metrics, sanitized service-log search, retention rules, backup/restore procedures, and secret/raw-payload redaction tests.
 

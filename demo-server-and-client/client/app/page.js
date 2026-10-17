@@ -13,6 +13,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
+import { describeAgentFinal, describeFailureNotice, runHealthyComparison } from '../lib/comparison';
 
 const CORE = process.env.NEXT_PUBLIC_CORE_URL || 'http://localhost:8000';
 const MOCK = process.env.NEXT_PUBLIC_MOCK_URL || 'http://localhost:5001';
@@ -24,10 +25,6 @@ const TOOL_BY_PATH = {
   '/api/users/set-status': { name: 'set_user_status', path: '/api/users/set-status', method: 'POST' },
 };
 
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
->>>>>>> origin/main
 function matchesTruth(data, truth, fields) {
   if (!data || !truth || truth.error) return null;
   const logical = data.id !== undefined ? data : (data.result ?? data);
@@ -88,65 +85,6 @@ function deriveSteps(events) {
   return map;
 }
 
-<<<<<<< HEAD
-=======
-=======
-// ─── Theme Colors ────────────────────────────────────────────────────────────
-const C = {
-  bg: 'var(--background)', surface: 'var(--card)', surfaceHi: 'var(--muted)',
-  border: 'var(--border)', borderHi: 'var(--border-strong)', text: 'var(--foreground)', textDim: 'var(--muted-foreground)', textMid: 'var(--secondary-foreground)',
-  green: 'var(--success)', greenDim: 'var(--success-muted)', red: 'var(--destructive)', redDim: 'var(--destructive-muted)',
-  amber: 'var(--warning)', amberDim: 'var(--warning-muted)', blue: 'var(--info)', blueDim: 'var(--info-muted)',
-  teal: 'var(--primary)', tealDim: 'var(--teal-muted)', slate: 'var(--slate)', slateDim: 'var(--slate-muted)',
-};
-
-const toneSurface = (color) => color === C.blue ? C.blueDim
-  : color === C.green ? C.greenDim
-    : color === C.red ? C.redDim
-      : color === C.amber ? C.amberDim
-        : color === C.slate ? C.slateDim : C.tealDim;
-
-// ─── Visual Pipeline Stages ──────────────────────────────────────────────────
-const PIPELINE_STEPS = [
-  { id: 'request',      label: 'Request',       icon: '01' },
-  { id: 'drift',        label: 'Drift',         icon: '02' },
-  { id: 'diagnosis',    label: 'Diagnosis',     icon: '03' },
-  { id: 'safety',       label: 'Safety check',  icon: '04' },
-  { id: 'verification', label: 'Verification',  icon: '05' },
-  { id: 'commit',       label: 'Commit / halt', icon: '06' },
-];
-
-const EVENT_TO_STEP = {
-  'call.started':       'request',
-  'upstream.request':   'request',
-  'drift.detected':     'drift',
-  'drift.silent':       'drift',
-  'call.failed':        'drift',
-  'diagnosis.started':  'diagnosis',
-  'patch.proposed':     'safety',
-  'patch.verified':     'verification',
-  'patch.committed':    'commit',
-  'halt':               'commit',
-  'heal.finished':      'commit',
-  'call.succeeded':     'commit',
-};
-
-function deriveSteps(events) {
-  const map = {};
-  for (const ev of events) {
-    const stepId = EVENT_TO_STEP[ev.type];
-    if (!stepId) continue;
-    if (map[stepId]?.status === 'done') continue;
-    let status = 'done';
-    if (ev.type === 'halt') status = 'failed';
-    if (ev.type === 'call.failed' && ev.code !== 'drift') status = 'failed';
-    map[stepId] = { status, ts: ev.ts, ev };
-  }
-  return map;
-}
-
->>>>>>> origin/main
->>>>>>> origin/main
 // ─── Timeline Event Parsing ──────────────────────────────────────────────────
 function buildTimeline(events) {
   const steps = [];
@@ -199,15 +137,7 @@ function buildTimeline(events) {
         break;
       case 'patch.proposed':
         label = `Patch Proposed (${ev.ops?.length ?? 0} operation${(ev.ops?.length ?? 0) === 1 ? '' : 's'})`;
-<<<<<<< HEAD
         detail = `${ev.tier === 2 ? `${ev.provider ?? 'gemini'} · ${ev.model ?? ''} · ${ev.usage?.inputTokens ?? 0} in / ${ev.usage?.outputTokens ?? 0} out · ${ev.latencyMs ?? 0} ms · ` : ''}Tier ${ev.tier ?? 1} · Confidence ${ev.confidence != null ? Math.round(ev.confidence * 100) + '%' : '100%'} · ${ev.evidence?.[0]?.quote ?? ev.evidence?.[0] ?? 'Contract analysis'}`;
-=======
-<<<<<<< HEAD
-        detail = `${ev.tier === 2 ? `${ev.provider ?? 'gemini'} · ${ev.model ?? ''} · ${ev.usage?.inputTokens ?? 0} in / ${ev.usage?.outputTokens ?? 0} out · ${ev.latencyMs ?? 0} ms · ` : ''}Tier ${ev.tier ?? 1} · Confidence ${ev.confidence != null ? Math.round(ev.confidence * 100) + '%' : '100%'} · ${ev.evidence?.[0]?.quote ?? ev.evidence?.[0] ?? 'Contract analysis'}`;
-=======
-        detail = `Tier ${ev.tier ?? 1} · Confidence ${ev.confidence != null ? Math.round(ev.confidence * 100) + '%' : '100%'} · ${ev.evidence?.[0] ?? 'Contract analysis'}`;
->>>>>>> origin/main
->>>>>>> origin/main
         kind = 'info';
         break;
       case 'patch.verified':
@@ -240,13 +170,13 @@ function buildTimeline(events) {
         detail = ev.tokens?.totalTokens ? `Token usage: ${ev.tokens.totalTokens} tokens` : 'Raw HTTP (no adapter)';
         kind = 'info';
         break;
-      case 'agent.final':
-        label = ev.outcome === 'success'
-          ? `Baseline Completed in ${ev.iterations} iterations`
-          : `Baseline Agent Failed: Reached Iteration Limit (${ev.iterations ?? 10}/${ev.iterations ?? 10})`;
-        detail = ev.error?.text ? `Terminal error: ${ev.error.text}` : 'All retry attempts rejected by target API';
-        kind = ev.outcome === 'success' ? 'ok' : 'err';
+      case 'agent.final': {
+        const final = describeAgentFinal(ev);
+        label = final.label;
+        detail = final.detail;
+        kind = final.success ? 'ok' : 'err';
         break;
+      }
       default:
         break;
     }
@@ -549,22 +479,9 @@ function HealingPipeline({ events, outcome }) {
 }
 
 // ─── Truth Check Comparison Table ────────────────────────────────────────────
-<<<<<<< HEAD
 function TruthTable({ data, truth, fields = ['id', 'name', 'email'] }) {
   if (!truth || !data) return null;
   const flat = data.id !== undefined ? data : (data.result ?? data);
-=======
-<<<<<<< HEAD
-function TruthTable({ data, truth, fields = ['id', 'name', 'email'] }) {
-  if (!truth || !data) return null;
-  const flat = data.id !== undefined ? data : (data.result ?? data);
-=======
-function TruthTable({ data, truth }) {
-  if (!truth || !data) return null;
-  const flat = data.id !== undefined ? data : (data.result ?? data);
-  const fields = ['id', 'name', 'email'];
->>>>>>> origin/main
->>>>>>> origin/main
 
   return (
     <div style={{ marginTop: 10, background: C.surfaceHi, padding: 10, borderRadius: 8, border: `1px solid ${C.border}` }}>
@@ -676,6 +593,8 @@ function Pane({
   status,
   iterations,
   rounds,
+  gatewayCalls,
+  statusCode,
   elapsed,
   events,
   data,
@@ -683,39 +602,16 @@ function Pane({
   ops,
   version,
   truth,
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
->>>>>>> origin/main
   truthFields = ['id', 'name', 'email'],
   mode,
   provider,
   model,
   tokens,
+  request,
 }) {
   const [tab, setTab] = useState('timeline'); // timeline | diff | patches | raw
 
   const truthOk = matchesTruth(data, truth, truthFields);
-<<<<<<< HEAD
-=======
-=======
-  mode,
-}) {
-  const [tab, setTab] = useState('timeline'); // timeline | diff | patches | raw
-
-  const truthOk = (() => {
-    if (!data || !truth) return null;
-    if (truth.error) return null;
-    const flat = data.id !== undefined ? data : (data.result ?? data);
-    if (!flat) return null;
-    return (
-      String(flat.id) === String(truth.id) &&
-      flat.name === truth.name &&
-      flat.email === truth.email
-    );
-  })();
->>>>>>> origin/main
->>>>>>> origin/main
 
   const timeline = buildTimeline(events);
   const hasData = Boolean(data);
@@ -755,14 +651,7 @@ function Pane({
             {mode}
           </span>
         )}
-<<<<<<< HEAD
         {provider && <span style={{ fontSize: '0.65rem', color: C.textDim }}>{provider} · {model}</span>}
-=======
-<<<<<<< HEAD
-        {provider && <span style={{ fontSize: '0.65rem', color: C.textDim }}>{provider} · {model}</span>}
-=======
->>>>>>> origin/main
->>>>>>> origin/main
         <div style={{ marginLeft: 'auto' }}>
           <StatusBadge status={status} truthOk={status === 'ok' ? truthOk : null} hasData={hasData} />
         </div>
@@ -772,48 +661,33 @@ function Pane({
       <div style={{ padding: '12px 16px', display: 'flex', gap: 8, flexWrap: 'wrap', borderBottom: `1px solid ${C.border}` }}>
         {side === 'baseline' ? (
           <>
-            <MetricCard label="Iterations" value={iterations > 0 ? `${iterations} / 10` : '—'} />
-<<<<<<< HEAD
+            <MetricCard label={mode === 'direct' ? 'Raw requests' : 'Iterations'} value={iterations > 0 ? (mode === 'direct' ? `${iterations} / 1` : `${iterations} / 10`) : '—'} />
             <MetricCard label="Outcome" value={status === 'ok' ? 'OK' : status === 'review' ? 'NEEDS REVIEW' : status === 'fail' ? 'FAILED' : status === 'running' ? 'RUNNING' : '—'} color={status === 'ok' ? C.green : status === 'review' ? C.amber : status === 'fail' ? C.red : C.textDim} />
             <MetricCard label="Latency" value={elapsed > 0 ? elapsed : '—'} unit={elapsed > 0 ? 'ms' : ''} />
             <MetricCard label="Tokens" value={events.reduce((sum, event) => sum + Number(event.tokens?.totalTokens ?? 0), 0)} />
-=======
-<<<<<<< HEAD
-            <MetricCard label="Outcome" value={status === 'ok' ? 'OK' : status === 'review' ? 'NEEDS REVIEW' : status === 'fail' ? 'FAILED' : status === 'running' ? 'RUNNING' : '—'} color={status === 'ok' ? C.green : status === 'review' ? C.amber : status === 'fail' ? C.red : C.textDim} />
-            <MetricCard label="Latency" value={elapsed > 0 ? elapsed : '—'} unit={elapsed > 0 ? 'ms' : ''} />
-            <MetricCard label="Tokens" value={events.reduce((sum, event) => sum + Number(event.tokens?.totalTokens ?? 0), 0)} />
-=======
-            <MetricCard label="Outcome" value={status === 'ok' ? 'OK' : status === 'fail' ? 'FAILED' : status === 'running' ? 'RUNNING' : '—'} color={status === 'ok' ? C.green : status === 'fail' ? C.red : C.textDim} />
-            <MetricCard label="Latency" value={elapsed > 0 ? elapsed : '—'} unit={elapsed > 0 ? 'ms' : ''} />
->>>>>>> origin/main
->>>>>>> origin/main
           </>
         ) : (
           <>
-            <MetricCard label="Heal Rounds" value={rounds > 0 ? rounds : '—'} color={C.teal} />
+            <MetricCard label={mode === 'gateway' ? 'Gateway calls' : 'Heal Rounds'} value={mode === 'gateway' ? (status === 'ok' ? gatewayCalls ?? 1 : '—') : rounds > 0 ? rounds : '—'} color={C.teal} />
             <MetricCard label="Version" value={version != null ? `v${version}` : '—'} color={C.slate} />
             <MetricCard label="Patch Ops" value={ops?.length > 0 ? ops.length : '—'} color={C.amber} />
             <MetricCard label="Latency" value={elapsed > 0 ? elapsed : '—'} unit={elapsed > 0 ? 'ms' : ''} />
-<<<<<<< HEAD
-            <MetricCard label="Agent tokens" value={tokens?.totalTokens ?? events.reduce((sum, event) => sum + Number(event.tokens?.totalTokens ?? 0), 0)} />
-=======
-<<<<<<< HEAD
-            <MetricCard label="Agent tokens" value={tokens?.totalTokens ?? events.reduce((sum, event) => sum + Number(event.tokens?.totalTokens ?? 0), 0)} />
-=======
->>>>>>> origin/main
->>>>>>> origin/main
+            <MetricCard label={mode === 'gateway' ? 'LLM tokens' : 'Agent tokens'} value={tokens?.totalTokens ?? events.reduce((sum, event) => sum + Number(event.tokens?.totalTokens ?? 0), 0)} />
           </>
         )}
       </div>
 
       {/* Visual Pipeline (healed side only) */}
-      {side === 'healed' && events.length > 0 && (
+      {side === 'healed' && mode !== 'gateway' && events.length > 0 && (
         <HealingPipeline events={events} outcome={status} />
       )}
 
+      {mode === 'direct' || mode === 'gateway' ? (
+        <HealthyExchange request={request} response={data} error={error} status={status} statusCode={statusCode} />
+      ) : <>
       {/* Navigation Tabs */}
       <div style={{ display: 'flex', borderBottom: `1px solid ${C.border}`, background: C.bg }}>
-        {(side === 'healed' ? ['timeline', 'diff', 'patches', 'raw'] : ['timeline', 'raw']).map(t => (
+        {(side === 'healed' && mode !== 'gateway' ? ['timeline', 'diff', 'patches', 'raw'] : ['timeline', 'raw']).map(t => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -865,12 +739,14 @@ function Pane({
 
         {tab === 'raw' && (
           <div>
+            {request && <RawSection label="Request" value={request} />}
             <RawSection label="Raw SSE Event Stream" value={events} />
             {data && <RawSection label="Extracted Logical Response" value={data} />}
             {error && <RawSection label="Raw Error Payload" value={error} isError />}
           </div>
         )}
       </div>
+      </>}
 
       {/* Footer Outcome & Ground Truth */}
       {status !== 'idle' && (
@@ -887,14 +763,7 @@ function Pane({
             </div>
           )}
 
-<<<<<<< HEAD
           {status === 'review' && <div role="status" style={{ marginTop: 6, color: C.amber, fontWeight: 700 }}>Needs review · proposal safely halted without a commit.</div>}
-=======
-<<<<<<< HEAD
-          {status === 'review' && <div role="status" style={{ marginTop: 6, color: C.amber, fontWeight: 700 }}>Needs review · proposal safely halted without a commit.</div>}
-=======
->>>>>>> origin/main
->>>>>>> origin/main
           {status === 'fail' && (
             <div style={{ color: C.red, marginBottom: 6, fontFamily: 'monospace', fontSize: '0.75rem' }}>
               <span style={{ fontWeight: 700 }}>Root Failure: </span>
@@ -910,15 +779,7 @@ function Pane({
                   {truthOk ? 'MATCH (Verified against Mock DB)' : 'MISMATCH (Payload diverges)'}
                 </span>
               </div>
-<<<<<<< HEAD
               <TruthTable data={data} truth={truth} fields={truthFields} />
-=======
-<<<<<<< HEAD
-              <TruthTable data={data} truth={truth} fields={truthFields} />
-=======
-              <TruthTable data={data} truth={truth} />
->>>>>>> origin/main
->>>>>>> origin/main
             </div>
           )}
 
@@ -932,7 +793,9 @@ function Pane({
               fontWeight: 700, fontSize: '0.8rem',
             }}>
               {side === 'healed'
-                ? (recoveredOk ? '✔ RECOVERED — schema repaired and truth check passed' : '⚠ HEALED (HTTP) — data truth check mismatch')
+                ? (mode === 'gateway'
+                  ? (recoveredOk ? '✔ HEALTHY — same request accepted through gateway; no repair needed' : '⚠ GATEWAY (HTTP) — data truth check mismatch')
+                  : (recoveredOk ? '✔ RECOVERED — schema repaired and truth check passed' : '⚠ HEALED (HTTP) — data truth check mismatch'))
                 : (recoveredOk ? '✔ BASELINE SUCCEEDED' : '⚠ BASELINE MISMATCH')}
             </div>
           )}
@@ -947,13 +810,29 @@ function Pane({
               fontWeight: 700, fontSize: '0.8rem',
             }}>
               {side === 'baseline'
-                ? '✖ BASELINE FAILED — 10 retries exhausted without wire-format adapter'
-                : '✖ HEALING HALTED — safety policy prevented commit'}
+                ? `✖ BASELINE NOT COMPLETED — ${describeFailureNotice(error, side, mode)}`
+                : `✖ HEALING STOPPED — ${describeFailureNotice(error, side, mode)}`}
             </div>
           )}
         </div>
       )}
     </section>
+  );
+}
+
+function HealthyExchange({ request, response, error, status, statusCode }) {
+  const path = request?.logicalPath ?? (request?.url ? new URL(request.url).pathname : '');
+  return (
+    <div className="healthy-exchange">
+      <section>
+        <div className="healthy-exchange-head"><strong>Request</strong><span>{request?.logicalMethod ?? request?.method} {path}</span></div>
+        <pre>{JSON.stringify(request ?? {}, null, 2)}</pre>
+      </section>
+      <section>
+        <div className="healthy-exchange-head"><strong>Response</strong><span data-ok={status === 'ok'}>{status === 'ok' ? `HTTP ${statusCode || 200} · accepted` : `HTTP ${statusCode || '—'} · failed`}</span></div>
+        <pre data-error={status !== 'ok'}>{JSON.stringify(error ? { error } : response ?? null, null, 2)}</pre>
+      </section>
+    </div>
   );
 }
 
@@ -1021,48 +900,25 @@ export default function DriftControl() {
   const [mutation, setMutation]       = useState(null);
   const [mutationCatalogue, setMutationCatalogue] = useState([]);
   const [selectedMutation, setSelectedMutation] = useState('M5');
-<<<<<<< HEAD
   const [specMode, setSpecMode] = useState('active');
-=======
-<<<<<<< HEAD
-  const [specMode, setSpecMode] = useState('active');
-=======
->>>>>>> origin/main
->>>>>>> origin/main
   const [registered, setRegistered]   = useState(false);
+  const [mockStateReady, setMockStateReady] = useState(false);
   const [coreConn, setCoreConn]       = useState('disconnected');
   const [mockConn, setMockConn]       = useState('disconnected');
 
   const [baseline, setBaseline] = useState({
     status: 'idle', iterations: 0, elapsed: 0,
-<<<<<<< HEAD
     events: [], data: null, error: null, mode: 'llm', provider: null, model: null,
-=======
-<<<<<<< HEAD
-    events: [], data: null, error: null, mode: 'llm', provider: null, model: null,
-=======
-    events: [], data: null, error: null, mode: 'scripted',
->>>>>>> origin/main
->>>>>>> origin/main
   });
   const [healed, setHealed] = useState({
     status: 'idle', rounds: 0, elapsed: 0,
     events: [], data: null, error: null, ops: [], version: null,
   });
   const [truth, setTruth] = useState(null);
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
->>>>>>> origin/main
   const activeMutation = mutationCatalogue.find((item) => item.id === selectedMutation);
   const selectedTool = TOOL_BY_PATH[activeMutation?.route?.path] ?? TOOL;
   const selectedArgs = activeMutation?.fixture?.args ?? {};
   const truthFields = selectedTool.path === '/api/users/set-status' ? ['id', 'status'] : ['id', 'name', 'email'];
-<<<<<<< HEAD
-=======
-=======
->>>>>>> origin/main
->>>>>>> origin/main
 
   useEffect(() => {
     let active = true;
@@ -1070,6 +926,15 @@ export default function DriftControl() {
       .then((response) => response.ok ? response.json() : Promise.reject(new Error('mutation catalogue unavailable')))
       .then((payload) => { if (active) setMutationCatalogue(payload.mutations ?? []); })
       .catch(() => { if (active) setMutationCatalogue([]); });
+    fetch(`${MOCK}/admin/state`)
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error('mock state unavailable')))
+      .then((payload) => {
+        if (!active) return;
+        setMutation(payload.mutation ?? null);
+        setSpecMode(payload.specAvailable ? (payload.specStale ? 'stale' : 'active') : 'unavailable');
+        setMockStateReady(true);
+      })
+      .catch(() => {});
     return () => { active = false; };
   }, []);
 
@@ -1124,27 +989,12 @@ export default function DriftControl() {
       if (ev.type === 'agent.final') {
         setBaseline((b) => ({
           ...b,
-<<<<<<< HEAD
           status: ev.outcome === 'completed' ? 'ok' : ev.outcome === 'halted' ? 'review' : 'fail',
-=======
-<<<<<<< HEAD
-          status: ev.outcome === 'completed' ? 'ok' : ev.outcome === 'halted' ? 'review' : 'fail',
-=======
-          status: ev.outcome === 'success' ? 'ok' : 'fail',
->>>>>>> origin/main
->>>>>>> origin/main
           iterations: ev.iterations ?? b.iterations,
           data: ev.data ?? b.data,
           error: ev.error ?? b.error,
           mode: ev.mode ?? b.mode,
-<<<<<<< HEAD
           provider: ev.provider ?? b.provider, model: ev.model ?? b.model,
-=======
-<<<<<<< HEAD
-          provider: ev.provider ?? b.provider, model: ev.model ?? b.model,
-=======
->>>>>>> origin/main
->>>>>>> origin/main
         }));
       }
     };
@@ -1164,11 +1014,12 @@ export default function DriftControl() {
 
   // ── API Actions ───────────────────────────────────────────────────────────
   const reset = async () => {
-    await fetch(`${MOCK}/admin/reset`, { method: 'POST' });
+    const response = await fetch(`${MOCK}/admin/reset`, { method: 'POST' });
+    if (!response.ok) throw new Error(`Could not reset demo mock state (HTTP ${response.status}).`);
     setMutation(null);
+    setMockStateReady(true);
     setRegistered(false);
     setTruth(null);
-<<<<<<< HEAD
     setBaseline({ status: 'idle', iterations: 0, elapsed: 0, events: [], data: null, error: null, mode: 'llm', provider: null, model: null });
     setHealed({ status: 'idle', rounds: 0, elapsed: 0, events: [], data: null, error: null, ops: [], version: null });
     setMode('idle');
@@ -1181,7 +1032,9 @@ export default function DriftControl() {
       body: JSON.stringify({ id: selectedMutation }),
     });
     const j = await r.json();
+    if (!r.ok) throw new Error(j.message ?? `Could not activate mutation (HTTP ${r.status}).`);
     setMutation(j.mutation);
+    setMockStateReady(true);
   };
 
   const updateSpecMode = async (value) => {
@@ -1189,9 +1042,9 @@ export default function DriftControl() {
     await fetch(`${MOCK}/admin/config`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ specAvailable: value !== 'unavailable', specStale: value === 'stale' }) });
   };
 
-  const registerApi = useCallback(async () => {
-    if (registered) return;
-    await fetch(`${CORE}/apis`, {
+  const registerApi = useCallback(async (force = false) => {
+    if (registered && !force) return;
+    const response = await fetch(`${CORE}/apis`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1233,21 +1086,78 @@ export default function DriftControl() {
         ],
       }),
     });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null);
+      throw new Error(payload?.message ?? `Could not register demo API (HTTP ${response.status}).`);
+    }
     setRegistered(true);
   }, [registered]);
 
   // ── Run Both with Separate Independent Timers ─────────────────────────────
-  const runBoth = async () => {
-    await registerApi();
-    await fetch(`${MOCK}/admin/task`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ values: Object.values(selectedArgs) }),
-    });
+  const runBoth = async ({ forceHealthy = false } = {}) => {
     setMode('running');
     setTruth(null);
-
+    setBaseline((b) => ({ ...b, status: 'running', iterations: 0, data: null, error: null, events: [], elapsed: 0, mode: 'llm', provider: null, model: null }));
+    setHealed((h) => ({ ...h, status: 'running', rounds: 0, data: null, error: null, ops: [], version: null, events: [], elapsed: 0, mode: null, gatewayCalls: 0, request: null, provider: null, model: null, tokens: null }));
+    try {
+      if (forceHealthy) {
+        const resetResponse = await fetch(`${MOCK}/admin/reset`, { method: 'POST' });
+        if (!resetResponse.ok) throw new Error(`Could not reset demo mock (HTTP ${resetResponse.status}).`);
+        setMutation(null);
+        setMockStateReady(true);
+        setSpecMode('active');
+        await registerApi(true);
+      } else {
+        await registerApi();
+      }
+    } catch (error) {
+      const message = String(error?.message ?? error);
+      setBaseline((b) => ({ ...b, status: 'fail', error: message }));
+      setHealed((h) => ({ ...h, status: 'fail', error: message }));
+      setMode('done');
+      return;
+    }
+    let mockState;
+    try {
+      const stateResponse = await fetch(`${MOCK}/admin/state`);
+      if (!stateResponse.ok) throw new Error(`Could not read demo mock state (HTTP ${stateResponse.status}).`);
+      mockState = await stateResponse.json();
+    } catch (error) {
+      const message = String(error?.message ?? error);
+      setBaseline((b) => ({ ...b, status: 'fail', error: message }));
+      setHealed((h) => ({ ...h, status: 'fail', error: message }));
+      setMode('done');
+      return;
+    }
+    const activeMutation = mockState.mutation ?? null;
+    setMutation(activeMutation);
+    setMockStateReady(true);
+    setTruth(null);
     setBaseline((b) => ({ ...b, status: 'running', data: null, error: null, events: [], elapsed: 0 }));
     setHealed((h) => ({ ...h, status: 'running', data: null, error: null, ops: [], version: null, events: [], elapsed: 0 }));
+    await fetch(`${MOCK}/admin/task`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ values: [...Object.values(selectedArgs), '123', 'asha.new@example.com'] }),
+    });
+
+    if (!activeMutation) {
+      const bRunId = `b_${Date.now()}`;
+      const hRunId = `h_${Date.now()}`;
+      try {
+        const result = await runHealthyComparison({
+          mockUrl: MOCK, coreUrl: CORE, apiId: API_ID, tool: selectedTool,
+          args: selectedArgs, baselineRunId: bRunId, healedRunId: hRunId,
+        });
+        setBaseline((b) => ({ ...b, ...result.baseline }));
+        setHealed((h) => ({ ...h, ...result.healed }));
+      } catch (error) {
+        const message = String(error?.message ?? error);
+        setBaseline((b) => ({ ...b, status: 'fail', error: message }));
+        setHealed((h) => ({ ...h, status: 'fail', error: message }));
+      }
+      setMode('done');
+      return;
+    }
 
     const bRunId = `b_${Date.now()}`;
     const hRunId = `h_${Date.now()}`;
@@ -1320,7 +1230,15 @@ export default function DriftControl() {
     setMode('done');
   };
 
+  const runHealthyDemo = () => runBoth({ forceHealthy: true });
+
   const running = mode === 'running';
+  const healthyPassed = healed.mode === 'gateway'
+    && baseline.status === 'ok'
+    && healed.status === 'ok'
+    && truth !== null && !truth.error
+    && matchesTruth(baseline.data, truth, truthFields) === true
+    && matchesTruth(healed.data, truth, truthFields) === true;
   const toggleTheme = () => {
     const nextTheme = theme === 'dark' ? 'light' : 'dark';
     setTheme(nextTheme);
@@ -1328,308 +1246,6 @@ export default function DriftControl() {
     document.documentElement.classList.toggle('dark', nextTheme === 'dark');
   };
 
-=======
-<<<<<<< HEAD
-    setBaseline({ status: 'idle', iterations: 0, elapsed: 0, events: [], data: null, error: null, mode: 'llm', provider: null, model: null });
-    setHealed({ status: 'idle', rounds: 0, elapsed: 0, events: [], data: null, error: null, ops: [], version: null });
-    setMode('idle');
-  };
-
-  const mutate = async () => {
-    const r = await fetch(`${MOCK}/admin/mutate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: selectedMutation }),
-    });
-    const j = await r.json();
-    setMutation(j.mutation);
-  };
-
-  const updateSpecMode = async (value) => {
-    setSpecMode(value);
-    await fetch(`${MOCK}/admin/config`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ specAvailable: value !== 'unavailable', specStale: value === 'stale' }) });
-  };
-
-  const registerApi = useCallback(async () => {
-    if (registered) return;
-    await fetch(`${CORE}/apis`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        apiId: API_ID,
-        baseUrl: MOCK,
-        specUrl: `${MOCK}/openapi.json`,
-        credentials: { 'X-Tenant': { env: 'TENANT_ID' } },
-        healing: { enabled: true, maxRounds: 5, tier2: true },
-        tools: [
-          {
-            name: 'get_user', method: 'POST', path: '/api/users/get',
-            risk: 'low', sideEffects: 'none',
-            parameters: { type: 'object', properties: { user_id: { type: 'string' } }, required: ['user_id'], additionalProperties: false },
-            response: { fields: {
-              id:    { path: 'result.id',    type: 'string' },
-              name:  { path: 'result.name',  type: 'string' },
-              email: { path: 'result.email', type: 'string', format: 'email' },
-            }},
-          },
-          {
-            name: 'update_user_email', method: 'POST', path: '/api/users/update-email',
-            risk: 'medium', sideEffects: 'write',
-            parameters: { type: 'object', properties: { user_id: { type: 'string' }, email: { type: 'string', format: 'email' } }, required: ['user_id', 'email'], additionalProperties: false },
-            response: { fields: {
-              id:         { path: 'result.id',         type: 'string' },
-              email:      { path: 'result.email',      type: 'string', format: 'email' },
-              updated_at: { path: 'result.updated_at', type: 'string' },
-            }},
-          },
-          {
-            name: 'set_user_status', method: 'POST', path: '/api/users/set-status',
-            risk: 'medium', sideEffects: 'write',
-            parameters: { type: 'object', properties: { user_id: { type: 'string' }, status: { type: 'string' } }, required: ['user_id', 'status'], additionalProperties: false },
-            response: { fields: {
-              id: { path: 'result.id', type: 'string' },
-              status: { path: 'result.status', type: 'string' },
-            } },
-          },
-        ],
-      }),
-    });
-    setRegistered(true);
-  }, [registered]);
-
-  // ── Run Both with Separate Independent Timers ─────────────────────────────
-  const runBoth = async () => {
-    await registerApi();
-    await fetch(`${MOCK}/admin/task`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ values: Object.values(selectedArgs) }),
-    });
-    setMode('running');
-    setTruth(null);
-
-    setBaseline((b) => ({ ...b, status: 'running', data: null, error: null, events: [], elapsed: 0 }));
-    setHealed((h) => ({ ...h, status: 'running', data: null, error: null, ops: [], version: null, events: [], elapsed: 0 }));
-
-    const bRunId = `b_${Date.now()}`;
-    const hRunId = `h_${Date.now()}`;
-    const taskPrompt = 'Fetch user 123, update their email to asha.new@example.com, then fetch the user again and report the user name and email.';
-
-    // Measure Baseline independently
-    const runBaselinePromise = (async () => {
-      const bT0 = Date.now();
-      try {
-        const res = await fetch(`${MOCK}/demo/run`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ apiId: API_ID, prompt: taskPrompt, args: selectedArgs, runId: bRunId }),
-        }).then(r => r.json());
-        const bElapsed = Date.now() - bT0;
-        setBaseline((b) => ({
-          ...b,
-          status: res.outcome === 'completed' ? 'ok' : res.outcome === 'halted' ? 'review' : 'fail',
-          iterations: res.iterations ?? res.steps ?? 0,
-          elapsed: bElapsed,
-          data: res.data ?? null,
-          error: res.error ?? null,
-          mode: res.mode ?? 'llm', provider: res.provider ?? null, model: res.model ?? null,
-        }));
-      } catch (err) {
-        const bElapsed = Date.now() - bT0;
-        setBaseline((b) => ({
-          ...b,
-          status: 'fail',
-          iterations: 0,
-          elapsed: bElapsed,
-          error: String(err?.message ?? err),
-        }));
-      }
-    })();
-
-    // Measure Healed independently
-    const runHealedPromise = (async () => {
-      const hT0 = Date.now();
-      try {
-        const res = await fetch(`${CORE}/tasks`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ apiId: API_ID, prompt: taskPrompt, wait: true, runId: hRunId }),
-        }).then(r => r.json());
-        const hElapsed = Date.now() - hT0;
-        setHealed((h) => ({
-          ...h,
-          status: res.outcome === 'completed' ? 'ok' : res.outcome === 'halted' ? 'review' : 'fail',
-          rounds: res.steps ?? 0,
-          elapsed: hElapsed,
-          data: h.data,
-          error: res.error ?? null,
-          ops: h.ops,
-          version: h.version,
-          provider: res.provider ?? null, model: res.model ?? null, tokens: res.tokens ?? null,
-        }));
-      } catch (err) {
-        const hElapsed = Date.now() - hT0;
-        setHealed((h) => ({
-          ...h,
-          status: 'fail',
-          elapsed: hElapsed,
-          error: String(err?.message ?? err),
-        }));
-      }
-    })();
-
-    await Promise.all([runBaselinePromise, runHealedPromise]);
-    setMode('done');
-  };
-
-  const running = mode === 'running';
-  const toggleTheme = () => {
-    const nextTheme = theme === 'dark' ? 'light' : 'dark';
-    setTheme(nextTheme);
-    localStorage.setItem('kintsugi-theme', nextTheme);
-    document.documentElement.classList.toggle('dark', nextTheme === 'dark');
-  };
-
-=======
-    setBaseline({ status: 'idle', iterations: 0, elapsed: 0, events: [], data: null, error: null, mode: 'scripted' });
-    setHealed({ status: 'idle', rounds: 0, elapsed: 0, events: [], data: null, error: null, ops: [], version: null });
-    setMode('idle');
-  };
-
-  const mutate = async () => {
-    const r = await fetch(`${MOCK}/admin/mutate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: selectedMutation }),
-    });
-    const j = await r.json();
-    setMutation(j.mutation);
-  };
-
-  const registerApi = useCallback(async () => {
-    if (registered) return;
-    await fetch(`${CORE}/apis`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        apiId: API_ID,
-        baseUrl: MOCK,
-        specUrl: `${MOCK}/openapi.json`,
-        credentials: { 'X-Tenant': { env: 'TENANT_ID' } },
-        healing: { enabled: true, maxRounds: 5, tier2: true },
-        tools: [
-          {
-            name: 'get_user', method: 'POST', path: '/api/users/get',
-            risk: 'low', sideEffects: 'none',
-            parameters: { type: 'object', properties: { user_id: { type: 'string' } }, required: ['user_id'], additionalProperties: false },
-            response: { fields: {
-              id:    { path: 'result.id',    type: 'string' },
-              name:  { path: 'result.name',  type: 'string' },
-              email: { path: 'result.email', type: 'string', format: 'email' },
-            }},
-          },
-          {
-            name: 'update_user_email', method: 'POST', path: '/api/users/update-email',
-            risk: 'medium', sideEffects: 'write',
-            parameters: { type: 'object', properties: { user_id: { type: 'string' }, email: { type: 'string', format: 'email' } }, required: ['user_id', 'email'], additionalProperties: false },
-            response: { fields: {
-              id:         { path: 'result.id',         type: 'string' },
-              email:      { path: 'result.email',      type: 'string', format: 'email' },
-              updated_at: { path: 'result.updated_at', type: 'string' },
-            }},
-          },
-        ],
-      }),
-    });
-    setRegistered(true);
-  }, [registered]);
-
-  // ── Run Both with Separate Independent Timers ─────────────────────────────
-  const runBoth = async () => {
-    await registerApi();
-    setMode('running');
-    setTruth(null);
-
-    setBaseline((b) => ({ ...b, status: 'running', data: null, error: null, events: [], elapsed: 0 }));
-    setHealed((h) => ({ ...h, status: 'running', data: null, error: null, ops: [], version: null, events: [], elapsed: 0 }));
-
-    const bRunId = `b_${Date.now()}`;
-    const hRunId = `h_${Date.now()}`;
-
-    // Measure Baseline independently
-    const runBaselinePromise = (async () => {
-      const bT0 = Date.now();
-      try {
-        const res = await fetch(`${MOCK}/demo/run`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ apiId: API_ID, tool: TOOL, args: { user_id: '123' }, baseUrl: MOCK, runId: bRunId }),
-        }).then(r => r.json());
-        const bElapsed = Date.now() - bT0;
-        setBaseline((b) => ({
-          ...b,
-          status: res.outcome === 'success' ? 'ok' : 'fail',
-          iterations: res.iterations ?? 10,
-          elapsed: bElapsed,
-          data: res.data ?? null,
-          error: res.error ?? null,
-        }));
-      } catch (err) {
-        const bElapsed = Date.now() - bT0;
-        setBaseline((b) => ({
-          ...b,
-          status: 'fail',
-          iterations: 0,
-          elapsed: bElapsed,
-          error: String(err?.message ?? err),
-        }));
-      }
-    })();
-
-    // Measure Healed independently
-    const runHealedPromise = (async () => {
-      const hT0 = Date.now();
-      try {
-        const res = await fetch(`${CORE}/apis/${API_ID}/tools/${TOOL.name}/invoke`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ args: { user_id: '123' }, runId: hRunId }),
-        }).then(r => r.json());
-        const hElapsed = Date.now() - hT0;
-        setHealed((h) => ({
-          ...h,
-          status: res.ok ? 'ok' : 'fail',
-          rounds: res.meta?.rounds ?? 0,
-          elapsed: hElapsed,
-          data: res.data ?? null,
-          error: res.error ?? null,
-          ops: res.meta?.ops ?? h.ops,
-          version: res.meta?.version ?? h.version,
-        }));
-      } catch (err) {
-        const hElapsed = Date.now() - hT0;
-        setHealed((h) => ({
-          ...h,
-          status: 'fail',
-          elapsed: hElapsed,
-          error: String(err?.message ?? err),
-        }));
-      }
-    })();
-
-    await Promise.all([runBaselinePromise, runHealedPromise]);
-    setMode('done');
-  };
-
-  const running = mode === 'running';
-  const toggleTheme = () => {
-    const nextTheme = theme === 'dark' ? 'light' : 'dark';
-    setTheme(nextTheme);
-    localStorage.setItem('kintsugi-theme', nextTheme);
-    document.documentElement.classList.toggle('dark', nextTheme === 'dark');
-  };
-
->>>>>>> origin/main
->>>>>>> origin/main
   return (
     <div style={{ fontFamily: 'Inter, ui-sans-serif, system-ui, -apple-system, sans-serif', margin: 0, background: C.bg, color: C.text, minHeight: '100vh' }}>
       {/* ── Top Navigation Bar ── */}
@@ -1668,21 +1284,15 @@ export default function DriftControl() {
         <div className="workspace-copy">
           <div className="eyebrow">DEVELOPER SANDBOX <span>/</span> RECOVERY TEST</div>
           <h1>Schema drift recovery</h1>
-          <p>Compare a direct API call with healr’s contract-aware adapter against the same mutated endpoint.</p>
-          <div className="endpoint-line"><span className="method-tag">POST</span><code>{MOCK}{TOOL.path}</code><span className="endpoint-separator">·</span><span>Scenario {mutation ?? selectedMutation}</span></div>
+          <p>Run a healthy request directly, or inject schema drift and compare it with healr’s recovery path.</p>
+          <div className="endpoint-line"><span className="method-tag">{selectedTool.method}</span><code>{MOCK}{selectedTool.path}</code><span className="endpoint-separator">·</span><span>{mutation ? `Active mutation ${mutation}` : `No active mutation · ${selectedMutation} selected`}</span></div>
         </div>
         <div className="workspace-actions">
           {mutation && <div className="mutation-label"><span>Active mutation</span><strong>{mutation}</strong></div>}
-<<<<<<< HEAD
           {(selectedMutation === 'M8' || selectedMutation === 'M11') && <span className="scenario-label">Tier 2 scenario</span>}
-=======
-<<<<<<< HEAD
-          {(selectedMutation === 'M8' || selectedMutation === 'M11') && <span className="scenario-label">Tier 2 scenario</span>}
-=======
->>>>>>> origin/main
->>>>>>> origin/main
           <div className="action-buttons">
             <Btn onClick={reset} disabled={running} color={C.teal} outline>Reset</Btn>
+            <Btn onClick={runHealthyDemo} disabled={running || !mockStateReady} color={C.green} outline title="Reset the mock and adapter, then show a successful healthy request">Healthy demo</Btn>
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: C.textDim, fontSize: '0.72rem' }}>
               Mutation
               <select value={selectedMutation} onChange={(event) => setSelectedMutation(event.target.value)} disabled={running || !mutationCatalogue.length} aria-label="Select API mutation">
@@ -1690,15 +1300,8 @@ export default function DriftControl() {
               </select>
             </label>
             <Btn onClick={mutate} disabled={running} color={C.amber}>Mutate API</Btn>
-<<<<<<< HEAD
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: C.textDim, fontSize: '0.72rem' }}>Spec<select value={specMode} onChange={(event) => updateSpecMode(event.target.value)} disabled={running}><option value="active">Active</option><option value="stale">Stale</option><option value="unavailable">Unavailable</option></select></label>
-=======
-<<<<<<< HEAD
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: C.textDim, fontSize: '0.72rem' }}>Spec<select value={specMode} onChange={(event) => updateSpecMode(event.target.value)} disabled={running}><option value="active">Active</option><option value="stale">Stale</option><option value="unavailable">Unavailable</option></select></label>
-=======
->>>>>>> origin/main
->>>>>>> origin/main
-            <Btn onClick={runBoth} disabled={running} color={C.teal}>{running ? 'Running…' : 'Run comparison'}</Btn>
+            <Btn onClick={runBoth} disabled={running || !mockStateReady} color={C.teal}>{running ? 'Running…' : !mockStateReady ? 'Syncing mock…' : 'Run comparison'}</Btn>
           </div>
         </div>
       </section>
@@ -1708,14 +1311,14 @@ export default function DriftControl() {
           <SummaryCard
             label="Baseline Outcome"
             value={baseline.status === 'idle' ? 'READY' : baseline.status === 'ok' ? 'OK' : baseline.status === 'fail' ? 'FAILED' : 'RUNNING…'}
-            sub={baseline.status === 'fail' ? '10 iterations exhausted without fix' : baseline.status === 'ok' ? 'succeeded unadapted' : ''}
+            sub={baseline.status === 'fail' ? describeFailureNotice(baseline.error, 'baseline', baseline.mode) : baseline.status === 'ok' ? (baseline.mode === 'direct' ? 'raw request accepted' : 'succeeded unadapted') : ''}
             color={baseline.status === 'ok' ? C.green : baseline.status === 'fail' ? C.red : C.textDim}
           />
           <SummaryCard
-            label="Healed Outcome"
-            value={healed.status === 'idle' ? 'READY' : healed.status === 'ok' ? 'RECOVERED' : healed.status === 'fail' ? 'HALTED' : 'RUNNING…'}
-            sub={healed.status === 'ok' ? `${healed.rounds} heal round(s) · dynamic adapter v${healed.version ?? 2}` : ''}
-            color={healed.status === 'ok' ? C.green : healed.status === 'fail' ? C.red : C.textDim}
+            label={healed.mode === 'gateway' ? 'Healthy Demo' : 'Healed Outcome'}
+            value={healed.status === 'idle' ? 'READY' : healed.mode === 'gateway' ? (healed.status === 'fail' ? 'FAILED' : truth === null ? 'VERIFYING…' : truth.error ? 'TRUTH UNAVAILABLE' : healthyPassed ? 'PASSED' : 'CHECK DATA') : healed.status === 'ok' ? 'RECOVERED' : healed.status === 'fail' ? 'HALTED' : 'RUNNING…'}
+            sub={healed.status === 'ok' ? (healed.mode === 'gateway' ? (truth === null ? 'both requests accepted · checking mock truth' : truth.error ? 'both requests accepted · mock truth unavailable' : healthyPassed ? 'both responses match the mock truth' : 'request accepted · response truth mismatch') : `${healed.rounds} heal round(s) · dynamic adapter v${healed.version ?? 2}`) : ''}
+            color={healed.mode === 'gateway' ? (healthyPassed ? C.green : healed.status === 'fail' ? C.red : truth?.error ? C.textDim : C.amber) : healed.status === 'ok' ? C.green : healed.status === 'fail' ? C.red : C.textDim}
           />
           <SummaryCard
             label="Active Patches"
@@ -1727,35 +1330,14 @@ export default function DriftControl() {
             label="Invariant Truth Check"
             value={mode === 'idle' ? '—' : truth === null ? 'Checking…' : truth.error ? 'Unavailable' : (() => {
               if (!healed.data) return '—';
-<<<<<<< HEAD
               const ok = matchesTruth(healed.data, truth, truthFields);
-=======
-<<<<<<< HEAD
-              const ok = matchesTruth(healed.data, truth, truthFields);
-=======
-              const flat = healed.data.id !== undefined ? healed.data : (healed.data.result ?? healed.data);
-              if (!flat) return '—';
-              const ok = String(flat.id) === String(truth.id) && flat.name === truth.name && flat.email === truth.email;
->>>>>>> origin/main
->>>>>>> origin/main
               return ok ? 'MATCH' : 'MISMATCH';
             })()}
             sub={mode === 'idle' ? 'Verified after the comparison runs' : 'Independent DB verification'}
             color={truth === null ? C.textDim : truth.error ? C.textDim : (() => {
               if (!healed.data || !truth) return C.textDim;
-<<<<<<< HEAD
               const ok = matchesTruth(healed.data, truth, truthFields);
               return ok === null ? C.textDim : ok ? C.green : C.amber;
-=======
-<<<<<<< HEAD
-              const ok = matchesTruth(healed.data, truth, truthFields);
-              return ok === null ? C.textDim : ok ? C.green : C.amber;
-=======
-              const flat = healed.data.id !== undefined ? healed.data : (healed.data.result ?? healed.data);
-              if (!flat) return C.textDim;
-              return String(flat.id) === String(truth.id) && flat.name === truth.name && flat.email === truth.email ? C.green : C.amber;
->>>>>>> origin/main
->>>>>>> origin/main
             })()}
           />
         </div>
@@ -1764,74 +1346,48 @@ export default function DriftControl() {
       <main className="demo-main">
         <Pane
           side="baseline"
-<<<<<<< HEAD
-          title={baseline.mode === 'llm' ? 'Baseline (same model, raw tools)' : 'Scripted retry baseline (no LLM)'}
-=======
-<<<<<<< HEAD
-          title={baseline.mode === 'llm' ? 'Baseline (same model, raw tools)' : 'Scripted retry baseline (no LLM)'}
-=======
-          title="Direct baseline"
->>>>>>> origin/main
->>>>>>> origin/main
+          title={baseline.mode === 'llm' ? 'Baseline (same model, raw tools)' : baseline.mode === 'direct' ? 'Healthy baseline (direct request)' : 'Scripted retry baseline (no LLM)'}
           accentColor={C.red}
           status={baseline.status}
           iterations={baseline.iterations}
           elapsed={baseline.elapsed}
           events={baseline.events}
           data={baseline.data}
+          statusCode={baseline.statusCode}
           error={baseline.error}
           truth={truth}
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
->>>>>>> origin/main
           truthFields={truthFields}
           mode={baseline.mode}
+          request={baseline.request}
           provider={baseline.provider}
           model={baseline.model}
         />
         <Pane
           side="healed"
-          title="Healed agent"
-<<<<<<< HEAD
-=======
-=======
-          mode={baseline.mode}
-        />
-        <Pane
-          side="healed"
-          title="Self-healing adapter"
->>>>>>> origin/main
->>>>>>> origin/main
+          title={healed.mode === 'gateway' ? 'Gateway passthrough (healthy)' : 'Healed agent'}
           accentColor={C.teal}
           status={healed.status}
           rounds={healed.rounds}
+          gatewayCalls={healed.gatewayCalls}
           elapsed={healed.elapsed}
           events={healed.events}
           data={healed.data}
+          statusCode={healed.statusCode}
           error={healed.error}
           ops={healed.ops}
           version={healed.version}
           truth={truth}
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
->>>>>>> origin/main
           truthFields={truthFields}
           provider={healed.provider}
           model={healed.model}
           tokens={healed.tokens}
+          mode={healed.mode}
+          request={healed.request}
         />
       </main>
-      {(baseline.mode !== 'llm' || (baseline.provider && healed.provider && (baseline.provider !== healed.provider || baseline.model !== healed.model))) && <p role="status" className="not-like-for-like">Not like for like: baseline uses {baseline.mode === 'scripted' ? 'scripted calls without an LLM' : `${baseline.provider} ${baseline.model}`}; healed agent uses {healed.provider ?? 'Gemini'} {healed.model ?? 'configured model'}.</p>}
+      {healed.mode === 'gateway' && <p role="status" className="healthy-run-note">Healthy comparison · identical logical tool and arguments sent directly and through the gateway; LLM retries and healing patches are not involved.</p>}
+      {(baseline.mode === 'scripted' || (baseline.provider && healed.provider && (baseline.provider !== healed.provider || baseline.model !== healed.model))) && <p role="status" className="not-like-for-like">Not like for like: baseline uses {baseline.mode === 'scripted' ? 'scripted calls without an LLM' : `${baseline.provider} ${baseline.model}`}; healed path uses {healed.provider ?? 'the core task runner'} {healed.model ?? ''}.</p>}
       {baseline.provider && healed.provider && (baseline.provider !== healed.provider || baseline.model !== healed.model) && <p role="status" className="not-like-for-like">Not like for like: baseline uses {baseline.provider} {baseline.model}; healed agent uses {healed.provider} {healed.model}.</p>}
-<<<<<<< HEAD
-=======
-=======
-        />
-      </main>
->>>>>>> origin/main
->>>>>>> origin/main
 
       {/* ── Footer ── */}
       <footer className="demo-footer" style={{

@@ -84,6 +84,13 @@ export default function MetricsPage() {
     try { await api.clearCache(); await refreshCache(); }
     catch (err) { setError(err); }
   };
+  const promoteCandidate = async (candidate) => {
+    try {
+      if (candidate.rollout_state === 'candidate') await api.rolloutCandidate(candidate.id, 'regression_verified', 'operator_regression_gate');
+      await api.promoteCandidate(candidate.id);
+      await refresh();
+    } catch (err) { setError(err); }
+  };
 
   const barData = series.map((point) => ({ ...point, passthrough: Math.max(0, (point.ok ?? 0) - (point.healed ?? 0)) }));
   const tiers = metrics?.tierCounts ?? {};
@@ -135,6 +142,9 @@ export default function MetricsPage() {
           <span className="text-muted-foreground">v{candidate.source_version} · {candidate.scope} · used {candidate.use_count}×</span>
           <code className="ml-auto text-[10px] text-muted-foreground">{candidate.cache_key?.slice(0, 12)}…</code>
           <Badge variant={candidate.state === 'verified' ? 'secondary' : 'outline'}>{candidate.state}</Badge>
+          <Badge variant={candidate.rollout_state === 'promoted' ? 'secondary' : 'outline'}>{candidate.rollout_state ?? 'promoted'}</Badge>
+          {['candidate', 'regression_verified', 'shadow', 'canary'].includes(candidate.rollout_state) && candidate.adapter
+            && <Button variant="outline" size="sm" onClick={() => promoteCandidate(candidate)}>Promote</Button>}
           {candidate.state === 'verified' && <Button variant="ghost" size="sm" onClick={() => invalidateCandidate(candidate.cache_key)} aria-label={`Invalidate candidate ${candidate.cache_key}`}><Trash2 />Invalidate</Button>}
         </div>)}</div> : <p className="py-4 text-center text-xs text-muted-foreground">No patch candidates in this workspace.</p>}
         {cache?.nextCursor && <div className="flex justify-end"><Button variant="outline" size="sm" onClick={() => refreshCache(cache.nextCursor)}>Load next candidates <span aria-hidden>→</span></Button></div>}

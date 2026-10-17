@@ -22,11 +22,7 @@ test('ambiguous two-field rename reaches Tier 2, validates evidence, replays and
     _logicalSchema: { type: 'object', properties: { user_id: { type: 'string' }, email: { type: 'string' } }, required: ['user_id', 'email'], additionalProperties: false },
   }, 'medium', {
     baseUrl: 'http://localhost:5001', healing: { enabled: true, mode: 'enforce', maxRounds: 4, tier2: true },
-<<<<<<< HEAD
-  });
-=======
   }, { idempotencyKeyHeader: 'Idempotency-Key' });
->>>>>>> origin/main
   let providerCalls = 0;
   globalThis.fetch = async (url, init) => {
     assert.match(String(url), /api\/users\/update-email/);
@@ -68,11 +64,7 @@ test('Tier 2 proposal that fails verified replay is never committed', async () =
   registryStore.register('tier2-m11-replay', 'update_email', {
     request: [], response: { map: { id: 'result.id', email: 'result.email' } }, _path: '/api/users/update-email', _method: 'POST', sideEffects: 'write',
     _logicalSchema: { type: 'object', properties: { user_id: { type: 'string' }, email: { type: 'string' } }, required: ['user_id', 'email'], additionalProperties: false },
-<<<<<<< HEAD
-  }, 'medium', { baseUrl: 'http://localhost:5001', healing: { enabled: true, mode: 'enforce', tier2: true } });
-=======
   }, 'medium', { baseUrl: 'http://localhost:5001', healing: { enabled: true, mode: 'enforce', tier2: true } }, { idempotencyKeyHeader: 'Idempotency-Key' });
->>>>>>> origin/main
   let attempts = 0;
   globalThis.fetch = async (_url, init) => {
     attempts += 1;

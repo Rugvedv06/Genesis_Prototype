@@ -126,10 +126,13 @@ export function Drawer({ open, onClose, title, children }) {
 }
 
 // Centered modal, built on shadcn Dialog.
-export function Modal({ open, onClose, title, children, actions }) {
+export function Modal({ open, onClose, title, children, actions, wide = false }) {
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="gap-3 border border-border-strong bg-popover">
+      <DialogContent
+        className="gap-3 border border-border-strong bg-popover"
+        style={wide ? { width: 'min(920px, calc(100vw - 2rem))', maxWidth: 'calc(100vw - 2rem)' } : undefined}
+      >
         <DialogHeader>
           <DialogTitle className="text-[14px] font-semibold">{title}</DialogTitle>
         </DialogHeader>

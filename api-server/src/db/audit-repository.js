@@ -1,8 +1,10 @@
 import { sha256, stableStringify } from '../lib/hash.js';
 import { getLocalWorkspaceId } from './workspace.js';
+import { sanitizePatchExplanation } from '../features/audit/explanation.js';
 
 function prepare(value, key = '') {
   if (value === undefined) return undefined;
+  if (key === 'explanation') return sanitizePatchExplanation(value) ?? undefined;
   const normalizedKey = key.replace(/[^a-z0-9]/gi, '').toLowerCase();
   if (['args', 'arguments', 'data', 'request', 'requestbody', 'response', 'responsebody', 'body', 'prompt', 'headers', 'cookies', 'error', 'message', 'raw']
     .includes(normalizedKey)) return undefined;
@@ -161,13 +163,5 @@ export async function exportAuditNdjson(queryable) {
   const { rows } = await queryable.query(
     'SELECT canonical_record FROM audit_entries WHERE workspace_id = $1 ORDER BY sequence', [workspaceId],
   );
-<<<<<<< HEAD
-  return rows.map((row) => JSON.stringify(row.canonical_record)).join('\n') + (rows.length ? '\n' : '');
-=======
-<<<<<<< HEAD
-  return rows.map((row) => JSON.stringify(row.canonical_record)).join('\n') + (rows.length ? '\n' : '');
-=======
   return rows.map((row) => JSON.stringify(row.canonical_record)).join('') + (rows.length ? '\n' : '');
->>>>>>> origin/main
->>>>>>> origin/main
 }

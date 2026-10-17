@@ -15,10 +15,6 @@ import Ajv from 'ajv';
 import addFormats from 'ajv-formats';
 import { cfg } from '../../config.js';
 import { check as safetyCheck, circuit } from '../safety/index.js';
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
->>>>>>> origin/main
 import { append as appendFileAudit } from '../audit/index.js';
 import { withTransaction } from '../../db/transaction.js';
 import { getPool } from '../../db/pool.js';
@@ -33,39 +29,22 @@ import { negativeHit, negativeResult, cacheNegative, recordHalt, negativeHitAsyn
 import { validateUpstreamUrl } from '../http/url-policy.js';
 import { checkResponse } from '../drift-detector/index.js';
 import { log } from '../../lib/log.js';
-<<<<<<< HEAD
 import { classifyUpstream, isRetryableOperation, retryDelayMs } from '../upstream-classifier/index.js';
 import { findKnownVariant, structuralFingerprint } from '../response-variants/index.js';
 import { observeQuarantine } from '../response-variants/quarantine.js';
-=======
-=======
-import { append as appendAudit } from '../audit/index.js';
-import { negativeHit, negativeResult, cacheNegative, recordHalt } from '../safety/circuit.js';
-import { validateUpstreamUrl } from '../http/url-policy.js';
-import { checkResponse } from '../drift-detector/index.js';
->>>>>>> origin/main
->>>>>>> origin/main
+import { buildPatchExplanation } from '../audit/explanation.js';
 
 const ajv = new Ajv({ allErrors: true, strict: false });
 addFormats(ajv);
 const validatorCache = new Map(); // schema-fingerprinted key -> compiled ajv validator
 const MAX_CACHED_VALIDATORS = 256;
 const reportedDomainHalts = new WeakSet();
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
->>>>>>> origin/main
 const CONVENTION_OPS = new Set(['rename_field', 'move_field', 'coerce_type']);
 
 async function appendAudit(input) {
   if (!process.env.DATABASE_URL) return appendFileAudit(input);
   return withTransaction((client) => appendAuditInTransaction(client, input));
 }
-<<<<<<< HEAD
-=======
-=======
->>>>>>> origin/main
->>>>>>> origin/main
 
 function cachedValidator(key, schema) {
   let validator = validatorCache.get(key);
@@ -150,21 +129,7 @@ function credentialResolver(apiId) {
   };
 }
 
-<<<<<<< HEAD
 async function send(tool, args, resolveCredential, parentSignal) {
-=======
-function replayPolicy(tool) {
-  const method = String(tool.versionObj?.meta?.method ?? tool.versionObj?.adapter?._method ?? 'POST').toUpperCase();
-  const sideEffects = tool.versionObj?.meta?.sideEffects ?? tool.versionObj?.adapter?.sideEffects ?? 'write';
-  const idempotencyHeader = tool.versionObj?.meta?.idempotencyKeyHeader;
-  const validHeader = typeof idempotencyHeader === 'string'
-    && /^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,128}$/.test(idempotencyHeader);
-  const readOnly = ['GET', 'HEAD'].includes(method) || ['read', 'none'].includes(sideEffects);
-  return { method, sideEffects, idempotencyHeader: validHeader ? idempotencyHeader : null, replaySafe: readOnly || validHeader };
-}
-
-async function send(tool, args, resolveCredential, parentSignal, callId) {
->>>>>>> origin/main
   const config = registryStore.config(tool.apiId) ?? {};
   const baseUrl = config.baseUrl;
   if (!baseUrl) throw new ConfigError(`no baseUrl configured for API ${tool.apiId}`);
@@ -174,33 +139,15 @@ async function send(tool, args, resolveCredential, parentSignal, callId) {
   const meta = tool.versionObj?.meta ?? {};
   const reqPath = meta.path ?? adapter._path;
   const method = meta.method ?? adapter._method ?? 'POST';
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
->>>>>>> origin/main
   const pathValues = { ...body };
   const resolvedPath = String(reqPath).replace(/\{([^}]+)\}/g, (_, key) => {
     if (pathValues[key] === undefined) throw new ConfigError(`missing path argument ${key}`);
     delete pathValues[key];
     return encodeURIComponent(String(body[key]));
-<<<<<<< HEAD
-=======
-=======
-  const pathValues = { ...args };
-  const resolvedPath = String(reqPath).replace(/\{([^}]+)\}/g, (_, key) => {
-    if (pathValues[key] === undefined) throw new ConfigError(`missing path argument ${key}`);
-    delete pathValues[key];
-    return encodeURIComponent(String(args[key]));
->>>>>>> origin/main
->>>>>>> origin/main
   });
   const upstream = validateUpstreamUrl(baseUrl, { allowLocal: cfg.allowLocalUpstreams });
   const url = new URL(resolvedPath, upstream);
   if (method.toUpperCase() === 'GET') {
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
->>>>>>> origin/main
     const query = pathValues.query && typeof pathValues.query === 'object' && !Array.isArray(pathValues.query)
       ? pathValues.query : {};
     delete pathValues.query;
@@ -209,13 +156,6 @@ async function send(tool, args, resolveCredential, parentSignal, callId) {
     }
     for (const [key, value] of Object.entries(query)) {
       if (value !== undefined && (value === null || typeof value !== 'object')) url.searchParams.set(key, String(value));
-<<<<<<< HEAD
-=======
-=======
-    for (const [key, value] of Object.entries(pathValues)) {
-      if (value !== undefined) url.searchParams.set(key, String(value));
->>>>>>> origin/main
->>>>>>> origin/main
     }
   }
   const ctrl = new AbortController();
@@ -224,37 +164,14 @@ async function send(tool, args, resolveCredential, parentSignal, callId) {
   else parentSignal?.addEventListener('abort', onParentAbort, { once: true });
   const timeout = setTimeout(() => ctrl.abort(new Error('upstream_timeout')), 10000);
   try {
-<<<<<<< HEAD
     const resp = await fetch(url, {
       method,
       headers: { 'Content-Type': 'application/json', ...headers },
-=======
-<<<<<<< HEAD
-    const requestHeaders = { 'Content-Type': 'application/json', ...headers };
-    const { idempotencyHeader } = replayPolicy(tool);
-    // Only send a key when the registered upstream contract explicitly says it supports one.
-    // callId is stable for the full invocation, including any permitted replay.
-    if (idempotencyHeader && callId) {
-      for (const existing of Object.keys(requestHeaders)) {
-        if (existing.toLowerCase() === idempotencyHeader.toLowerCase()) delete requestHeaders[existing];
-      }
-      requestHeaders[idempotencyHeader] = callId;
-    }
-    const resp = await fetch(url, {
-      method,
-      headers: requestHeaders,
-=======
-    const resp = await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json', ...headers },
->>>>>>> origin/main
->>>>>>> origin/main
       body: method.toUpperCase() === 'GET' || method.toUpperCase() === 'HEAD' ? undefined : JSON.stringify(body),
       signal: ctrl.signal,
     });
     clearTimeout(timeout);
     parentSignal?.removeEventListener('abort', onParentAbort);
-<<<<<<< HEAD
     const bodyText = resp.status === 204 ? '' : await resp.text();
     let json = null;
     if (bodyText.trim() !== '') {
@@ -272,11 +189,6 @@ async function send(tool, args, resolveCredential, parentSignal, callId) {
       bodyText,
       text: bodyText,
     };
-=======
-    let json;
-    try { json = await resp.json(); } catch { json = null; }
-    return { ok: resp.ok, status: resp.status, json, headers: { link: resp.headers.get('link') ?? '' }, text: resp.status === 204 ? '' : JSON.stringify(json ?? null) };
->>>>>>> origin/main
   } catch (err) {
     clearTimeout(timeout);
     parentSignal?.removeEventListener('abort', onParentAbort);
@@ -290,34 +202,21 @@ function matchesLogicalResponse(tool, response) {
   return response.ok && validateResponse(tool, response).ok;
 }
 
-<<<<<<< HEAD
 function matchesIdentityData(tool, args, data) {
   const identity = tool.versionObj?.meta?.identity ?? {};
   return Object.entries(identity).every(([arg, field]) => {
     const expected = args?.[arg];
     const actual = data?.[field];
-=======
-function matchesIdentity(tool, args, response) {
-  const identity = tool.versionObj?.meta?.identity ?? {};
-  const extracted = tool.compiled.extract(response.json ?? {});
-<<<<<<< HEAD
-  return Object.entries(identity).every(([arg, field]) => {
-    const expected = args?.[arg];
-    const actual = extracted[field];
->>>>>>> origin/main
     const scalar = (value) => value !== null && value !== undefined
       && ['string', 'number', 'boolean'].includes(typeof value);
     return scalar(expected) && scalar(actual) && String(actual) === String(expected);
   });
 }
 
-<<<<<<< HEAD
 function matchesIdentity(tool, args, response) {
   return matchesIdentityData(tool, args, tool.compiled.extract(response.json ?? {}));
 }
 
-=======
->>>>>>> origin/main
 export function matchesWriteEcho(tool, args, response, tier = 2, resolveCredential) {
   const method = String(tool.versionObj?.meta?.method ?? 'POST').toUpperCase();
   const sideEffects = tool.versionObj?.meta?.sideEffects ?? tool.versionObj?.adapter?.sideEffects ?? 'write';
@@ -336,9 +235,6 @@ export function matchesWriteEcho(tool, args, response, tier = 2, resolveCredenti
       || String(actual) !== String(sent)) return false;
   }
   return true;
-=======
-  return Object.entries(identity).every(([arg, field]) => String(extracted[field]) === String(args?.[arg]));
->>>>>>> origin/main
 }
 
 function errorSignature(toolName, res) {
@@ -391,57 +287,25 @@ function mapDomainError(err, tool, args, first) {
   return failure('upstream_error', err.message ?? 'internal', false);
 }
 
-<<<<<<< HEAD
 async function reportDomainHalt({ tool, result, callId, runId, t0 }) {
-=======
-<<<<<<< HEAD
-async function reportDomainHalt({ tool, result, callId, runId, t0 }) {
-=======
-function reportDomainHalt({ tool, result, callId, runId, t0 }) {
->>>>>>> origin/main
->>>>>>> origin/main
   if (result?.error?.code !== 'tool_unavailable') return result;
   const reason = result.error.details?.reason ?? 'domain_error';
   const fields = { callId, runId, apiId: tool.apiId, tool: tool.name };
   emit({ type: 'call.failed', ...fields, code: 'tool_unavailable', reason });
   emit({ type: 'halt', ...fields, reason, retryable: false });
-<<<<<<< HEAD
   await appendAudit({ decision: 'halt', apiId: tool.apiId, tool: tool.name, versionBefore: tool.version, reason, callId });
   const openedUntil = process.env.DATABASE_URL ? await recordHaltAsync(tool.apiId, tool.name) : recordHalt(tool.apiId, tool.name);
-=======
-<<<<<<< HEAD
-  await appendAudit({ decision: 'halt', apiId: tool.apiId, tool: tool.name, versionBefore: tool.version, reason, callId });
-  const openedUntil = process.env.DATABASE_URL ? await recordHaltAsync(tool.apiId, tool.name) : recordHalt(tool.apiId, tool.name);
-=======
-  appendAudit({ decision: 'halt', apiId: tool.apiId, tool: tool.name, versionBefore: tool.version, reason, callId });
-  const openedUntil = recordHalt(tool.apiId, tool.name);
->>>>>>> origin/main
->>>>>>> origin/main
   if (openedUntil) emit({ type: 'circuit.opened', apiId: tool.apiId, tool: tool.name, key: `${tool.apiId}:${tool.name}`, until: openedUntil });
   emit({ type: 'heal.finished', ...fields, healId: callId, outcome: 'halted', rounds: 0, ms: Date.now() - t0, tier: 0, tokens: { input: 0, output: 0 } });
   reportedDomainHalts.add(result);
   return result;
 }
 
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
->>>>>>> origin/main
 async function finishHealHalt({ tool, callId, runId, reason, details, t0, rounds = 0, tier = 0, tokens = { input: 0, output: 0 } }) {
   const fields = { callId, runId, apiId: tool.apiId, tool: tool.name };
   emit({ type: 'halt', ...fields, reason, details, ...(details?.needsOperator ? { needsOperator: true } : {}), retryable: false });
   emit({ type: 'heal.finished', ...fields, healId: callId, outcome: 'halted', rounds, ms: Date.now() - t0, tier, tokens, tokensByRole: { diagnoser: tokens } });
   return halt(reason, { ...(details ?? {}), tier, tokens });
-<<<<<<< HEAD
-=======
-=======
-function finishHealHalt({ tool, callId, runId, reason, details, t0, rounds = 0, tier = 0 }) {
-  const fields = { callId, runId, apiId: tool.apiId, tool: tool.name };
-  emit({ type: 'halt', ...fields, reason, details, retryable: false });
-  emit({ type: 'heal.finished', ...fields, healId: callId, outcome: 'halted', rounds, ms: Date.now() - t0, tier, tokens: { input: 0, output: 0 } });
-  return halt(reason, details);
->>>>>>> origin/main
->>>>>>> origin/main
 }
 
 // Heal lock (§5.2): only one leader heals per apiId:tool; followers await then
@@ -458,15 +322,7 @@ async function withHealLock(apiId, toolName, healFn, args, context) {
       const tool = { apiId, name: toolName, version: 0 };
       return {
         follower: true,
-<<<<<<< HEAD
         result: await reportDomainHalt({
-=======
-<<<<<<< HEAD
-        result: await reportDomainHalt({
-=======
-        result: reportDomainHalt({
->>>>>>> origin/main
->>>>>>> origin/main
           tool,
           result: halt('not_registered', { apiId, tool: toolName }),
           ...context,
@@ -498,30 +354,14 @@ async function withHealLock(apiId, toolName, healFn, args, context) {
           }),
         };
       }
-<<<<<<< HEAD
       const result = await reportDomainHalt({
-=======
-<<<<<<< HEAD
-      const result = await reportDomainHalt({
-=======
-      const result = reportDomainHalt({
->>>>>>> origin/main
->>>>>>> origin/main
         tool,
         result: halt('follower_replay_failed', { status: r.status }),
         ...context,
       });
       return { follower: true, result };
     } catch (err) {
-<<<<<<< HEAD
       const result = await reportDomainHalt({ tool, result: mapDomainError(err, tool, args, null), ...context });
-=======
-<<<<<<< HEAD
-      const result = await reportDomainHalt({ tool, result: mapDomainError(err, tool, args, null), ...context });
-=======
-      const result = reportDomainHalt({ tool, result: mapDomainError(err, tool, args, null), ...context });
->>>>>>> origin/main
->>>>>>> origin/main
       return { follower: true, result };
     }
   }
@@ -693,11 +533,7 @@ async function replayVerifiedCandidate({ tool, args, signature, failure, resolve
   }
   const candidateTool = { ...tool, versionObj: { ...tool.versionObj, adapter }, compiled };
   let replay;
-<<<<<<< HEAD
   try { replay = await send(candidateTool, args, resolveCredential); }
-=======
-  try { replay = await send(candidateTool, args, resolveCredential, undefined, callId); }
->>>>>>> origin/main
   catch {
     if (candidate.scope === 'exact') await invalidateVerifiedPatchCandidate(candidate.cache_key);
     return null;
@@ -715,7 +551,24 @@ async function replayVerifiedCandidate({ tool, args, signature, failure, resolve
       result: halt('stale_cache_candidate', { revisionChanged: true }),
     });
   }
-  const change = { ops, tier, confidence, evidence: [], rounds: 0, cacheHit: true, callId, runId };
+  const change = {
+    ops, tier, confidence, evidence: [{ kind: 'verified_patch_cache', source: candidate.scope }],
+    rounds: 0, cacheHit: true, callId, runId,
+    explanation: buildPatchExplanation({
+      beforeAdapter: tool.versionObj.adapter,
+      afterAdapter: adapter,
+      beforeVersion: tool.version,
+      afterVersion: tool.version + 1,
+      proposal: { ...proposal, evidence: [{ kind: 'verified_patch_cache', source: candidate.scope }] },
+      gate,
+      verification: { replay: true, logicalResponse: true, identity: true },
+      policy: {
+        mode: apiConfig.healing?.mode ?? 'enforce',
+        threshold: apiConfig.confidenceThreshold ?? apiConfig.healing?.confidenceThreshold ?? 0.85,
+        risk: tool.versionObj.meta?.risk ?? tool.risk ?? 'low',
+      },
+    }),
+  };
   let committed;
   try {
     committed = process.env.DATABASE_URL
@@ -739,15 +592,7 @@ async function replayVerifiedCandidate({ tool, args, signature, failure, resolve
 }
 
 // Heal loop (§5.3)
-<<<<<<< HEAD
 async function healAndRetry({ tool, args, first, kind, callId, runId, t0, resolveCredential, requestKey, tier2Provider }) {
-=======
-<<<<<<< HEAD
-async function healAndRetry({ tool, args, first, kind, callId, idempotencyKey, runId, t0, resolveCredential, requestKey, tier2Provider }) {
-=======
-async function healAndRetry({ tool, args, first, kind, callId, runId, t0, resolveCredential, requestKey }) {
->>>>>>> origin/main
->>>>>>> origin/main
   const apiConfig = registryStore.config(tool.apiId) ?? {};
   const healing = apiConfig.healing ?? {};
   const maxRounds = healing.maxRounds ?? cfg.maxHealRounds;
@@ -775,10 +620,6 @@ async function healAndRetry({ tool, args, first, kind, callId, runId, t0, resolv
 
     emit({ type: 'diagnosis.started', callId, runId, apiId: tool.apiId, tool: tool.name, round: rounds, kind });
 
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
->>>>>>> origin/main
     const proposal = await diagnose({ tool: draft, args, failure, kind, apiConfig, tier2Provider, skipTiers: [...skipTiers], tier2CallsRemaining: Math.max(0, Number(process.env.TIER2_MAX_CALLS_PER_HEAL ?? 2) - tier2Calls) });
     if (proposal?.tier === 2 || proposal?.diagnosisFailure) tier2Calls += 1;
     if (proposal?.usage) { healTokens.input += Number(proposal.usage.inputTokens ?? 0); healTokens.output += Number(proposal.usage.outputTokens ?? 0); }
@@ -799,23 +640,6 @@ async function healAndRetry({ tool, args, first, kind, callId, runId, t0, resolv
     if ((healing.mode ?? 'enforce') === 'log') {
       await appendAudit({ decision: 'proposed', apiId: tool.apiId, tool: tool.name, versionBefore: tool.version, tier: proposal.tier, ops: proposal.ops, confidence: proposal.confidence, evidence: proposal.evidence, healId: callId });
       return finishHealHalt({ tool, callId, runId, reason: 'drift_unresolved', details: { proposal }, t0, rounds, tier: proposal.tier, tokens: healTokens, tokensByRole: { diagnoser: healTokens } });
-<<<<<<< HEAD
-=======
-=======
-    const proposal = await diagnose({ tool: draft, args, failure, kind });
-    if (!proposal) {
-      cacheNegative(requestKey, { reason: 'no_diagnosis', details: { kind } });
-      return finishHealHalt({ tool, callId, runId, reason: 'no_diagnosis', details: { kind }, t0, rounds });
-    }
-    const gate = safetyCheck({ proposal, tool: draft, mode: healing.mode ?? 'enforce', apiCfg: apiConfig });
-    if (!gate.ok) {
-      return finishHealHalt({ tool, callId, runId, reason: gate.reason, details: gate.details, t0, rounds, tier: proposal.tier });
-    }
-    if ((healing.mode ?? 'enforce') === 'log') {
-      appendAudit({ decision: 'proposed', apiId: tool.apiId, tool: tool.name, versionBefore: tool.version, tier: proposal.tier, ops: proposal.ops, confidence: proposal.confidence, evidence: proposal.evidence, healId: callId });
-      return finishHealHalt({ tool, callId, runId, reason: 'drift_unresolved', details: { proposal }, t0, rounds, tier: proposal.tier });
->>>>>>> origin/main
->>>>>>> origin/main
     }
 
     const newAdapter = applyPatch(draft.versionObj.adapter, proposal.ops);
@@ -827,38 +651,77 @@ async function healAndRetry({ tool, args, first, kind, callId, runId, t0, resolv
       compiled: newCompiled,
     };
 
-<<<<<<< HEAD
-=======
-    if (!replayPolicy(nextDraft).replaySafe) {
-      return finishHealHalt({ tool, callId, runId, reason: 'unsafe_write_replay',
-        details: { status: failure.status, message: 'Replay skipped because this write has no registered upstream idempotency contract.' },
-        t0, rounds, tier: proposal.tier, tokens: healTokens });
-    }
-
->>>>>>> origin/main
     emit({ type: 'patch.proposed', callId, runId, apiId: tool.apiId, tool: tool.name, round: rounds, tier: proposal.tier, ops: proposal.ops, confidence: proposal.confidence, evidence: proposal.evidence, usage: proposal.usage, ...(proposal.tier === 2 ? { provider: proposal.provider, model: proposal.model, keySlot: proposal.keySlot, latencyMs: proposal.latencyMs } : {}) });
 
     let r;
     try {
-      r = await send(nextDraft, args, resolveCredential, undefined, idempotencyKey);
+      r = await send(nextDraft, args, resolveCredential);
     } catch (err) {
       return reportDomainHalt({ tool: nextDraft, result: mapDomainError(err, nextDraft, args, first), callId, runId, t0 });
     }
 
-<<<<<<< HEAD
-    if (r.ok && matchesLogicalResponse(nextDraft, r) && matchesIdentity(nextDraft, args, r) && matchesWriteEcho(nextDraft, args, r, proposal.tier, resolveCredential)) {
-=======
-<<<<<<< HEAD
-    if (r.ok && matchesLogicalResponse(nextDraft, r) && matchesIdentity(nextDraft, args, r) && matchesWriteEcho(nextDraft, args, r, proposal.tier, resolveCredential)) {
-=======
-    if (r.ok && matchesLogicalResponse(nextDraft, r) && matchesIdentity(nextDraft, args, r)) {
->>>>>>> origin/main
->>>>>>> origin/main
+    const replayVerification = {
+      replay: r.ok,
+      logicalResponse: r.ok && matchesLogicalResponse(nextDraft, r),
+      identity: r.ok && matchesIdentity(nextDraft, args, r),
+      writeEcho: r.ok && matchesWriteEcho(nextDraft, args, r, proposal.tier, resolveCredential),
+    };
+    if (replayVerification.replay && replayVerification.logicalResponse && replayVerification.identity && replayVerification.writeEcho) {
       const commitOps = applied.concat(proposal.ops);
       const change = {
         ops: commitOps, tier: proposal.tier, confidence: proposal.confidence,
         evidence: proposal.evidence, provider: proposal.provider, model: proposal.model, keySlot: proposal.keySlot, usage: proposal.usage, rounds, latencyMs: Date.now() - t0, callId, runId,
       };
+      change.explanation = buildPatchExplanation({
+        beforeAdapter: tool.versionObj.adapter,
+        afterAdapter: newAdapter,
+        beforeVersion: tool.version,
+        afterVersion: tool.version + 1,
+        proposal: { ...proposal, ops: commitOps },
+        gate,
+        verification: replayVerification,
+        policy: {
+          mode: healing.mode ?? 'enforce',
+          threshold: apiConfig.confidenceThreshold ?? healing.confidenceThreshold ?? 0.85,
+          risk: tool.versionObj.meta?.risk ?? tool.risk ?? 'low',
+        },
+        provenance: { observedNames: proposal.tier === 2 },
+      });
+      if (cfg.patchRolloutMode === 'candidate' && process.env.DATABASE_URL) {
+        const candidateIdentityValue = candidateIdentity(tool, sig);
+        const candidate = await saveVerifiedPatchCandidate({
+          ...candidateIdentityValue,
+          scope: 'exact',
+          sourceApiId: tool.apiId,
+          sourceToolName: tool.name,
+          sourceVersion: tool.version,
+          adapterFingerprint: candidateIdentityValue.adapterFingerprint,
+          schemaFingerprint: candidateIdentityValue.schemaFingerprint,
+          operationSignature: sha256(stableStringify(commitOps)),
+          operations: commitOps,
+          adapter: newAdapter,
+          evidenceClass: `tier${proposal.tier}`,
+          evidenceSummary: { tier: proposal.tier, confidence: proposal.confidence, kind, replayVerified: true },
+          provenanceRequirements: [{
+            apiEpoch: tool.epoch, configRevision: tool.configRevision,
+            credentialRevision: tool.credentialRevision,
+            method: String(tool.versionObj.meta?.method ?? 'POST').toUpperCase(),
+          }],
+          rolloutState: 'candidate',
+        });
+        await appendAudit({
+          decision: 'proposed', apiId: tool.apiId, tool: tool.name,
+          versionBefore: tool.version, tier: proposal.tier, ops: commitOps,
+          confidence: proposal.confidence, evidence: proposal.evidence,
+          candidateId: candidate?.id, rolloutState: 'candidate', explanation: change.explanation,
+        });
+        emit({ type: 'patch.candidate', callId, runId, apiId: tool.apiId, tool: tool.name, candidateId: candidate?.id, ops: commitOps });
+        return finishHealHalt({
+          tool, callId, runId, reason: 'patch_pending_promotion',
+          details: { candidateId: candidate?.id, needsOperator: true, proposal: { ops: commitOps, confidence: proposal.confidence } },
+          t0, rounds, tier: proposal.tier, tokens: healTokens, tokensByRole: { diagnoser: healTokens },
+        });
+      }
       const committed = process.env.DATABASE_URL
         ? (await commitFromCache({ apiId: tool.apiId, toolName: tool.name, adapter: newAdapter, change, origin: 'heal', current: tool })).value
         : registryStore.commit(tool.apiId, tool.name, newAdapter, change);
@@ -870,12 +733,8 @@ async function healAndRetry({ tool, args, first, kind, callId, runId, t0, resolv
         versionBefore: tool.version, versionAfter: committed.version,
         tier: proposal.tier, ops: commitOps, confidence: proposal.confidence,
         evidence: proposal.evidence, provider: proposal.provider, model: proposal.model, keySlot: proposal.keySlot, usage: proposal.usage, healId: callId, callId,
-        latencyMs: Date.now() - t0,
+        latencyMs: Date.now() - t0, explanation: change.explanation,
       });
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
->>>>>>> origin/main
       if (process.env.DATABASE_URL && rounds === 1 && !applied.length
         && ['GET', 'HEAD'].includes(String(tool.versionObj.meta?.method ?? 'POST').toUpperCase())
         && ['read', 'none'].includes(tool.versionObj.meta?.sideEffects ?? tool.versionObj.adapter?.sideEffects ?? 'write')) {
@@ -907,31 +766,12 @@ async function healAndRetry({ tool, args, first, kind, callId, runId, t0, resolv
           log({ level: 'warn', code: 'patch_candidate_persist_failed', apiId: tool.apiId, tool: tool.name, errorClass: error.name ?? 'Error' });
         }
       }
-<<<<<<< HEAD
-=======
-=======
-      emit({ type: 'patch.committed', callId, runId, apiId: tool.apiId, tool: tool.name, version: committed.version, ops: commitOps });
-      emit({ type: 'patch.verified', callId, runId, apiId: tool.apiId, tool: tool.name, round: rounds, status: r.status });
-      emit({ type: 'heal.finished', callId, runId, healId: callId, apiId: tool.apiId, tool: tool.name, outcome: 'committed', rounds, tier: proposal.tier, ms: Date.now() - t0, tokens: { input: 0, output: 0 } });
-      appendAudit({
-        decision: 'commit', apiId: tool.apiId, tool: tool.name,
-        versionBefore: tool.version, versionAfter: committed.version,
-        tier: proposal.tier, ops: commitOps, confidence: proposal.confidence,
-        evidence: proposal.evidence, healId: callId, callId,
-        latencyMs: Date.now() - t0,
-      });
->>>>>>> origin/main
->>>>>>> origin/main
       return success(nextDraft, r, {
         healed: true, rounds, tier: proposal.tier, cacheHit: false,
         latencyMs: Date.now() - t0, healMs: Date.now() - t0, tokens: healTokens,
         ops: commitOps, version: committed.version,
       });
     }
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
->>>>>>> origin/main
     if (r.ok && matchesLogicalResponse(nextDraft, r)) return finishHealHalt({ tool, callId, runId, reason: 'verification_mismatch', t0, rounds, tier: proposal.tier, tokens: healTokens, tokensByRole: { diagnoser: healTokens } });
     if (proposal.tier === 0) {
       const spec = proposal.evidence?.find((item) => item.spec)?.spec;
@@ -942,12 +782,6 @@ async function healAndRetry({ tool, args, first, kind, callId, runId, t0, resolv
       }
       skipTiers.add(0);
     }
-<<<<<<< HEAD
-=======
-=======
-    if (r.ok && matchesLogicalResponse(nextDraft, r)) return finishHealHalt({ tool, callId, runId, reason: 'verification_mismatch', t0, rounds, tier: proposal.tier });
->>>>>>> origin/main
->>>>>>> origin/main
     failure = r;
     draft = nextDraft;
     applied.push(...proposal.ops);
@@ -958,15 +792,8 @@ async function healAndRetry({ tool, args, first, kind, callId, runId, t0, resolv
   return result;
 }
 
-<<<<<<< HEAD
 async function invokeCore({ apiId, toolName, args, runId, callId = newId('c'), tier2Provider, signal }) {
-=======
-async function invokeCore({ apiId, toolName, args, runId, idempotencyKey: callerKey, callId = newId('c'), tier2Provider, signal }) {
->>>>>>> origin/main
   const t0 = Date.now();
-  const idempotencyKey = callerKey
-    ? sha256(stableStringify({ apiId, toolName, callerKey, args: args ?? {} }))
-    : callId;
   const emitCall = (type, extra) => emit({ type, callId, runId, apiId, tool: toolName, ...extra });
 
   // G18: never emit raw args on the public stream.
@@ -1001,10 +828,6 @@ async function invokeCore({ apiId, toolName, args, runId, idempotencyKey: caller
     adapter: tool.versionObj.adapter,
     schema: tool.versionObj.meta?.logicalSchema,
   }))}`;
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
->>>>>>> origin/main
   const circuitState = process.env.DATABASE_URL ? await circuit.checkAsync(apiId, toolName) : circuit.check(apiId, toolName);
   if (!circuitState.ok) {
     emitCall('call.failed', { code: 'tool_unavailable', reason: circuitState.reason });
@@ -1020,25 +843,6 @@ async function invokeCore({ apiId, toolName, args, runId, idempotencyKey: caller
     emitCall('call.failed', { code: 'tool_unavailable', reason: cached.reason, cacheHit: true });
     emitCall('halt', { reason: cached.reason, retryable: false, cacheHit: true });
     await appendAudit({ decision: 'halt', apiId, tool: toolName, versionBefore: tool.version, reason: cached.reason, callId, cacheHit: true });
-<<<<<<< HEAD
-=======
-=======
-  const circuitState = circuit.check(apiId, toolName);
-  if (!circuitState.ok) {
-    emitCall('call.failed', { code: 'tool_unavailable', reason: circuitState.reason });
-    emitCall('halt', { reason: circuitState.reason, retryable: false });
-    appendAudit({ decision: 'halt', apiId, tool: toolName, versionBefore: tool.version, reason: circuitState.reason, callId });
-    emit({ type: 'heal.finished', callId, runId, healId: callId, apiId, tool: toolName, outcome: 'halted', rounds: 0, ms: Date.now() - t0, tier: 0, tokens: { input: 0, output: 0 } });
-    return halt('circuit_open', { until: circuitState.until });
-  }
-  if (negativeHit(requestKey)) {
-    const cached = negativeResult(requestKey) ?? { reason: 'unfixable_contract' };
-    const result = halt(cached.reason, { ...cached.details, signature: requestKey });
-    emitCall('call.failed', { code: 'tool_unavailable', reason: cached.reason, cacheHit: true });
-    emitCall('halt', { reason: cached.reason, retryable: false, cacheHit: true });
-    appendAudit({ decision: 'halt', apiId, tool: toolName, versionBefore: tool.version, reason: cached.reason, callId, cacheHit: true });
->>>>>>> origin/main
->>>>>>> origin/main
     emit({ type: 'heal.finished', callId, runId, healId: callId, apiId, tool: toolName, outcome: 'halted', rounds: 0, ms: Date.now() - t0, tier: 0, tokens: { input: 0, output: 0 } });
     return result;
   }
@@ -1052,16 +856,11 @@ async function invokeCore({ apiId, toolName, args, runId, idempotencyKey: caller
   const resolveCredential = credentialResolver(apiId);
   let first;
   try {
-<<<<<<< HEAD
     first = await send(tool, args, resolveCredential, signal);
-=======
-    first = await send(tool, args, resolveCredential, signal, idempotencyKey);
->>>>>>> origin/main
   } catch (err) {
     const result = mapDomainError(err, tool, args, null);
     if (err instanceof MissingCredential) {
       const details = { ref: err.ref, field: err.ref };
-<<<<<<< HEAD
       if (process.env.DATABASE_URL) await cacheNegativeAsync(requestKey, { reason: 'credential_unavailable', details });
       else cacheNegative(requestKey, { reason: 'credential_unavailable', details });
     }
@@ -1138,16 +937,6 @@ async function invokeCore({ apiId, toolName, args, runId, idempotencyKey: caller
     && !(tool.versionObj.origin === 'dev' && !first.ok)) {
     emitCall('call.failed', { code: 'request_error', ...classificationDetails });
     return failure('request_error', 'Upstream rejected the request', false, classificationDetails);
-=======
-<<<<<<< HEAD
-      if (process.env.DATABASE_URL) await cacheNegativeAsync(requestKey, { reason: 'credential_unavailable', details });
-      else cacheNegative(requestKey, { reason: 'credential_unavailable', details });
-=======
-      cacheNegative(requestKey, { reason: 'credential_unavailable', details });
->>>>>>> origin/main
-    }
-    return reportDomainHalt({ tool, result, callId, runId, t0 });
->>>>>>> origin/main
   }
 
   if (first.ok && matchesLogicalResponse(tool, first)) {
@@ -1161,7 +950,6 @@ async function invokeCore({ apiId, toolName, args, runId, idempotencyKey: caller
       await appendAudit({ decision: 'halt', apiId, tool: toolName, versionBefore: tool.version, reason, responseOnly: true, callId });
       return halt(reason, details);
     }
-<<<<<<< HEAD
     emitCall('upstream.classified', {
       classification: 'no_drift',
       status: first.status,
@@ -1172,13 +960,10 @@ async function invokeCore({ apiId, toolName, args, runId, idempotencyKey: caller
       elapsedMs: Date.now() - t0,
       reason: 'response matches the configured contract',
     });
-=======
->>>>>>> origin/main
     emitCall('call.succeeded', { version: tool.version, healed: false, data: tool.compiled.extract(first.json ?? {}) });
     return success(tool, first, { healed: false, rounds: 0, tier: 0, latencyMs: Date.now() - t0, classification: 'no_drift', retryCount });
   }
 
-<<<<<<< HEAD
   if (first.ok) {
     const variants = tool.versionObj?.meta?.responseVariants ?? [];
     if (variants.length > 0) {
@@ -1243,14 +1028,11 @@ async function invokeCore({ apiId, toolName, args, runId, idempotencyKey: caller
     }
   }
 
-=======
->>>>>>> origin/main
   // A 200 response has already happened, so response-only drift is diagnosed
   // from that payload and is never replayed (especially for writes).
   if (first.ok) {
     const responseCheck = validateResponse(tool, first);
     const proposal = checkResponse({ tool, response: first });
-<<<<<<< HEAD
     const fingerprint = structuralFingerprint(first.json);
     const quarantine = observeQuarantine({
       apiId,
@@ -1271,8 +1053,6 @@ async function invokeCore({ apiId, toolName, args, runId, idempotencyKey: caller
       elapsedMs: Date.now() - t0,
       reason: proposal.ok ? 'successful response differs from the configured contract' : (proposal.reason ?? 'response contract mismatch'),
     });
-=======
->>>>>>> origin/main
     const mode = apiConfig.healing?.mode ?? 'enforce';
     const fields = { callId, runId, apiId, tool: toolName };
     if (proposal.ok) {
@@ -1281,34 +1061,31 @@ async function invokeCore({ apiId, toolName, args, runId, idempotencyKey: caller
         const remapped = { ...tool, versionObj: { ...tool.versionObj, adapter: proposal.adapter } };
         remapped.compiled = compileAdapter(proposal.adapter, resolveCredential);
         if (matchesLogicalResponse(remapped, first) && matchesIdentity(remapped, args, first)) {
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
->>>>>>> origin/main
           const change = {
             ops: proposal.ops, tier: 1, confidence: 0.9, evidence: proposal.evidence,
             rounds: 0, responseOnly: true, verified: true, callId, runId,
           };
+          change.explanation = buildPatchExplanation({
+            beforeAdapter: tool.versionObj.adapter,
+            afterAdapter: proposal.adapter,
+            beforeVersion: tool.version,
+            afterVersion: tool.version + 1,
+            proposal: { ...proposal, tier: 1 },
+            gate,
+            verification: { replay: true, logicalResponse: true, identity: true },
+            policy: {
+              mode,
+              threshold: apiConfig.confidenceThreshold ?? apiConfig.healing?.confidenceThreshold ?? 0.85,
+              risk: tool.versionObj.meta?.risk ?? tool.risk ?? 'low',
+            },
+          });
           const committed = process.env.DATABASE_URL
             ? (await commitFromCache({ apiId, toolName, adapter: proposal.adapter, change, origin: 'heal', current })).value
             : registryStore.commit(apiId, toolName, proposal.adapter, change);
           emit({ type: 'drift.silent', ...fields, ops: proposal.ops, errors: responseCheck.errors ?? [] });
           emit({ type: 'patch.verified', ...fields, status: first.status, responseOnly: true });
           emit({ type: 'patch.committed', ...fields, version: committed.version, ops: proposal.ops, responseOnly: true });
-          if (!process.env.DATABASE_URL) await appendAudit({ decision: 'commit', apiId, tool: toolName, versionBefore: tool.version, versionAfter: committed.version, tier: 1, ops: proposal.ops, evidence: proposal.evidence, responseOnly: true, callId });
-<<<<<<< HEAD
-=======
-=======
-          const committed = registryStore.commit(apiId, toolName, proposal.adapter, {
-            ops: proposal.ops, tier: 1, confidence: 0.9, evidence: proposal.evidence,
-            rounds: 0, responseOnly: true, verified: true,
-          });
-          emit({ type: 'drift.silent', ...fields, ops: proposal.ops, errors: responseCheck.errors ?? [] });
-          emit({ type: 'patch.verified', ...fields, status: first.status, responseOnly: true });
-          emit({ type: 'patch.committed', ...fields, version: committed.version, ops: proposal.ops, responseOnly: true });
-          appendAudit({ decision: 'commit', apiId, tool: toolName, versionBefore: tool.version, versionAfter: committed.version, tier: 1, ops: proposal.ops, evidence: proposal.evidence, responseOnly: true, callId });
->>>>>>> origin/main
->>>>>>> origin/main
+          if (!process.env.DATABASE_URL) await appendAudit({ decision: 'commit', apiId, tool: toolName, versionBefore: tool.version, versionAfter: committed.version, tier: 1, ops: proposal.ops, evidence: proposal.evidence, responseOnly: true, callId, explanation: change.explanation });
           emitCall('call.succeeded', { version: committed.version, healed: true, rounds: 0, data: remapped.compiled.extract(first.json) });
           return success({ ...remapped, version: committed.version }, first, {
             healed: true, rounds: 0, tier: 1, cacheHit: false, latencyMs: Date.now() - t0,
@@ -1317,15 +1094,7 @@ async function invokeCore({ apiId, toolName, args, runId, idempotencyKey: caller
         }
         emit({ type: 'drift.silent', ...fields, ops: proposal.ops, errors: responseCheck.errors ?? [], outcome: 'identity_or_type_mismatch' });
       } else if (mode === 'log' && gate.ok) {
-<<<<<<< HEAD
         await appendAudit({ decision: 'proposed', apiId, tool: toolName, versionBefore: tool.version, tier: 1, ops: proposal.ops, evidence: proposal.evidence, responseOnly: true, callId });
-=======
-<<<<<<< HEAD
-        await appendAudit({ decision: 'proposed', apiId, tool: toolName, versionBefore: tool.version, tier: 1, ops: proposal.ops, evidence: proposal.evidence, responseOnly: true, callId });
-=======
-        appendAudit({ decision: 'proposed', apiId, tool: toolName, versionBefore: tool.version, tier: 1, ops: proposal.ops, evidence: proposal.evidence, responseOnly: true, callId });
->>>>>>> origin/main
->>>>>>> origin/main
       }
     }
     const details = { reason: proposal.reason ?? 'response_drift_unresolved', fields: responseCheck.errors ?? [] };
@@ -1333,24 +1102,13 @@ async function invokeCore({ apiId, toolName, args, runId, idempotencyKey: caller
     emitCall('call.failed', { code: 'tool_unavailable', reason: details.reason });
     emit({ type: 'halt', ...fields, reason: details.reason, retryable: false });
     emit({ type: 'heal.finished', ...fields, healId: callId, outcome: 'halted', rounds: 0, ms: Date.now() - t0, tier: 1, tokens: { input: 0, output: 0 } });
-<<<<<<< HEAD
     await appendAudit({ decision: 'halt', apiId, tool: toolName, versionBefore: tool.version, reason: details.reason, responseOnly: true, callId });
-=======
-<<<<<<< HEAD
-    await appendAudit({ decision: 'halt', apiId, tool: toolName, versionBefore: tool.version, reason: details.reason, responseOnly: true, callId });
-=======
-    appendAudit({ decision: 'halt', apiId, tool: toolName, versionBefore: tool.version, reason: details.reason, responseOnly: true, callId });
->>>>>>> origin/main
->>>>>>> origin/main
     return halt(details.reason, details);
   }
 
   let errors = parseErrors(first.json ?? first.text, first.status);
   let kind = classify(errors, first.status);
-<<<<<<< HEAD
   if (upstreamClassification.classification === 'auth_error') kind = 'auth4xx';
-=======
->>>>>>> origin/main
   if (first.ok) {
     const responseCheck = validateResponse(tool, first);
     if (!responseCheck.ok) {
@@ -1364,10 +1122,6 @@ async function invokeCore({ apiId, toolName, args, runId, idempotencyKey: caller
 
   if (tool.versionObj.origin === 'dev' && !first.ok) {
     const parentVersion = tool.versionObj.parent;
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
->>>>>>> origin/main
     const restored = process.env.DATABASE_URL
       ? (await rollbackFromCache({ apiId, toolName, toVersion: parentVersion, origin: 'watchdog_rollback', current: tool, callId, runId })).value
       : registryStore.rollback(apiId, toolName, parentVersion);
@@ -1375,21 +1129,7 @@ async function invokeCore({ apiId, toolName, args, runId, idempotencyKey: caller
     if (!process.env.DATABASE_URL) await appendAudit({ decision: 'rollback', apiId, tool: toolName, versionBefore: tool.version, versionAfter: restored.version, rollbackOf: parentVersion, auto: true, callId });
     const restoredTool = { ...registryStore.current(apiId, toolName), apiId, name: toolName };
     try {
-<<<<<<< HEAD
       const replay = await send(restoredTool, args, resolveCredential);
-=======
-      const replay = replayPolicy(restoredTool).replaySafe
-        ? await send(restoredTool, args, resolveCredential, undefined, idempotencyKey)
-        : { ok: false, status: 0, json: null, text: 'unsafe_write_replay_skipped' };
-=======
-    const restored = registryStore.rollback(apiId, toolName, parentVersion);
-    emitCall('patch.rolledback', { fromVersion: tool.version, toVersion: restored.version, reason: 'watchdog_validation_failure', auto: true });
-    appendAudit({ decision: 'rollback', apiId, tool: toolName, versionBefore: tool.version, versionAfter: restored.version, rollbackOf: parentVersion, auto: true, callId });
-    const restoredTool = { ...registryStore.current(apiId, toolName), apiId, name: toolName };
-    try {
-      const replay = await send(restoredTool, args, resolveCredential);
->>>>>>> origin/main
->>>>>>> origin/main
       if (replay.ok && matchesLogicalResponse(restoredTool, replay) && matchesIdentity(restoredTool, args, replay)) {
         emitCall('call.succeeded', {
           version: restoredTool.version,
@@ -1424,13 +1164,10 @@ async function invokeCore({ apiId, toolName, args, runId, idempotencyKey: caller
         return success(tool, r, { healed: false, rounds: 0, tier: 0, latencyMs: Date.now() - t0 });
       }
     }
-    const unsafeWrite = policy.sideEffects !== 'read' && policy.sideEffects !== 'none' && !['GET', 'HEAD'].includes(policy.method);
-    emitCall('call.failed', { code: unsafeWrite ? 'outcome_uncertain' : 'upstream_error', reason: 'transient' });
-    return failure(unsafeWrite ? 'outcome_uncertain' : 'upstream_error', 'Transient upstream failure; automatic replay was skipped because the operation is not declared idempotent.', false,
-      { reason: 'unsafe_write_replay', status: first.status, callId });
+    emitCall('call.failed', { code: 'upstream_error', reason: 'transient' });
+    return failure('upstream_error', 'Transient upstream failure after retry', false);
   }
   if (kind === 'auth4xx') {
-<<<<<<< HEAD
     const details = {
       signature,
       message: 'The upstream requires credentials not configured for this tool',
@@ -1439,10 +1176,6 @@ async function invokeCore({ apiId, toolName, args, runId, idempotencyKey: caller
       retryCount,
       elapsedMs: Date.now() - t0,
     };
-=======
-    const details = { signature, message: 'The upstream requires credentials not configured for this tool' };
-<<<<<<< HEAD
->>>>>>> origin/main
     if (process.env.DATABASE_URL) await cacheNegativeAsync(requestKey, { reason: 'credential_unavailable', details });
     else cacheNegative(requestKey, { reason: 'credential_unavailable', details });
     const result = halt('credential_unavailable', details);
@@ -1451,18 +1184,6 @@ async function invokeCore({ apiId, toolName, args, runId, idempotencyKey: caller
     emitCall('call.failed', { code: 'tool_unavailable', reason: 'credential_unavailable' });
     emitCall('halt', { reason: 'credential_unavailable', retryable: false });
     await appendAudit({ decision: 'halt', apiId, tool: toolName, versionBefore: tool.version, reason: 'credential_unavailable', callId });
-<<<<<<< HEAD
-=======
-=======
-    cacheNegative(requestKey, { reason: 'credential_unavailable', details });
-    const result = halt('credential_unavailable', details);
-    const openedUntil = recordHalt(apiId, toolName);
-    if (openedUntil) emit({ type: 'circuit.opened', apiId, tool: toolName, key: `${apiId}:${toolName}`, until: openedUntil });
-    emitCall('call.failed', { code: 'tool_unavailable', reason: 'credential_unavailable' });
-    emitCall('halt', { reason: 'credential_unavailable', retryable: false });
-    appendAudit({ decision: 'halt', apiId, tool: toolName, versionBefore: tool.version, reason: 'credential_unavailable', callId });
->>>>>>> origin/main
->>>>>>> origin/main
     emit({ type: 'heal.finished', callId, runId, healId: callId, apiId, tool: toolName, outcome: 'halted', rounds: 0, ms: Date.now() - t0, tier: 0, tokens: { input: 0, output: 0 } });
     return result;
   }
@@ -1482,36 +1203,16 @@ async function invokeCore({ apiId, toolName, args, runId, idempotencyKey: caller
     const result = halt(reason);
     emitCall('halt', { reason, retryable: false });
     emit({ type: 'heal.finished', callId, runId, healId: callId, apiId, tool: toolName, outcome: 'halted', rounds: 0, ms: Date.now() - t0, tier: 0, tokens: { input: 0, output: 0 } });
-<<<<<<< HEAD
     await appendAudit({ decision: 'halt', apiId, tool: toolName, versionBefore: tool.version, reason, callId });
-=======
-<<<<<<< HEAD
-    await appendAudit({ decision: 'halt', apiId, tool: toolName, versionBefore: tool.version, reason, callId });
-=======
-    appendAudit({ decision: 'halt', apiId, tool: toolName, versionBefore: tool.version, reason, callId });
->>>>>>> origin/main
->>>>>>> origin/main
     return result;
   }
 
   const healResult = await withHealLock(
     apiId,
     toolName,
-<<<<<<< HEAD
     () => healAndRetry({ tool, args, first, kind, callId, runId, t0, resolveCredential, requestKey, tier2Provider }),
     args,
     { callId, runId, t0 },
-=======
-<<<<<<< HEAD
-    () => healAndRetry({ tool, args, first, kind, callId, idempotencyKey, runId, t0, resolveCredential, requestKey, tier2Provider }),
-    args,
-    { callId, idempotencyKey, runId, t0 },
-=======
-    () => healAndRetry({ tool, args, first, kind, callId, runId, t0, resolveCredential, requestKey }),
-    args,
-    { callId, runId, t0 },
->>>>>>> origin/main
->>>>>>> origin/main
   );
   const result = healResult.result;
 
@@ -1521,33 +1222,16 @@ async function invokeCore({ apiId, toolName, args, runId, idempotencyKey: caller
     if (reportedDomainHalts.has(result)) return result;
     emitCall('call.failed', { code: result.error.code, reason: result.error.details?.reason });
     if (result.error.code === 'tool_unavailable') {
-<<<<<<< HEAD
       await appendAudit({ decision: 'halt', apiId, tool: toolName, versionBefore: tool.version, reason: result.error.details?.reason, callId });
       if (process.env.DATABASE_URL) await recordHaltAsync(apiId, toolName);
       else recordHalt(apiId, toolName);
-=======
-<<<<<<< HEAD
-      await appendAudit({ decision: 'halt', apiId, tool: toolName, versionBefore: tool.version, reason: result.error.details?.reason, callId });
-      if (process.env.DATABASE_URL) await recordHaltAsync(apiId, toolName);
-      else recordHalt(apiId, toolName);
-=======
-      appendAudit({ decision: 'halt', apiId, tool: toolName, versionBefore: tool.version, reason: result.error.details?.reason, callId });
-      recordHalt(apiId, toolName);
->>>>>>> origin/main
->>>>>>> origin/main
     }
   }
   return result;
 }
 
-<<<<<<< HEAD
 export async function invoke({ apiId, toolName, args, runId, tier2Provider, signal }) {
   if (!process.env.DATABASE_URL) return invokeCore({ apiId, toolName, args, runId, tier2Provider, signal });
-=======
-<<<<<<< HEAD
-export async function invoke({ apiId, toolName, args, runId, idempotencyKey, tier2Provider, signal }) {
-  if (!process.env.DATABASE_URL) return invokeCore({ apiId, toolName, args, runId, idempotencyKey, tier2Provider, signal });
->>>>>>> origin/main
 
   const callId = newId('c');
   const startedAt = new Date();
@@ -1568,11 +1252,7 @@ export async function invoke({ apiId, toolName, args, runId, idempotencyKey, tie
 
   let result;
   let thrown;
-<<<<<<< HEAD
   try { result = await invokeCore({ apiId, toolName, args, runId, callId, tier2Provider, signal }); }
-=======
-  try { result = await invokeCore({ apiId, toolName, args, runId, idempotencyKey, callId, tier2Provider, signal }); }
->>>>>>> origin/main
   catch (error) {
     thrown = error;
     log({ level: 'error', code: 'invoke_internal_error', apiId, tool: toolName, errorClass: error.name ?? 'Error' });
@@ -1638,9 +1318,4 @@ export async function invoke({ apiId, toolName, args, runId, idempotencyKey, tie
   return result;
 }
 
-<<<<<<< HEAD
-=======
-=======
->>>>>>> origin/main
->>>>>>> origin/main
 export { errorSignature, withHealLock, MissingCredential, validateResponse };

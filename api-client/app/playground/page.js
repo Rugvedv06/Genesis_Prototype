@@ -13,6 +13,8 @@ import { useStore, refreshState } from '@/lib/store';
 import { api, mock, MOCK } from '@/lib/core';
 import { useAsync } from '@/lib/hooks';
 import { haltReason } from '@/lib/labels';
+import { isDemoBaseUrl } from '@/lib/demo-url';
+import { resolveMutationTool } from '@/lib/mutation-selection';
 
 function exampleArgs(tool) {
   const schema = tool?.parameters ?? tool?.meta?.logicalSchema;
@@ -38,7 +40,7 @@ export default function PlaygroundPage() {
   const [mutationBusy, setMutationBusy] = useState('');
   const selectedApi = apis.find((item) => item.apiId === apiId) ?? apis[0];
   const selectedTool = selectedApi?.tools?.find((item) => item.name === toolName) ?? selectedApi?.tools?.[0];
-  const isDemo = selectedApi?.baseUrl === MOCK;
+  const isDemo = isDemoBaseUrl(selectedApi?.baseUrl, MOCK);
   const mutations = useAsync(() => isDemo ? mock.mutations() : Promise.resolve({ mutations: [] }), [isDemo]);
 
   useEffect(() => {
@@ -72,7 +74,24 @@ export default function PlaygroundPage() {
   };
   const applyMutation = async (id) => {
     setMutationBusy(id || 'reset');
-    try { if (id) await mock.mutate(id); else await mock.reset(); toast.success(id ? `Demo mutation ${id} enabled` : 'Demo mock reset'); }
+    try {
+      if (id) {
+        await mock.mutate(id);
+        const mutation = mutations.data?.mutations?.find((item) => item.id === id);
+        const selected = resolveMutationTool(mutation, selectedApi?.tools ?? []);
+        if (selected) {
+          setToolName(selected.name);
+          setArgs(JSON.stringify(selected.args, null, 2));
+          setResult(null); setError('');
+          toast.success(`Demo mutation ${id} enabled · selected ${selected.name}`);
+        } else {
+          const route = mutation?.route;
+          toast.info(`Mutation ${id} enabled. Register a tool for ${route?.method ?? 'POST'} ${route?.path ?? 'its route'} to invoke this scenario.`);
+        }
+      } else {
+        await mock.reset(); toast.success('Demo mock reset');
+      }
+    }
     catch (err) { toast.error(err.message); }
     finally { setMutationBusy(''); mutations.reload(); setConfirmReset(false); }
   };

@@ -9,7 +9,7 @@ import { appendAuditInTransaction } from './audit-repository.js';
 import { appendGatewayEventInTransaction } from './event-repository.js';
 import { registryStore } from '../features/registry/store.js';
 import { clearNegativeForApiAsync } from '../features/safety/circuit.js';
-import { putVerifiedCandidateInTransaction, findVerifiedCandidateInTransaction, invalidatePatchCandidatesInTransaction, invalidateAllPatchCandidatesInTransaction } from './patch-candidate-repository.js';
+import { putVerifiedCandidateInTransaction, findVerifiedCandidateInTransaction, invalidatePatchCandidatesInTransaction, invalidateAllPatchCandidatesInTransaction, getPatchCandidate, transitionPatchCandidateInTransaction } from './patch-candidate-repository.js';
 import { readCandidateMirror, writeCandidateMirror, deleteCandidateMirror } from '../features/patch-cache/redis-mirror.js';
 
 let registryMutationQueue = Promise.resolve();
@@ -87,7 +87,18 @@ export async function commitAdapter({ apiId, toolName, adapter, change, origin =
       return committed;
     },
     {
-      audit: (committed) => ({ decision: 'commit', apiId, tool: toolName, versionBefore: committed.parent, versionAfter: committed.version, adapterHash: committed.adapterHash, origin, ops: change?.ops, evidence: change?.evidence }),
+      audit: (committed) => ({
+        decision: 'commit',
+        apiId,
+        tool: toolName,
+        versionBefore: committed.parent,
+        versionAfter: committed.version,
+        adapterHash: committed.adapterHash,
+        origin,
+        ops: committed.change?.ops ?? change?.ops,
+        evidence: committed.change?.evidence ?? change?.evidence,
+        explanation: committed.change?.explanation ?? change?.explanation,
+      }),
       event: (committed) => ({ type: 'patch.committed', apiId, tool: toolName, callId: change?.callId, runId: change?.runId, version: committed.version, ops: change?.ops, origin }),
     },
   );
@@ -168,6 +179,57 @@ export async function invalidateAllVerifiedPatchCandidates() {
   const keys = await withTransaction(invalidateAllPatchCandidatesInTransaction);
   await Promise.all(keys.map((cacheKey) => deleteCandidateMirror(cacheKey)));
   return keys.length;
+}
+
+export async function updatePatchCandidateRollout(id, state, reason, metrics) {
+  return withTransaction(async (client) => {
+    const candidate = await transitionPatchCandidateInTransaction(client, { id, state, reason, metrics });
+    if (candidate) {
+      await appendAuditInTransaction(client, {
+        decision: 'patch_rollout',
+        candidateId: candidate.id,
+        cacheKey: candidate.cache_key,
+        apiId: candidate.source_api_id,
+        tool: candidate.source_tool_name,
+        sourceVersion: candidate.source_version,
+        rolloutState: candidate.rollout_state,
+        reason: reason ?? null,
+        metrics: metrics ?? {},
+      });
+    }
+    return candidate;
+  });
+}
+
+export async function promotePatchCandidate(id) {
+  const candidate = await getPatchCandidate(getPool(), id);
+  if (!candidate) return null;
+  if (!['candidate', 'regression_verified', 'shadow', 'canary'].includes(candidate.rollout_state)) {
+    const error = new Error('candidate is not eligible for promotion');
+    error.code = 'candidate_not_promotable';
+    throw error;
+  }
+  if (!candidate.adapter) {
+    const error = new Error('candidate has no staged adapter');
+    error.code = 'candidate_adapter_missing';
+    throw error;
+  }
+  const current = registryStore.current(candidate.source_api_id, candidate.source_tool_name);
+  if (!current || current.version !== candidate.source_version) {
+    const error = new Error('candidate source version is no longer live');
+    error.code = 'stale_candidate_source';
+    throw error;
+  }
+  const committed = (await commitFromCache({
+    apiId: candidate.source_api_id,
+    toolName: candidate.source_tool_name,
+    adapter: candidate.adapter,
+    change: { ops: candidate.operations, candidateId: candidate.id, rollout: true },
+    origin: 'candidate_promotion',
+    current,
+  })).value;
+  const rollout = await updatePatchCandidateRollout(id, 'promoted', 'operator_promoted', { promotedVersion: committed.version });
+  return { committed, rollout };
 }
 
 export async function rollbackFromCache({ apiId, toolName, toVersion, origin = 'manual_rollback', current, callId, runId }) {

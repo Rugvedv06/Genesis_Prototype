@@ -56,8 +56,6 @@ test('OpenAPI import preview includes supported JSON body operations and respons
   assert.equal(preview.tools[0].response.fields.id.required, true);
 });
 
-<<<<<<< HEAD
-=======
 test('OpenAPI import carries an explicitly declared idempotency header into tool configuration', async () => {
   const { previewOpenApi } = await import('../src/features/apis/import/openapi-import.js');
   const operation = {
@@ -72,7 +70,6 @@ test('OpenAPI import carries an explicitly declared idempotency header into tool
   assert.equal(preview.tools[0].sideEffects, 'write');
 });
 
->>>>>>> origin/main
 test('OpenAPI importer rejects unsupported formats and malformed schemas safely', async () => {
   const { previewOpenApi } = await import('../src/features/apis/import/openapi-import.js');
   assert.throws(() => previewOpenApi({ swagger: '2.0', info: {}, paths: {} }), /Swagger 2\.0/);
@@ -114,11 +111,8 @@ test('an imported API heals an M1 rename through Tier 0 and invokes successfully
   bodySchema.properties = { userId: { type: 'string' } }; bodySchema.required = ['userId'];
   const preview = previewOpenApi(baseline);
   assert.equal(preview.tools[0].response.fields.id.required, true);
-<<<<<<< HEAD
-=======
   // This POST endpoint is semantically read-only even though OpenAPI uses POST.
   preview.tools[0].sideEffects = 'none';
->>>>>>> origin/main
   registryStore.reset();
   registryStore.registerApi('imported-m1', { baseUrl: 'https://import.example.test', specUrl: 'https://import.example.test/openapi.json', healing: { enabled: true, maxRounds: 3 }, tools: preview.tools });
   const originalFetch = globalThis.fetch;

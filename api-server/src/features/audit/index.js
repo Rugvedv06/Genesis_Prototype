@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { cfg } from '../../config.js';
 import { sha256, stableStringify } from '../../lib/hash.js';
 import { resolveDataDir } from '../../lib/data-dir.js';
+import { sanitizePatchExplanation } from './explanation.js';
 
 const DATA_DIR = resolveDataDir(cfg.dataDir);
 const FILE = join(DATA_DIR, 'audit.jsonl');
@@ -11,6 +12,7 @@ const BACKUP = `${FILE}.bak`;
 
 function prepare(value, key = '') {
   if (value === undefined) return undefined;
+  if (key === 'explanation') return sanitizePatchExplanation(value) ?? undefined;
   if (/(credential|secret|password|authorization)/i.test(key)) return '[redacted]';
   if (Array.isArray(value)) return value.map((item) => prepare(item)).filter((item) => item !== undefined);
   if (value && typeof value === 'object') {

@@ -7,14 +7,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
-<<<<<<< HEAD
-import { createIsolatedDatabase } from './helpers/isolated-database.js';
-=======
-<<<<<<< HEAD
-import { createIsolatedDatabase } from './helpers/isolated-database.js';
-=======
->>>>>>> origin/main
->>>>>>> origin/main
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const CORE_ENTRY = join(ROOT, 'api-server/src/server.js');
@@ -109,70 +101,26 @@ async function readHaltEvents(url, apiId, runId) {
   };
 }
 
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
->>>>>>> origin/main
-test('provenance domain errors return a structured safe halt without changing history', {
-  skip: !process.env.HEALR_TEST_DATABASE_URL && 'set HEALR_TEST_DATABASE_URL to run isolated PostgreSQL runtime coverage',
-}, async (t) => {
-  const isolatedDb = await createIsolatedDatabase('provenance');
-  let dataDir;
-  let core;
-  let mock;
-  t.after(async () => {
-    await Promise.all([stop(core), stop(mock)]);
-    if (dataDir) rmSync(dataDir, { recursive: true, force: true });
-    assert.deepEqual(await isolatedDb.drop(), { dropped: true, databaseExists: false }, 'isolated provenance database is dropped');
-  });
-  dataDir = mkdtempSync(join(tmpdir(), 'healr-provenance-'));
-<<<<<<< HEAD
-=======
-=======
 test('provenance domain errors return a structured safe halt without changing history', async (t) => {
   const dataDir = mkdtempSync(join(tmpdir(), 'healr-provenance-'));
->>>>>>> origin/main
->>>>>>> origin/main
   const corePort = await freePort();
   const mockPort = await freePort([corePort]);
   const coreUrl = `http://127.0.0.1:${corePort}`;
   const mockUrl = `http://127.0.0.1:${mockPort}`;
   const env = {
     ...process.env,
-<<<<<<< HEAD
-    DATABASE_URL: isolatedDb.url,
-    REDIS_URL: '',
-    HEALR_TEST_DATABASE_URL: '',
-=======
-<<<<<<< HEAD
-    DATABASE_URL: isolatedDb.url,
-    REDIS_URL: '',
-    HEALR_TEST_DATABASE_URL: '',
-=======
->>>>>>> origin/main
->>>>>>> origin/main
     PORT: String(corePort),
     CORE_URL: coreUrl,
     MOCK_URL: mockUrl,
     HEALR_DATA_DIR: dataDir,
     ALLOW_LOCAL_UPSTREAMS: '1',
   };
-<<<<<<< HEAD
-  core = start(CORE_ENTRY, join(ROOT, 'api-server'), env);
-  mock = start(MOCK_ENTRY, join(ROOT, 'demo-server-and-client/server'), { ...env, PORT: String(mockPort) });
-=======
-<<<<<<< HEAD
-  core = start(CORE_ENTRY, join(ROOT, 'api-server'), env);
-  mock = start(MOCK_ENTRY, join(ROOT, 'demo-server-and-client/server'), { ...env, PORT: String(mockPort) });
-=======
   const core = start(CORE_ENTRY, join(ROOT, 'api-server'), env);
   const mock = start(MOCK_ENTRY, join(ROOT, 'demo-server-and-client/server'), { ...env, PORT: String(mockPort) });
   t.after(async () => {
     await Promise.all([stop(core), stop(mock)]);
     rmSync(dataDir, { recursive: true, force: true });
   });
->>>>>>> origin/main
->>>>>>> origin/main
 
   await Promise.all([waitForHealth(coreUrl, [core]), waitForHealth(mockUrl, [mock])]);
   await post(`${mockUrl}/admin/reset`, {});

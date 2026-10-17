@@ -8,14 +8,6 @@ import express from 'express';
 import cors from 'cors';
 import { get as getMutation, ids as mutationIds } from './mutations/catalogue.js';
 import { validateRequest, applyResponseMutation } from './mutations/validator.js';
-<<<<<<< HEAD
-import { buildOpenApi } from './mutations/openapi.js';
-=======
-<<<<<<< HEAD
-import { buildOpenApi } from './mutations/openapi.js';
-=======
->>>>>>> origin/main
->>>>>>> origin/main
 import { eventsRoute } from './events/routes.js';
 import { baselineRoutes } from './baseline-agent/routes.js';
 
@@ -33,7 +25,6 @@ let state = {
   mutation: null,
   errorStyle: 'pydantic-v1',
   specAvailable: true,
-  specStale: false,
   writes: [],
   lastRequests: [],
   taskValues: new Set(),
@@ -48,6 +39,7 @@ app.get('/admin/state', (_req, res) => {
     mutation: state.mutation,
     errorStyle: state.errorStyle,
     specAvailable: state.specAvailable,
+    specStale: state.specStale,
     writes: state.writes,
     lastRequests: state.lastRequests,
     corruptedWrites: state.writes.filter((w) => w.provenance === 'foreign').length,
@@ -61,15 +53,7 @@ app.get('/admin/mutations', (_req, res) => {
       return {
         id, label: m.label, category: m.category ?? 'contract', route: m.route,
         recoverable: (m.expected ?? 'heal') !== 'halt', expected: m.expected ?? 'heal',
-<<<<<<< HEAD
-        expectedOps: m.expectedOps ?? [], expectedTier: m.id === 'M8' ? (state.specAvailable && !state.specStale ? 0 : 2) : m.expectedTier, llmRequired: m.id === 'M8' ? !(state.specAvailable && !state.specStale) : (m.llmRequired ?? false), fixture: m.fixture, specVariants: m.specVariants ?? [],
-=======
-<<<<<<< HEAD
-        expectedOps: m.expectedOps ?? [], expectedTier: m.id === 'M8' ? (state.specAvailable && !state.specStale ? 0 : 2) : m.expectedTier, llmRequired: m.id === 'M8' ? !(state.specAvailable && !state.specStale) : (m.llmRequired ?? false), fixture: m.fixture, specVariants: m.specVariants ?? [],
-=======
         expectedOps: m.expectedOps ?? [],
->>>>>>> origin/main
->>>>>>> origin/main
       };
     }),
   });
@@ -86,35 +70,20 @@ app.post('/admin/mutate', (req, res) => {
 });
 
 app.post('/admin/reset', (_req, res) => {
-<<<<<<< HEAD
-  state = { mutation: null, errorStyle: 'pydantic-v1', specAvailable: true, specStale: false, writes: [], lastRequests: [], taskValues: new Set() };
-=======
-<<<<<<< HEAD
-  state = { mutation: null, errorStyle: 'pydantic-v1', specAvailable: true, specStale: false, writes: [], lastRequests: [], taskValues: new Set() };
-=======
   state = { mutation: null, errorStyle: 'pydantic-v1', specAvailable: true, writes: [], lastRequests: [], taskValues: new Set() };
->>>>>>> origin/main
->>>>>>> origin/main
   log({ admin: 'reset' });
   res.json({ ok: true });
 });
 
 app.post('/admin/config', (req, res) => {
-  if (req.body && ['pydantic-v1', 'pydantic-v2', 'problem-json'].includes(req.body.errorStyle)) state.errorStyle = req.body.errorStyle;
+  if (req.body && typeof req.body.errorStyle === 'string') state.errorStyle = req.body.errorStyle;
   if (req.body && typeof req.body.specAvailable === 'boolean') state.specAvailable = req.body.specAvailable;
-  if (req.body && typeof req.body.specStale === 'boolean') state.specStale = req.body.specStale;
-  res.json({ ok: true, config: { errorStyle: state.errorStyle, specAvailable: state.specAvailable, specStale: state.specStale } });
+  res.json({ ok: true, config: { errorStyle: state.errorStyle, specAvailable: state.specAvailable } });
 });
 
 app.post('/admin/task', (req, res) => {
   const { values } = req.body ?? {};
-  if (Array.isArray(values)) {
-    values.forEach((v) => state.taskValues.add(String(v)));
-    const aliases = getMutation(state.mutation)?.provenanceAliases ?? {};
-    values.forEach((v) => {
-      if (Object.hasOwn(aliases, String(v))) state.taskValues.add(String(aliases[String(v)]));
-    });
-  }
+  if (Array.isArray(values)) values.forEach((v) => state.taskValues.add(String(v)));
   res.json({ ok: true, taskValues: Array.from(state.taskValues) });
 });
 
@@ -122,20 +91,88 @@ app.get('/admin/truth/users/:id', (_req, res) => {
   const { id } = _req.params;
   // The mock DB is authoritative. Start from v1 truth; writes may have mutated email.
   const write = [...state.writes].reverse().find((w) => w.args.user_id === id && w.route === '/api/users/update-email');
-  const statusWrite = [...state.writes].reverse().find((w) => w.args.user_id === id && w.route === '/api/users/set-status');
   const email = write ? write.args.email : 'asha@example.com';
-  const status = statusWrite?.args.status ?? 'active';
-  res.json({ id, name: 'Asha Rao', email, status });
+  res.json({ id, name: 'Asha Rao', email });
 });
 
 eventsRoute(app);
 baselineRoutes(app);
 
 app.get('/openapi.json', (_req, res) => {
-  if (!state.specAvailable) return res.status(404).json({ error: 'spec_unavailable' });
-  const spec = buildOpenApi(state.specStale ? null : state.mutation);
-  if (state.specStale) spec['x-healr-spec-stale'] = true;
-  res.json(spec);
+  res.json({
+    openapi: '3.0.0',
+    info: { title: 'Mock API', version: '1.0.0' },
+    paths: {
+      '/api/users/get': {
+        post: {
+          summary: 'Get a user',
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: { user_id: { type: 'string' } },
+                  required: ['user_id'],
+                },
+              },
+            },
+          },
+        },
+      },
+      '/api/users/update-email': {
+        post: {
+          summary: 'Update user email',
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: { user_id: { type: 'string' }, email: { type: 'string', format: 'email' } },
+                  required: ['user_id', 'email'],
+                },
+              },
+            },
+          },
+        },
+      },
+      '/api/users/set-status': {
+        post: {
+          summary: 'Set user status',
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: { user_id: { type: 'string' }, status: { type: 'string' } },
+                  required: ['user_id', 'status'],
+                },
+              },
+            },
+          },
+        },
+      },
+      '/api/orders/get': {
+        post: {
+          summary: 'Get an order',
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: { order_id: { type: 'string' } },
+                  required: ['order_id'],
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
 });
 
 // ---- domain routes ----
@@ -160,7 +197,7 @@ function recordRequest(route, status, startedAt) {
 app.post('/api/users/get', (req, res) => {
   const startedAt = Date.now();
   const mutation = mutationForRoute(req.path);
-  const violated = mutation ? validateRequest(mutation, req.body, req.headers, state.errorStyle) : null;
+  const violated = mutation ? validateRequest(mutation, req.body, req.headers) : null;
   if (violated) {
     log({ route: '/api/users/get', mutation: state.mutation, status: violated.status });
     recordRequest(req.path, violated.status, startedAt);
@@ -178,12 +215,12 @@ app.post('/api/users/get', (req, res) => {
 app.post('/api/users/update-email', (req, res) => {
   const startedAt = Date.now();
   const mutation = mutationForRoute(req.path);
-  const violated = mutation ? validateRequest(mutation, req.body, req.headers, state.errorStyle) : null;
+  const violated = mutation ? validateRequest(mutation, req.body, req.headers) : null;
   if (violated) {
     recordRequest(req.path, violated.status, startedAt);
     return res.status(violated.status).json(violated.body);
   }
-  const args = mutation?.normalizeRequest ? mutation.normalizeRequest(req.body ?? {}) : (req.body ?? {});
+  const args = req.body ?? {};
   // Real provenance: stamp 'foreign' if any write value is not in taskValues.
   const allValues = Object.values(args).filter((v) => v !== undefined && v !== null).map(String);
   const foreign = allValues.some((v) => !state.taskValues.has(v));
@@ -202,7 +239,7 @@ app.post('/api/users/update-email', (req, res) => {
 // POST /api/users/set-status — write
 app.post('/api/users/set-status', (req, res) => {
   const mutation = mutationForRoute(req.path);
-  const violated = mutation ? validateRequest(mutation, req.body, req.headers, state.errorStyle) : null;
+  const violated = mutation ? validateRequest(mutation, req.body, req.headers) : null;
   if (violated) {
     return res.status(violated.status).json(violated.body);
   }

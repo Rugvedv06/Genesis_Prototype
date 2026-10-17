@@ -1,7 +1,7 @@
 // PostgreSQL owns candidate state. Redis is maintained by the repository
 // service as a bounded mirror and is never sufficient to authorize a hit.
 import { getPool } from '../../db/pool.js';
-import { listPatchCandidates } from '../../db/patch-candidate-repository.js';
+import { listPatchCandidates, getPatchCandidate } from '../../db/patch-candidate-repository.js';
 import {
   findVerifiedPatchCandidate,
   invalidateVerifiedPatchCandidate,
@@ -27,4 +27,8 @@ export function invalidateAll() {
 
 export function candidates(options) {
   return listPatchCandidates(getPool(), options);
+}
+
+export function candidate(id) {
+  return getPatchCandidate(getPool(), id);
 }
