@@ -18,8 +18,9 @@ import { snapshot as metricsSnapshot, timeseries as metricsTimeseries } from './
 import { head as auditHead } from './features/audit/index.js';
 import { snapshot as circuitSnapshot } from './features/safety/circuit.js';
 import { getProvider } from './features/llm/provider.js';
-import { closePool, databaseStatus } from './db/pool.js';
+import { closePool, databaseStatus, getPool } from './db/pool.js';
 import { migrationStatus } from './db/migrate.js';
+import { snapshotMetrics, metricsTimeseries as databaseMetricsTimeseries } from './db/metrics-repository.js';
 import { promotePatchCandidate, updatePatchCandidateRollout } from './db/registry-service.js';
 import { candidate as getPatchCacheCandidate } from './features/patch-cache/index.js';
 
@@ -77,7 +78,7 @@ app.get('/ready', async (_req, res) => {
   }
 });
 
-app.get('/state', (_req, res) => {
+app.get('/state', async (_req, res) => {
   const apis = registryStore.list();
   const safety = circuitSnapshot();
   const grouped = new Map();
@@ -92,11 +93,31 @@ app.get('/state', (_req, res) => {
       sideEffects: current?.versionObj?.meta?.sideEffects ?? current?.versionObj?.adapter?.sideEffects ?? 'write',
     });
   }
-  res.json({ lastEventId: bus.since(0).at(-1)?.id ?? 0, apis: [...grouped.values()], metrics: metricsSnapshot(), audit: auditHead(), cache: { entries: safety.negativeEntries, hits: 0 }, circuit: safety.open });
+  const state = { lastEventId: bus.since(0).at(-1)?.id ?? 0, apis: [...grouped.values()], audit: auditHead(), cache: { entries: safety.negativeEntries, hits: 0 }, circuit: safety.open };
+  if (process.env.DATABASE_URL) {
+    try { return res.json({ ...state, metrics: await snapshotMetrics(getPool()) }); }
+    catch (error) {
+      log({ level: 'warn', code: 'metrics_database_fallback', err: error.message });
+      return res.json({ ...state, metrics: metricsSnapshot() });
+    }
+  }
+  res.json({ ...state, metrics: metricsSnapshot() });
 });
 
-app.get('/metrics', (_req, res) => res.json(metricsSnapshot()));
-app.get('/metrics/timeseries', (req, res) => res.json({ series: metricsTimeseries(Number(req.query.window ?? 300), Number(req.query.step ?? 5)) }));
+app.get('/metrics', async (_req, res) => {
+  if (process.env.DATABASE_URL) {
+    try { return res.json(await snapshotMetrics(getPool())); }
+    catch (error) { log({ level: 'warn', code: 'metrics_database_fallback', err: error.message }); }
+  }
+  return res.json(metricsSnapshot());
+});
+app.get('/metrics/timeseries', async (req, res) => {
+  if (process.env.DATABASE_URL) {
+    try { return res.json({ series: await databaseMetricsTimeseries(getPool(), Number(req.query.window ?? 300), Number(req.query.step ?? 5)) }); }
+    catch (error) { log({ level: 'warn', code: 'metrics_database_fallback', err: error.message }); }
+  }
+  return res.json({ series: metricsTimeseries(Number(req.query.window ?? 300), Number(req.query.step ?? 5)) });
+});
 
 app.get('/provider/health', async (_req, res) => {
   try {

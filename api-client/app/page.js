@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useStore } from '@/lib/store';
 import { EVENT_LABEL, UPSTREAM_CLASSIFICATION_LABEL } from '@/lib/labels';
+import { CORE } from '@/lib/core';
 
 function Metric({ label, value, detail, icon: Icon }) {
   return <Card><CardContent className="px-4 py-4"><div className="flex items-center justify-between"><span className="tile-label">{label}</span><Icon size={15} className="text-muted-foreground" aria-hidden /></div><div className="tile-value num">{value}</div><div className="tile-hint">{detail}</div></CardContent></Card>;
@@ -18,40 +19,27 @@ function PanelTitle({ title, detail, href, linkLabel }) {
 }
 
 export default function Home() {
-  const [state, setState] = useState(null);
+  const { apis, metrics: storedMetrics, conn, events, bootstrapped, error } = useStore();
   const [provider, setProvider] = useState(null);
-  const [events, setEvents] = useState([]);
-  const [connection, setConnection] = useState('connecting');
-  const [updatedAt, setUpdatedAt] = useState(null);
+  const [providerError, setProviderError] = useState(false);
 
   useEffect(() => {
-    let source;
     let disposed = false;
-    const refresh = async () => {
+    const refreshProvider = async () => {
       try {
-        const [stateResponse, providerResponse] = await Promise.all([
-          fetch(`${CORE}/state`), fetch(`${CORE}/provider/health`),
-        ]);
-        if (!stateResponse.ok || !providerResponse.ok) throw new Error('Core service returned an error');
-        const [nextState, nextProvider] = await Promise.all([stateResponse.json(), providerResponse.json()]);
-        if (!disposed) { setState(nextState); setProvider(nextProvider); setUpdatedAt(new Date()); }
-      } catch { if (!disposed) setConnection('offline'); }
+        const response = await fetch(`${CORE}/provider/health`);
+        if (!response.ok) throw new Error('Provider health request failed');
+        const nextProvider = await response.json();
+        if (!disposed) { setProvider(nextProvider); setProviderError(false); }
+      } catch { if (!disposed) setProviderError(true); }
     };
-    refresh();
-    const timer = setInterval(refresh, 10000);
-    try {
-      source = new EventSource(`${CORE}/events`);
-      source.onopen = () => setConnection('live');
-      source.onerror = () => setConnection('reconnecting');
-      source.onmessage = (message) => {
-        try { setEvents((current) => [JSON.parse(message.data), ...current].slice(0, 30)); } catch { /* Ignore malformed frames. */ }
-      };
-    } catch { setConnection('offline'); }
-    return () => { disposed = true; clearInterval(timer); source?.close(); };
+    refreshProvider();
+    const timer = setInterval(refreshProvider, 10000);
+    return () => { disposed = true; clearInterval(timer); };
   }, []);
 
-  const metrics = state?.metrics ?? {};
-  const apis = state?.apis ?? [];
+  const metrics = storedMetrics ?? {};
+  const connection = conn;
   const successRate = metrics.calls ? `${Math.round((metrics.ok / metrics.calls) * 100)}%` : '—';
   const connectionLabel = { live: 'Streaming', connecting: 'Connecting', reconnecting: 'Reconnecting', offline: 'Core offline' }[connection];
   const healthTone = connection === 'live' ? 'default' : connection === 'offline' ? 'destructive' : 'secondary';
@@ -59,7 +47,7 @@ export default function Home() {
   return <>
     <header className="page-head">
       <div className="grow"><div className="section-label mb-2">CONTROL PLANE / OVERVIEW</div><h1>System overview</h1><p>Monitor API traffic, healing outcomes, and the services your agents depend on.</p></div>
-      <div className="flex min-w-0 items-center gap-3"><span className="hidden min-w-0 text-[11px] text-muted-foreground sm:inline">{updatedAt ? `Updated ${updatedAt.toLocaleTimeString()}` : 'Waiting for first update'}</span><Button render={<Link href="/playground" />}>Open playground<ArrowUpRight /></Button></div>
+      <div className="flex min-w-0 items-center gap-3"><span className="hidden min-w-0 text-[11px] text-muted-foreground sm:inline">{bootstrapped ? 'Live system data' : 'Waiting for first update'}</span><Button render={<Link href="/playground" />}>Open playground<ArrowUpRight /></Button></div>
     </header>
 
     <div className="overview-metrics">
@@ -91,7 +79,7 @@ export default function Home() {
           <PanelTitle title="Service health" detail="Live connection status" />
           <CardContent className="p-0">
             <div className="health-row"><span className={`health-dot ${connection === 'live' ? 'is-live' : connection === 'offline' ? 'is-offline' : 'is-pending'}`} /><div className="health-copy"><div className="text-xs font-medium">Gateway</div><div className="mt-1 text-[11px] text-muted-foreground">{connection === 'offline' ? `Unable to reach ${CORE}` : 'Event stream and state polling'}</div></div><Badge variant={healthTone}>{connectionLabel}</Badge></div>
-            <div className="health-row"><span className={`health-dot ${provider?.ok ? 'is-live' : 'is-pending'}`} /><div className="health-copy"><div className="text-xs font-medium">Healing provider</div><div className="mt-1 text-[11px] text-muted-foreground">{provider?.ok ? `${provider.model ?? 'Provider'} is available` : provider?.code ?? 'Checking provider availability'}</div></div><Badge variant={provider?.ok ? 'secondary' : 'outline'}>{provider?.ok ? 'Available' : 'Standby'}</Badge></div>
+            <div className="health-row"><span className={`health-dot ${provider?.ok ? 'is-live' : 'is-pending'}`} /><div className="health-copy"><div className="text-xs font-medium">Healing provider</div><div className="mt-1 text-[11px] text-muted-foreground">{provider?.ok ? `${provider.model ?? 'Provider'} is available` : providerError ? 'Provider health unavailable' : provider?.code ?? 'Checking provider availability'}</div></div><Badge variant={provider?.ok ? 'secondary' : 'outline'}>{provider?.ok ? 'Available' : 'Standby'}</Badge></div>
           </CardContent>
         </Card>
 

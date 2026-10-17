@@ -1,4 +1,6 @@
-export const CORE = process.env.NEXT_PUBLIC_CORE_URL || 'http://localhost:8000';
+// Route browser requests through the Next.js dev server so the UI and core
+// share an origin. next.config.js forwards this prefix to the API server.
+export const CORE = '/core-api';
 export const MOCK = process.env.NEXT_PUBLIC_MOCK_URL || 'http://localhost:5001';
 
 export class CoreError extends Error {

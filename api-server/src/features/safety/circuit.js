@@ -55,6 +55,29 @@ export function clearNegativeForApi(apiId) {
   }
 }
 
+// The database-backed executor uses the async interface so callers can later
+// move this state to a shared store without changing their control flow. Keep
+// the current in-process cache behavior consistent with the sync interface.
+export async function negativeHitAsync(signature) {
+  return negativeHit(signature);
+}
+
+export async function negativeResultAsync(signature) {
+  return negativeResult(signature);
+}
+
+export async function cacheNegativeAsync(signature, result) {
+  return cacheNegative(signature, result);
+}
+
+export async function clearNegativeForApiAsync(apiId) {
+  return clearNegativeForApi(apiId);
+}
+
+export async function recordHaltAsync(apiId, tool) {
+  return recordHalt(apiId, tool);
+}
+
 export function reset() {
   states.clear();
   failures.clear();
