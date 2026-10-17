@@ -28,11 +28,25 @@ export const tierLabel = (tier) => TIER_LABEL[tier] ?? (tier == null ? 'No diagn
 
 export const EVENT_LABEL = {
   'call.started': 'Call started', 'upstream.request': 'Sent to API', 'call.failed': 'API rejected the call',
+  'upstream.classified': 'Upstream classified',
   'diagnosis.started': 'Diagnosing', 'patch.proposed': 'Fix proposed', 'patch.verified': 'Fix verified by replay',
   'patch.committed': 'Fix committed', 'call.succeeded': 'Call succeeded', 'heal.started': 'Heal started',
   'heal.finished': 'Heal finished', halt: 'Halted safely', 'cache.hit': 'Cache hit', 'drift.silent': 'Silent drift detected',
   'registry.rollback': 'Rolled back', 'api.registered': 'API registered', 'api.removed': 'API removed',
 };
+
+export const UPSTREAM_CLASSIFICATION_LABEL = Object.freeze({
+  transport_error: 'TRANSPORT ERROR',
+  auth_error: 'AUTH ERROR',
+  rate_limited: 'RATE LIMITED',
+  upstream_error: 'UPSTREAM ERROR',
+  request_error: 'REQUEST ERROR',
+  valid_empty_response: 'VALID EMPTY RESPONSE',
+  invalid_upstream_response: 'INVALID UPSTREAM RESPONSE',
+  request_contract_drift: 'REQUEST CONTRACT DRIFT',
+  response_drift: 'RESPONSE DRIFT',
+  no_drift: 'NO DRIFT',
+});
 
 // Human sentence for a typed patch op. Used by OpChip, call drawer, version timeline.
 export function describeOp(op) {

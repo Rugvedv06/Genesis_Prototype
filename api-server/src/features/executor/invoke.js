@@ -29,6 +29,7 @@ import { negativeHit, negativeResult, cacheNegative, recordHalt, negativeHitAsyn
 import { validateUpstreamUrl } from '../http/url-policy.js';
 import { checkResponse } from '../drift-detector/index.js';
 import { log } from '../../lib/log.js';
+import { classifyUpstream, isRetryableOperation, retryDelayMs } from '../upstream-classifier/index.js';
 
 const ajv = new Ajv({ allErrors: true, strict: false });
 addFormats(ajv);
@@ -168,15 +169,29 @@ async function send(tool, args, resolveCredential, parentSignal) {
     });
     clearTimeout(timeout);
     parentSignal?.removeEventListener('abort', onParentAbort);
-    let json;
-    try { json = await resp.json(); } catch { json = null; }
-    return { ok: resp.ok, status: resp.status, json, headers: { link: resp.headers.get('link') ?? '' }, text: resp.status === 204 ? '' : JSON.stringify(json ?? null) };
+    const bodyText = resp.status === 204 ? '' : await resp.text();
+    let json = null;
+    if (bodyText.trim() !== '') {
+      try { json = JSON.parse(bodyText); } catch { json = null; }
+    }
+    return {
+      ok: resp.ok,
+      status: resp.status,
+      json,
+      headers: {
+        link: resp.headers.get('link') ?? '',
+        'content-type': resp.headers.get('content-type') ?? '',
+        'retry-after': resp.headers.get('retry-after') ?? '',
+      },
+      bodyText,
+      text: bodyText,
+    };
   } catch (err) {
     clearTimeout(timeout);
     parentSignal?.removeEventListener('abort', onParentAbort);
     // Re-throw domain errors (provenance, credential, config) so the caller can map them.
     if (err instanceof ProvenanceError || err instanceof NotLossless || err instanceof MissingCredential || err instanceof ConfigError) throw err;
-    return { ok: false, status: 0, json: null, text: err.message, error: err };
+    return { ok: false, status: 0, json: null, text: err.message, bodyText: '', error: err };
   }
 }
 
@@ -771,6 +786,72 @@ async function invokeCore({ apiId, toolName, args, runId, callId = newId('c'), t
     return reportDomainHalt({ tool, result, callId, runId, t0 });
   }
 
+  let upstreamClassification = classifyUpstream(first);
+  let retryCount = 0;
+  const recordClassification = (classification) => emitCall('upstream.classified', {
+    classification: classification.classification,
+    status: classification.status,
+    schemaDiagnosisAttempted: false,
+    patchProposed: false,
+    patchCommitted: false,
+    retryCount,
+    elapsedMs: Date.now() - t0,
+    reason: classification.reason,
+  });
+  if (upstreamClassification.classification !== 'successful_response') {
+    recordClassification(upstreamClassification);
+  }
+
+  while (upstreamClassification.classification !== 'successful_response'
+    && upstreamClassification.classification !== 'valid_empty_response'
+    && upstreamClassification.classification !== 'request_contract_drift'
+    && upstreamClassification.retryable
+    && retryCount < Number(apiConfig.retry?.maxRetries ?? 1)
+    && isRetryableOperation(tool)) {
+    const delay = retryDelayMs(upstreamClassification, retryCount, {
+      maxDelayMs: Number(apiConfig.retry?.maxDelayMs ?? 5000),
+    });
+    if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
+    retryCount += 1;
+    try {
+      first = await send(tool, args, resolveCredential, signal);
+    } catch (err) {
+      const result = mapDomainError(err, tool, args, first);
+      return reportDomainHalt({ tool, result, callId, runId, t0 });
+    }
+    upstreamClassification = classifyUpstream(first);
+    recordClassification(upstreamClassification);
+  }
+
+  const classificationDetails = {
+    classification: upstreamClassification.classification,
+    status: upstreamClassification.status,
+    retryCount,
+    elapsedMs: Date.now() - t0,
+    reason: upstreamClassification.reason,
+  };
+  if (upstreamClassification.classification === 'valid_empty_response') {
+    emitCall('call.succeeded', { version: tool.version, healed: false, classification: 'valid_empty_response', data: {} });
+    return success(tool, { ...first, json: first.json ?? {} }, { healed: false, rounds: 0, tier: 0, latencyMs: Date.now() - t0, classification: 'valid_empty_response', retryCount });
+  }
+  if (upstreamClassification.classification === 'invalid_upstream_response'
+    && !(tool.versionObj.origin === 'dev' && !first.ok)) {
+    emitCall('call.failed', { code: 'invalid_upstream_response', ...classificationDetails });
+    return failure('invalid_upstream_response', 'Upstream returned an invalid or unexpected response', false, classificationDetails);
+  }
+  if (['transport_error', 'rate_limited', 'upstream_error'].includes(upstreamClassification.classification)
+    && !(tool.versionObj.origin === 'dev' && !first.ok)) {
+    const code = upstreamClassification.classification === 'transport_error'
+      ? 'transport_error' : upstreamClassification.classification;
+    emitCall('call.failed', { code, ...classificationDetails });
+    return failure(code, upstreamClassification.reason, upstreamClassification.retryable && retryCount < Number(apiConfig.retry?.maxRetries ?? 1), classificationDetails);
+  }
+  if (upstreamClassification.classification === 'request_error'
+    && !(tool.versionObj.origin === 'dev' && !first.ok)) {
+    emitCall('call.failed', { code: 'request_error', ...classificationDetails });
+    return failure('request_error', 'Upstream rejected the request', false, classificationDetails);
+  }
+
   if (first.ok && matchesLogicalResponse(tool, first)) {
     if (!matchesIdentity(tool, args, first)) {
       const reason = 'response_identity_mismatch';
@@ -782,8 +863,18 @@ async function invokeCore({ apiId, toolName, args, runId, callId = newId('c'), t
       await appendAudit({ decision: 'halt', apiId, tool: toolName, versionBefore: tool.version, reason, responseOnly: true, callId });
       return halt(reason, details);
     }
+    emitCall('upstream.classified', {
+      classification: 'no_drift',
+      status: first.status,
+      schemaDiagnosisAttempted: false,
+      patchProposed: false,
+      patchCommitted: false,
+      retryCount,
+      elapsedMs: Date.now() - t0,
+      reason: 'response matches the configured contract',
+    });
     emitCall('call.succeeded', { version: tool.version, healed: false, data: tool.compiled.extract(first.json ?? {}) });
-    return success(tool, first, { healed: false, rounds: 0, tier: 0, latencyMs: Date.now() - t0 });
+    return success(tool, first, { healed: false, rounds: 0, tier: 0, latencyMs: Date.now() - t0, classification: 'no_drift', retryCount });
   }
 
   // A 200 response has already happened, so response-only drift is diagnosed
@@ -791,6 +882,16 @@ async function invokeCore({ apiId, toolName, args, runId, callId = newId('c'), t
   if (first.ok) {
     const responseCheck = validateResponse(tool, first);
     const proposal = checkResponse({ tool, response: first });
+    emitCall('upstream.classified', {
+      classification: 'response_drift',
+      status: first.status,
+      schemaDiagnosisAttempted: true,
+      patchProposed: proposal.ok,
+      patchCommitted: false,
+      retryCount,
+      elapsedMs: Date.now() - t0,
+      reason: proposal.ok ? 'successful response differs from the configured contract' : (proposal.reason ?? 'response contract mismatch'),
+    });
     const mode = apiConfig.healing?.mode ?? 'enforce';
     const fields = { callId, runId, apiId, tool: toolName };
     if (proposal.ok) {
@@ -832,6 +933,7 @@ async function invokeCore({ apiId, toolName, args, runId, callId = newId('c'), t
 
   let errors = parseErrors(first.json ?? first.text, first.status);
   let kind = classify(errors, first.status);
+  if (upstreamClassification.classification === 'auth_error') kind = 'auth4xx';
   if (first.ok) {
     const responseCheck = validateResponse(tool, first);
     if (!responseCheck.ok) {
@@ -892,7 +994,14 @@ async function invokeCore({ apiId, toolName, args, runId, callId = newId('c'), t
     return failure('upstream_error', 'Transient upstream failure after retry', false);
   }
   if (kind === 'auth4xx') {
-    const details = { signature, message: 'The upstream requires credentials not configured for this tool' };
+    const details = {
+      signature,
+      message: 'The upstream requires credentials not configured for this tool',
+      classification: upstreamClassification.classification,
+      status: upstreamClassification.status,
+      retryCount,
+      elapsedMs: Date.now() - t0,
+    };
     if (process.env.DATABASE_URL) await cacheNegativeAsync(requestKey, { reason: 'credential_unavailable', details });
     else cacheNegative(requestKey, { reason: 'credential_unavailable', details });
     const result = halt('credential_unavailable', details);

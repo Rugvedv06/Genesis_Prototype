@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useStore } from '@/lib/store';
+import { EVENT_LABEL, UPSTREAM_CLASSIFICATION_LABEL } from '@/lib/labels';
 
 function Metric({ label, value, detail, icon: Icon }) {
   return <Card><CardContent className="px-4 py-4"><div className="flex items-center justify-between"><span className="tile-label">{label}</span><Icon size={15} className="text-muted-foreground" aria-hidden /></div><div className="tile-value num">{value}</div><div className="tile-hint">{detail}</div></CardContent></Card>;
@@ -67,7 +68,7 @@ export default function Home() {
 
         <Card className="overflow-hidden" id="traffic">
           <PanelTitle title="Recent activity" detail="Live events from the gateway" href="/traffic" linkLabel="View traffic" />
-          {events.length ? <div className="feed">{events.slice(0, 30).map((event, index) => <div className="event" key={event.id ?? `${event.ts}-${index}`}><span className="event-dot" /><div className="min-w-0"><strong>{event.type ?? 'Gateway event'}</strong><small>{event.tool ?? event.apiId ?? 'system'} · {event.ts ? new Date(event.ts).toLocaleTimeString() : 'just now'}</small>{(event.reason ?? event.code ?? event.status) && <em>{event.reason ?? event.code ?? event.status}</em>}</div></div>)}</div> : <div className="flex items-center gap-3 px-4 py-6 text-xs text-muted-foreground"><Radio size={15} />{connection === 'offline' ? 'Start the core service to receive gateway events.' : 'Waiting for the first gateway event.'}</div>}
+          {events.length ? <div className="feed">{events.slice(0, 30).map((event, index) => <div className="event" key={event.id ?? `${event.ts}-${index}`}><span className="event-dot" /><div className="min-w-0"><strong>{event.classification ? (UPSTREAM_CLASSIFICATION_LABEL[event.classification] ?? event.classification) : (EVENT_LABEL[event.type] ?? event.type ?? 'Gateway event')}</strong><small>{event.tool ?? event.apiId ?? 'system'} · {event.ts ? new Date(event.ts).toLocaleTimeString() : 'just now'}</small>{(event.reason ?? event.code ?? event.status) && <em>{event.reason ?? event.code ?? event.status}</em>}</div></div>)}</div> : <div className="flex items-center gap-3 px-4 py-6 text-xs text-muted-foreground"><Radio size={15} />{connection === 'offline' ? 'Start the core service to receive gateway events.' : 'Waiting for the first gateway event.'}</div>}
         </Card>
       </div>
 
