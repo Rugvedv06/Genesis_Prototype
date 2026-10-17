@@ -178,6 +178,10 @@ function buildRegisteredAdapter(tool) {
   validateRequestOperations(tool.adapter?.request ?? []);
   if (tool.risk !== undefined && !['low', 'medium', 'high', 'critical'].includes(tool.risk)) throw new TypeError('unsupported tool risk');
   if (tool.sideEffects !== undefined && !['read', 'write', 'none'].includes(tool.sideEffects)) throw new TypeError('sideEffects must be read, write, or none');
+  if (tool.idempotencyKeyHeader !== undefined && (typeof tool.idempotencyKeyHeader !== 'string'
+    || !/^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,128}$/.test(tool.idempotencyKeyHeader))) {
+    throw new TypeError('idempotencyKeyHeader must be a valid HTTP header name');
+  }
   const fields = tool.response?.fields ?? {};
   if (!fields || typeof fields !== 'object' || Array.isArray(fields)) throw new TypeError('response fields must be an object');
   for (const [field, definition] of Object.entries(fields)) {
@@ -214,6 +218,7 @@ function buildRegisteredAdapter(tool) {
     responseSchema,
     risk: tool.risk ?? 'low',
     sideEffects,
+    ...(tool.idempotencyKeyHeader ? { idempotencyKeyHeader: tool.idempotencyKeyHeader } : {}),
     identity: clone(tool.identity ?? {}),
   };
   return { adapter, metadata, risk: metadata.risk, sideEffects };

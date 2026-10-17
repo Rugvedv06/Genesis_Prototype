@@ -2,7 +2,7 @@ name: healr
 
 services:
   postgres:
-    image: postgres:18-alpine
+    image: postgres:16-alpine
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-healr}
@@ -20,7 +20,7 @@ services:
       start_period: 10s
 
   redis:
-    image: redis:8-alpine
+    image: redis:7-alpine
     restart: unless-stopped
     command:
       - redis-server

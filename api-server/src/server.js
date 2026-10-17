@@ -244,8 +244,12 @@ app.post('/apis/:apiId/tools/:tool/invoke', async (req, res) => {
   const { apiId, tool } = req.params;
   const { args, runId: bodyRunId } = req.body ?? {};
   const runId = bodyRunId ?? req.get('x-run-id');
+  const idempotencyKey = req.get('idempotency-key');
+  if (idempotencyKey !== undefined && (!idempotencyKey.trim() || idempotencyKey.length > 255 || /[\u0000-\u001f\u007f]/.test(idempotencyKey))) {
+    return res.status(400).json({ ok: false, error: { code: 'invalid_idempotency_key', retryable: false } });
+  }
   try {
-    const result = await invoke({ apiId, toolName: tool, args, runId });
+    const result = await invoke({ apiId, toolName: tool, args, runId, idempotencyKey });
     if (result.ok) return res.json({ ok: true, data: result.data, meta: result.meta });
     if (['outcome_uncertain', 'persistence_unavailable'].includes(result.error.code)) return res.status(503).json({ ok: false, error: result.error });
     const status = result.error.retryable === false && result.error.code === 'invalid_arguments' ? 400 : 200;

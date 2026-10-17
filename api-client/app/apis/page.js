@@ -34,6 +34,8 @@ export default function APIsPage() {
   const [baseUrl, setBaseUrl] = useState('');
   const [credentialHeader, setCredentialHeader] = useState('');
   const [credentialEnv, setCredentialEnv] = useState('');
+  const [defaultIdempotencyHeader, setDefaultIdempotencyHeader] = useState('');
+  const [customDefaultIdempotencyHeader, setCustomDefaultIdempotencyHeader] = useState('');
   const calls = order.map((id) => callMap.get(id)).filter(Boolean);
   const health = toolHealth(apis, calls);
 
@@ -51,19 +53,34 @@ export default function APIsPage() {
     setMessage(''); setJson(JSON.stringify(demoRegistration(), null, 2)); setRegistrationTab('manual');
     setImportSource('url'); setSpecUrl(''); setSpecText(''); setPreview(null); setSelectedTools([]); setIdentitySuggestions([]);
     setImportApiId(''); setBaseUrl(''); setCredentialHeader(''); setCredentialEnv('');
+    setDefaultIdempotencyHeader(''); setCustomDefaultIdempotencyHeader('');
   };
   const loadPreview = async () => {
     setBusy(true); setMessage(''); setPreview(null);
     try {
       const result = await api.previewOpenApi(importSource === 'url' ? { url: specUrl } : { spec: specText });
       setPreview(result); setSelectedTools(result.tools.map((tool) => tool.name)); setIdentitySuggestions([]);
+      setDefaultIdempotencyHeader(''); setCustomDefaultIdempotencyHeader('');
       setBaseUrl(result.baseUrlSuggestion ?? '');
       setImportApiId(String(result.title ?? 'imported-api').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''));
     } catch (err) { setMessage(err.message); }
     finally { setBusy(false); }
   };
   const registerImported = async () => {
-    const tools = (preview?.tools ?? []).filter((tool) => selectedTools.includes(tool.name)).map(({ identitySuggestion, ...tool }) => ({ ...tool, ...(identitySuggestion && identitySuggestions.includes(tool.name) ? { identity: identitySuggestion } : {}) }));
+    if (defaultIdempotencyHeader === 'custom' && !customDefaultIdempotencyHeader.trim()) {
+      setMessage('Enter the custom idempotency header name or choose a preset.');
+      return;
+    }
+    const tools = (preview?.tools ?? []).filter((tool) => selectedTools.includes(tool.name)).map(({ identitySuggestion, idempotencyKeyHeader, idempotencyHeaderChoice, ...tool }) => {
+      const header = idempotencyHeaderChoice !== undefined
+        ? idempotencyKeyHeader
+        : idempotencyKeyHeader || (defaultIdempotencyHeader === 'custom' ? customDefaultIdempotencyHeader : defaultIdempotencyHeader);
+      return {
+        ...tool,
+        ...(tool.sideEffects === 'write' && header?.trim() ? { idempotencyKeyHeader: header.trim() } : {}),
+        ...(identitySuggestion && identitySuggestions.includes(tool.name) ? { identity: identitySuggestion } : {}),
+      };
+    });
     if (!importApiId.trim() || !baseUrl.trim() || !tools.length) { setMessage('Enter an API id and base URL, and select at least one operation.'); return; }
     let credentials;
     if (credentialHeader.trim() || credentialEnv.trim()) {
@@ -111,6 +128,12 @@ export default function APIsPage() {
       {registrationTab === 'manual' ? <>
         <p className="dialog-copy">Provide the registration payload used by <code>POST /apis</code>. Credentials should reference environment variables, not contain secret values.</p>
         <Textarea className="json-editor" value={json} onChange={(event) => setJson(event.target.value)} spellCheck="false" aria-label="API registration JSON" />
+        <details className="mt-2 text-sm">
+          <summary className="cursor-pointer">Configure safe write retries</summary>
+          <p className="my-2 text-muted-foreground">Add this optional field inside a write tool only when the upstream documents support for that header. Healr manages the key value automatically.</p>
+          <pre className="code">{`"sideEffects": "write",
+"idempotencyKeyHeader": "Idempotency-Key"`}</pre>
+        </details>
         <div className="modal-tools"><Button variant="link" size="sm" onClick={() => setJson(JSON.stringify(demoRegistration(), null, 2))}>Load demo registration</Button><Link href="/settings">Check core and mock connection details <ArrowUpRight size={13} /></Link></div>
       </> : <div className="space-y-3">
         {!preview ? <>
@@ -121,10 +144,18 @@ export default function APIsPage() {
         </> : <>
           <p className="dialog-copy">Review the selected operations, base URL and API id before registering.</p>
           <div className="grid gap-3 sm:grid-cols-2"><label className="form-field"><span>API id</span><input className="field-control" value={importApiId} onChange={(event) => setImportApiId(event.target.value)} /></label><label className="form-field"><span>Base URL <strong aria-hidden="true">*</strong></span><input className="field-control" type="url" value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} required /></label></div>
-          <div className="table-scroll max-h-64 overflow-auto"><table className="native-table"><thead><tr><th>Import</th><th>Operation</th><th>Risk</th><th>Side effects</th></tr></thead><tbody>{preview.tools.map((tool) => <tr key={tool.name}><td><input type="checkbox" checked={selectedTools.includes(tool.name)} aria-label={`Import ${tool.name}`} onChange={(event) => setSelectedTools((current) => event.target.checked ? [...current, tool.name] : current.filter((name) => name !== tool.name))} /></td><td><strong>{tool.name}</strong><br /><span className="faint mono">{tool.method} {tool.path}</span>{tool.identitySuggestion && <label className="mt-1 flex items-center gap-1 text-xs"><input type="checkbox" checked={identitySuggestions.includes(tool.name)} aria-label={`Use suggested identity mapping for ${tool.name}`} onChange={(event) => setIdentitySuggestions((current) => event.target.checked ? [...current, tool.name] : current.filter((name) => name !== tool.name))} />Suggestion: identity {Object.entries(tool.identitySuggestion).map(([from, to]) => `${from} → ${to}`).join(', ')}</label>}</td><td><select className="field-control" value={tool.risk} onChange={(event) => setPreview((current) => ({ ...current, tools: current.tools.map((item) => item.name === tool.name ? { ...item, risk: event.target.value } : item) }))}><option value="low">low</option><option value="medium">medium</option><option value="high">high</option></select></td><td><select className="field-control" value={tool.sideEffects} onChange={(event) => setPreview((current) => ({ ...current, tools: current.tools.map((item) => item.name === tool.name ? { ...item, sideEffects: event.target.value } : item) }))}><option value="none">none</option><option value="write">write</option></select></td></tr>)}</tbody></table></div>
+          <div className="table-scroll max-h-64 overflow-auto"><table className="native-table"><thead><tr><th>Import</th><th>Operation</th><th>Risk</th><th>Side effects</th><th>Idempotency header</th></tr></thead><tbody>{preview.tools.map((tool) => {
+            const currentHeader = tool.idempotencyKeyHeader ?? '';
+            const presetHeader = ['', 'Idempotency-Key', 'X-Idempotency-Key'].includes(currentHeader);
+            const choice = tool.idempotencyHeaderChoice ?? (presetHeader ? currentHeader : currentHeader ? 'custom' : '');
+            return <tr key={tool.name}><td><input type="checkbox" checked={selectedTools.includes(tool.name)} aria-label={`Import ${tool.name}`} onChange={(event) => setSelectedTools((current) => event.target.checked ? [...current, tool.name] : current.filter((name) => name !== tool.name))} /></td><td><strong>{tool.name}</strong><br /><span className="faint mono">{tool.method} {tool.path}</span>{tool.identitySuggestion && <label className="mt-1 flex items-center gap-1 text-xs"><input type="checkbox" checked={identitySuggestions.includes(tool.name)} aria-label={`Use suggested identity mapping for ${tool.name}`} onChange={(event) => setIdentitySuggestions((current) => event.target.checked ? [...current, tool.name] : current.filter((name) => name !== tool.name))} />Suggestion: identity {Object.entries(tool.identitySuggestion).map(([from, to]) => `${from} → ${to}`).join(', ')}</label>}</td><td><select className="field-control" value={tool.risk} onChange={(event) => setPreview((current) => ({ ...current, tools: current.tools.map((item) => item.name === tool.name ? { ...item, risk: event.target.value } : item) }))}><option value="low">low</option><option value="medium">medium</option><option value="high">high</option></select></td><td><select className="field-control" value={tool.sideEffects} onChange={(event) => setPreview((current) => ({ ...current, tools: current.tools.map((item) => item.name === tool.name ? { ...item, sideEffects: event.target.value } : item) }))}><option value="none">none</option><option value="write">write</option></select></td><td>{tool.sideEffects === 'write' ? <><select className="field-control min-w-40" value={choice} aria-label={`Idempotency header for ${tool.name}`} onChange={(event) => setPreview((current) => ({ ...current, tools: current.tools.map((item) => item.name === tool.name ? { ...item, idempotencyHeaderChoice: event.target.value, idempotencyKeyHeader: event.target.value === 'custom' ? (item.idempotencyHeaderChoice === 'custom' ? item.idempotencyKeyHeader : '') : event.target.value } : item) }))}><option value="">None</option><option value="Idempotency-Key">Idempotency-Key</option><option value="X-Idempotency-Key">X-Idempotency-Key</option><option value="custom">Custom header…</option></select>{choice === 'custom' && <input className="field-control mt-1 min-w-40" value={tool.idempotencyKeyHeader ?? ''} onChange={(event) => setPreview((current) => ({ ...current, tools: current.tools.map((item) => item.name === tool.name ? { ...item, idempotencyKeyHeader: event.target.value } : item) }))} placeholder="Your documented header" aria-label={`Custom idempotency header for ${tool.name}`} />}</> : <span className="faint">Not needed</span>}</td></tr>;
+          })}</tbody></table></div>
+          <p className="faint">Choose a header only if the upstream API documents idempotency support. Healr creates and reuses the key for retries.</p>
           {preview.warnings.map((warning) => <p className="faint" key={warning} role="status">Warning: {warning}</p>)}
           {preview.skipped.length > 0 && <details><summary>{preview.skipped.length} skipped operations</summary><ul>{preview.skipped.map((item, index) => <li key={`${item.method}:${item.path}:${index}`}><code>{item.method} {item.path}</code>: {item.reason}</li>)}</ul></details>}
           <div className="grid gap-3 sm:grid-cols-2"><label className="form-field"><span>Credential header (optional)</span><input className="field-control" value={credentialHeader} onChange={(event) => setCredentialHeader(event.target.value)} placeholder="X-Tenant" /></label><label className="form-field"><span>Environment variable name</span><input className="field-control" value={credentialEnv} onChange={(event) => setCredentialEnv(event.target.value)} placeholder="TENANT_ID" /></label></div>
+          <div className="grid gap-3 sm:grid-cols-2"><label className="form-field"><span>Default idempotency header (optional)</span><select className="field-control" value={defaultIdempotencyHeader} onChange={(event) => setDefaultIdempotencyHeader(event.target.value)}><option value="">None</option><option value="Idempotency-Key">Idempotency-Key</option><option value="X-Idempotency-Key">X-Idempotency-Key</option><option value="custom">Custom header…</option></select></label>{defaultIdempotencyHeader === 'custom' && <label className="form-field"><span>Custom idempotency header</span><input className="field-control" value={customDefaultIdempotencyHeader} onChange={(event) => setCustomDefaultIdempotencyHeader(event.target.value)} placeholder="Your documented header" /></label>}</div>
+          <p className="faint">This default applies to write operations without a per-operation header. Use it only when the upstream documents idempotency support.</p>
           <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => setPreview(null)}>Back to source</Button><span className="faint">{preview.title} · {preview.tools.length} supported operations</span></div>
         </>}
       </div>}

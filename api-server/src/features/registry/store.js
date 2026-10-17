@@ -83,9 +83,10 @@ export class RegistryStore {
 
   // Register a single tool within an existing or new API. Used internally by
   // registerApi; kept for backward compatibility.
-  register(apiId, tool, adapter, risk = 'low', config = {}) {
+  register(apiId, tool, adapter, risk = 'low', config = {}, toolMetadata = {}) {
     adapter = copy(adapter);
     config = copy(config);
+    toolMetadata = copy(toolMetadata);
     ensureDir();
     if (!this._byApi[apiId]) this._byApi[apiId] = { tools: {}, config, epoch: 0 };
     if (!this._byApi[apiId].tools) this._byApi[apiId].tools = {};
@@ -106,6 +107,7 @@ export class RegistryStore {
         risk,
         sideEffects: adapter.sideEffects ?? 'write',
         identity: {},
+        ...(toolMetadata.idempotencyKeyHeader ? { idempotencyKeyHeader: toolMetadata.idempotencyKeyHeader } : {}),
       },
       origin: 'register',
       change: null,
@@ -131,6 +133,10 @@ export class RegistryStore {
     const epoch = (existing?.epoch ?? 0) + 1;
     const apiEntry = { tools: {}, config: { baseUrl, specUrl, credentials, healing }, epoch };
     for (const tool of tools) {
+      if (tool.idempotencyKeyHeader !== undefined && (typeof tool.idempotencyKeyHeader !== 'string'
+        || !/^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,128}$/.test(tool.idempotencyKeyHeader))) {
+        throw new TypeError('idempotencyKeyHeader must be a valid HTTP header name');
+      }
       const responseMap = tool.response
         ? Object.fromEntries(Object.entries(tool.response.fields ?? {}).map(([k, v]) => [k, v.path]))
         : {};
@@ -164,6 +170,7 @@ export class RegistryStore {
           responseSchema,
           risk: tool.risk ?? 'low',
           sideEffects: tool.sideEffects ?? 'write',
+          ...(tool.idempotencyKeyHeader ? { idempotencyKeyHeader: tool.idempotencyKeyHeader } : {}),
           identity: tool.identity ?? {},
         },
         origin: 'register',

@@ -6,6 +6,7 @@ import { Activity, ArrowUpRight, Check, CircleAlert, Clock3, Layers3, Radio, Shi
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { PrinciplesCarousel } from '@/components/PrinciplesCarousel';
 import { useStore } from '@/lib/store';
 
 function Metric({ label, value, detail, icon: Icon }) {
@@ -53,6 +54,8 @@ export default function Home() {
       <Metric label="Requests healed" value={bootstrapped ? (metrics.healed ?? 0) : '—'} detail="Schema drift corrected" icon={Wrench} />
       <Metric label="Safety halts" value={bootstrapped ? (metrics.halted ?? 0) : '—'} detail="Review required" icon={ShieldCheck} />
     </div>
+
+    <PrinciplesCarousel />
 
     <div className="overview-grid">
       <div className="flex min-w-0 flex-col gap-4">

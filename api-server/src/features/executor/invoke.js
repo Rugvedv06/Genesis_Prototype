@@ -125,7 +125,17 @@ function credentialResolver(apiId) {
   };
 }
 
-async function send(tool, args, resolveCredential, parentSignal) {
+function replayPolicy(tool) {
+  const method = String(tool.versionObj?.meta?.method ?? tool.versionObj?.adapter?._method ?? 'POST').toUpperCase();
+  const sideEffects = tool.versionObj?.meta?.sideEffects ?? tool.versionObj?.adapter?.sideEffects ?? 'write';
+  const idempotencyHeader = tool.versionObj?.meta?.idempotencyKeyHeader;
+  const validHeader = typeof idempotencyHeader === 'string'
+    && /^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,128}$/.test(idempotencyHeader);
+  const readOnly = ['GET', 'HEAD'].includes(method) || ['read', 'none'].includes(sideEffects);
+  return { method, sideEffects, idempotencyHeader: validHeader ? idempotencyHeader : null, replaySafe: readOnly || validHeader };
+}
+
+async function send(tool, args, resolveCredential, parentSignal, callId) {
   const config = registryStore.config(tool.apiId) ?? {};
   const baseUrl = config.baseUrl;
   if (!baseUrl) throw new ConfigError(`no baseUrl configured for API ${tool.apiId}`);
@@ -160,9 +170,19 @@ async function send(tool, args, resolveCredential, parentSignal) {
   else parentSignal?.addEventListener('abort', onParentAbort, { once: true });
   const timeout = setTimeout(() => ctrl.abort(new Error('upstream_timeout')), 10000);
   try {
+    const requestHeaders = { 'Content-Type': 'application/json', ...headers };
+    const { idempotencyHeader } = replayPolicy(tool);
+    // Only send a key when the registered upstream contract explicitly says it supports one.
+    // callId is stable for the full invocation, including any permitted replay.
+    if (idempotencyHeader && callId) {
+      for (const existing of Object.keys(requestHeaders)) {
+        if (existing.toLowerCase() === idempotencyHeader.toLowerCase()) delete requestHeaders[existing];
+      }
+      requestHeaders[idempotencyHeader] = callId;
+    }
     const resp = await fetch(url, {
       method,
-      headers: { 'Content-Type': 'application/json', ...headers },
+      headers: requestHeaders,
       body: method.toUpperCase() === 'GET' || method.toUpperCase() === 'HEAD' ? undefined : JSON.stringify(body),
       signal: ctrl.signal,
     });
@@ -311,7 +331,9 @@ async function withHealLock(apiId, toolName, healFn, args, context) {
     const resolvedCredential = credentialResolver(apiId);
     const tool = { ...current, apiId, name: toolName };
     try {
-      const r = await send(tool, args, resolvedCredential);
+      const policy = replayPolicy(tool);
+      if (!policy.replaySafe) return { follower: true, result: failure('outcome_uncertain', 'The original write may have completed; automatic replay is disabled without an upstream idempotency contract.', false, { reason: 'unsafe_write_replay' }) };
+      const r = await send(tool, args, resolvedCredential, undefined, context.idempotencyKey);
       if (r.ok && matchesLogicalResponse(tool, r)) {
         // The call only succeeded because the leader's heal landed — report it
         // as healed with the committed change so callers see consistent meta.
@@ -510,7 +532,7 @@ async function replayVerifiedCandidate({ tool, args, signature, failure, resolve
   }
   const candidateTool = { ...tool, versionObj: { ...tool.versionObj, adapter }, compiled };
   let replay;
-  try { replay = await send(candidateTool, args, resolveCredential); }
+  try { replay = await send(candidateTool, args, resolveCredential, undefined, callId); }
   catch {
     if (candidate.scope === 'exact') await invalidateVerifiedPatchCandidate(candidate.cache_key);
     return null;
@@ -552,7 +574,7 @@ async function replayVerifiedCandidate({ tool, args, signature, failure, resolve
 }
 
 // Heal loop (§5.3)
-async function healAndRetry({ tool, args, first, kind, callId, runId, t0, resolveCredential, requestKey, tier2Provider }) {
+async function healAndRetry({ tool, args, first, kind, callId, idempotencyKey, runId, t0, resolveCredential, requestKey, tier2Provider }) {
   const apiConfig = registryStore.config(tool.apiId) ?? {};
   const healing = apiConfig.healing ?? {};
   const maxRounds = healing.maxRounds ?? cfg.maxHealRounds;
@@ -611,11 +633,17 @@ async function healAndRetry({ tool, args, first, kind, callId, runId, t0, resolv
       compiled: newCompiled,
     };
 
+    if (!replayPolicy(nextDraft).replaySafe) {
+      return finishHealHalt({ tool, callId, runId, reason: 'unsafe_write_replay',
+        details: { status: failure.status, message: 'Replay skipped because this write has no registered upstream idempotency contract.' },
+        t0, rounds, tier: proposal.tier, tokens: healTokens });
+    }
+
     emit({ type: 'patch.proposed', callId, runId, apiId: tool.apiId, tool: tool.name, round: rounds, tier: proposal.tier, ops: proposal.ops, confidence: proposal.confidence, evidence: proposal.evidence, usage: proposal.usage, ...(proposal.tier === 2 ? { provider: proposal.provider, model: proposal.model, keySlot: proposal.keySlot, latencyMs: proposal.latencyMs } : {}) });
 
     let r;
     try {
-      r = await send(nextDraft, args, resolveCredential);
+      r = await send(nextDraft, args, resolveCredential, undefined, idempotencyKey);
     } catch (err) {
       return reportDomainHalt({ tool: nextDraft, result: mapDomainError(err, nextDraft, args, first), callId, runId, t0 });
     }
@@ -696,8 +724,11 @@ async function healAndRetry({ tool, args, first, kind, callId, runId, t0, resolv
   return result;
 }
 
-async function invokeCore({ apiId, toolName, args, runId, callId = newId('c'), tier2Provider, signal }) {
+async function invokeCore({ apiId, toolName, args, runId, idempotencyKey: callerKey, callId = newId('c'), tier2Provider, signal }) {
   const t0 = Date.now();
+  const idempotencyKey = callerKey
+    ? sha256(stableStringify({ apiId, toolName, callerKey, args: args ?? {} }))
+    : callId;
   const emitCall = (type, extra) => emit({ type, callId, runId, apiId, tool: toolName, ...extra });
 
   // G18: never emit raw args on the public stream.
@@ -760,7 +791,7 @@ async function invokeCore({ apiId, toolName, args, runId, callId = newId('c'), t
   const resolveCredential = credentialResolver(apiId);
   let first;
   try {
-    first = await send(tool, args, resolveCredential, signal);
+    first = await send(tool, args, resolveCredential, signal, idempotencyKey);
   } catch (err) {
     const result = mapDomainError(err, tool, args, null);
     if (err instanceof MissingCredential) {
@@ -852,7 +883,9 @@ async function invokeCore({ apiId, toolName, args, runId, callId = newId('c'), t
     if (!process.env.DATABASE_URL) await appendAudit({ decision: 'rollback', apiId, tool: toolName, versionBefore: tool.version, versionAfter: restored.version, rollbackOf: parentVersion, auto: true, callId });
     const restoredTool = { ...registryStore.current(apiId, toolName), apiId, name: toolName };
     try {
-      const replay = await send(restoredTool, args, resolveCredential);
+      const replay = replayPolicy(restoredTool).replaySafe
+        ? await send(restoredTool, args, resolveCredential, undefined, idempotencyKey)
+        : { ok: false, status: 0, json: null, text: 'unsafe_write_replay_skipped' };
       if (replay.ok && matchesLogicalResponse(restoredTool, replay) && matchesIdentity(restoredTool, args, replay)) {
         emitCall('call.succeeded', {
           version: restoredTool.version,
@@ -873,13 +906,12 @@ async function invokeCore({ apiId, toolName, args, runId, callId = newId('c'), t
   }
 
   if (kind === 'transient') {
-    // G13: retry once only for reads (sideEffects !== 'write').
-    const sideEffects = tool.versionObj?.adapter?.sideEffects ?? 'write';
-    if (sideEffects !== 'write') {
+    const policy = replayPolicy(tool);
+    if (policy.replaySafe) {
       await new Promise((res) => setTimeout(res, 300));
       let r;
       try {
-        r = await send(tool, args, resolveCredential);
+        r = await send(tool, args, resolveCredential, undefined, idempotencyKey);
       } catch (err) {
         return reportDomainHalt({ tool, result: mapDomainError(err, tool, args, first), callId, runId, t0 });
       }
@@ -888,8 +920,10 @@ async function invokeCore({ apiId, toolName, args, runId, callId = newId('c'), t
         return success(tool, r, { healed: false, rounds: 0, tier: 0, latencyMs: Date.now() - t0 });
       }
     }
-    emitCall('call.failed', { code: 'upstream_error', reason: 'transient' });
-    return failure('upstream_error', 'Transient upstream failure after retry', false);
+    const unsafeWrite = policy.sideEffects !== 'read' && policy.sideEffects !== 'none' && !['GET', 'HEAD'].includes(policy.method);
+    emitCall('call.failed', { code: unsafeWrite ? 'outcome_uncertain' : 'upstream_error', reason: 'transient' });
+    return failure(unsafeWrite ? 'outcome_uncertain' : 'upstream_error', 'Transient upstream failure; automatic replay was skipped because the operation is not declared idempotent.', false,
+      { reason: 'unsafe_write_replay', status: first.status, callId });
   }
   if (kind === 'auth4xx') {
     const details = { signature, message: 'The upstream requires credentials not configured for this tool' };
@@ -927,9 +961,9 @@ async function invokeCore({ apiId, toolName, args, runId, callId = newId('c'), t
   const healResult = await withHealLock(
     apiId,
     toolName,
-    () => healAndRetry({ tool, args, first, kind, callId, runId, t0, resolveCredential, requestKey, tier2Provider }),
+    () => healAndRetry({ tool, args, first, kind, callId, idempotencyKey, runId, t0, resolveCredential, requestKey, tier2Provider }),
     args,
-    { callId, runId, t0 },
+    { callId, idempotencyKey, runId, t0 },
   );
   const result = healResult.result;
 
@@ -947,8 +981,8 @@ async function invokeCore({ apiId, toolName, args, runId, callId = newId('c'), t
   return result;
 }
 
-export async function invoke({ apiId, toolName, args, runId, tier2Provider, signal }) {
-  if (!process.env.DATABASE_URL) return invokeCore({ apiId, toolName, args, runId, tier2Provider, signal });
+export async function invoke({ apiId, toolName, args, runId, idempotencyKey, tier2Provider, signal }) {
+  if (!process.env.DATABASE_URL) return invokeCore({ apiId, toolName, args, runId, idempotencyKey, tier2Provider, signal });
 
   const callId = newId('c');
   const startedAt = new Date();
@@ -969,7 +1003,7 @@ export async function invoke({ apiId, toolName, args, runId, tier2Provider, sign
 
   let result;
   let thrown;
-  try { result = await invokeCore({ apiId, toolName, args, runId, callId, tier2Provider, signal }); }
+  try { result = await invokeCore({ apiId, toolName, args, runId, idempotencyKey, callId, tier2Provider, signal }); }
   catch (error) {
     thrown = error;
     log({ level: 'error', code: 'invoke_internal_error', apiId, tool: toolName, errorClass: error.name ?? 'Error' });

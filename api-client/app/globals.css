@@ -90,6 +90,24 @@ button.chip { cursor: pointer; } button.chip:hover { border-color: var(--border-
 .callout-stop { border: 1px solid var(--halted); background: var(--halted-muted); border-radius: var(--radius); padding: 10px 12px; }
 .overview-grid { display: grid; grid-template-columns: minmax(0,1.65fr) minmax(300px,1fr); gap: 16px; }
 .overview-metrics { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; margin-bottom: 16px; }
+.principles-carousel { position: relative; margin-bottom: 16px; padding: 16px; overflow: hidden; border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface-2); }
+.principles-carousel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.principles-carousel-head h2 { margin: 4px 0 0; color: var(--text); font-size: 15px; font-weight: 620; letter-spacing: -.02em; }
+.principles-controls { display: flex; flex: none; gap: 8px; }
+.principles-control { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 1px solid var(--border-strong); border-radius: 50%; background: var(--surface); color: var(--text); cursor: pointer; }
+.principles-control:hover:not(:disabled) { border-color: var(--brand); color: var(--brand); }
+.principles-control:disabled { cursor: default; opacity: .35; }
+.principles-control:focus-visible,.principles-pagination button:focus-visible,.principles-track:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.principles-track { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 0; overflow-x: auto; overscroll-behavior-inline: contain; scrollbar-width: none; }
+.principles-track::-webkit-scrollbar { display: none; }
+.principles-slide { min-width: 0; min-height: 148px; padding: 14px; border: 1px solid var(--border-strong); border-right: 0; background: var(--surface); }
+.principles-slide:first-child { border-radius: var(--radius) 0 0 var(--radius); }
+.principles-slide:last-child { border-right: 1px solid var(--border-strong); border-radius: 0 var(--radius) var(--radius) 0; }
+.principles-slide h3 { margin: 0; color: var(--text); font-size: 16px; line-height: 1.3; font-weight: 560; overflow-wrap: anywhere; }
+.principles-slide p { margin: 12px 0 0; color: var(--text-dim); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
+.principles-pagination { display: none; justify-content: center; gap: 6px; margin-top: 12px; }
+.principles-pagination button { width: 7px; height: 7px; padding: 0; border: 0; border-radius: 50%; background: var(--border-strong); cursor: pointer; }
+.principles-pagination button.active { background: var(--brand); }
 .resource-row { display: grid; grid-template-columns: minmax(0,1fr) auto auto; align-items: center; gap: 20px; padding: 13px 16px; border-bottom: 1px solid var(--border); }
 .resource-row:last-child { border-bottom: 0; } .resource-primary { min-width: 0; overflow: hidden; } .resource-primary strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 570; } .resource-primary small,.resource-meta { color: var(--text-dim); font-size: 11px; }
 .resource-primary small { display: block; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); }
@@ -149,6 +167,11 @@ button.chip { cursor: pointer; } button.chip:hover { border-color: var(--border-
   .page-head > .grow { min-width:0; flex-basis:100%; }
   .page-head > .flex { width:100%; }
   .overview-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+  .principles-carousel { padding: 13px; }
+  .principles-carousel-head { align-items: flex-start; }
+  .principles-track { grid-template-columns: repeat(4, minmax(85%, 1fr)); scroll-snap-type: x mandatory; }
+  .principles-slide { scroll-snap-align: start; min-height: 160px; border-right: 1px solid var(--border-strong); border-radius: var(--radius)!important; }
+  .principles-pagination { display: flex; }
   .health-row { gap:8px; padding:13px 12px; }
   .health-row [data-slot='badge'] { max-width:38%; white-space:normal; text-align:center; }
   .resource-row { grid-template-columns:minmax(0,1fr) auto; gap:10px; padding:12px; }
