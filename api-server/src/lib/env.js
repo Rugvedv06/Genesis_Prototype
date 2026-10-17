@@ -51,4 +51,8 @@ export function loadEnv(start = process.cwd()) {
   return { found: true, file, loaded };
 }
 
+// Make configuration available before dependent ES modules capture config at
+// import time. Existing process environment values always take precedence.
+loadEnv();
+
 export { findEnvFile, parseEnv };

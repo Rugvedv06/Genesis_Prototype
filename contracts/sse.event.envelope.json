@@ -8,18 +8,84 @@
     "tool": "get_user",
     "type": "patch.proposed",
     "round": 2,
-    "tier": 1,
-    "ops": [ { "op": "coerce_type", "path": "target.id", "from": "string", "to": "integer" } ],
-    "confidence": 0.95,
-    "evidence": ["value is not a valid integer"],
-    "argKeys": ["user_id"]
+    "tier": 2,
+    "ops": [
+      {
+        "op": "rename_field",
+        "from": "user_id",
+        "to": "subscriber_ref"
+      }
+    ],
+    "confidence": 0.98,
+    "evidence": [
+      {
+        "kind": "llm_quote",
+        "source": "error",
+        "quote": "subscriber_ref is required"
+      }
+    ],
+    "argKeys": [
+      "user_id"
+    ],
+    "provider": "gemini",
+    "model": "gemini-2.5-flash",
+    "keySlot": 2,
+    "usage": {
+      "inputTokens": 42,
+      "outputTokens": 18,
+      "totalTokens": 60
+    },
+    "latencyMs": 321
   },
   "eventTypes": [
+<<<<<<< HEAD
+    "call.started",
+    "call.failed",
+    "call.succeeded",
+    "diagnosis.started",
+    "diagnosis.finished",
+    "upstream.request",
+    "heal.started",
+    "heal.finished",
+    "patch.proposed",
+    "patch.verified",
+    "patch.committed",
+    "patch.rolledback",
+    "cache.hit",
+    "drift.silent",
+    "halt",
+    "agent.step",
+    "agent.final",
+    "metrics",
+    "audit.appended",
+    "circuit.opened",
+    "circuit.closed",
+    "api.registered",
+    "api.removed",
+    "config.changed",
+    "tier2.unavailable"
+=======
     "call.started", "call.failed", "call.succeeded",
     "diagnosis.started", "diagnosis.finished", "upstream.request", "heal.started", "heal.finished",
     "patch.proposed", "patch.verified", "patch.committed", "patch.rolledback",
     "cache.hit", "drift.silent", "halt", "agent.step", "agent.final", "metrics",
     "audit.appended", "circuit.opened", "circuit.closed", "api.registered", "api.removed", "config.changed"
+>>>>>>> origin/main
   ],
-  "note": "Flat SSE envelope: event type lives inside data. No `payload` wrapper. Ring buffer (last 500 events), monotonically increasing `id`, replay via `Last-Event-ID` (§4.6, §5.2). `call.started` carries only argKeys/argCount — never raw argument values (§G18)."
+  "agentEvents": {
+    "agent.step": {
+      "required": ["runId", "apiId", "iteration", "toolCalls", "tokens", "cumulative", "provider", "model"],
+      "toolCalls": "Each item contains name and argKeys only. Raw arguments are never emitted."
+    },
+    "agent.final": {
+      "required": ["runId", "apiId", "outcome", "steps", "tokens", "tokensByRole", "provider", "model", "mode"],
+      "outcomes": ["completed", "halted", "step_limit", "cancelled", "error"]
+    }
+  },
+  "haltDetails": {
+    "needsOperator": true,
+    "proposal": { "ops": [{ "op": "rename_field", "from": "old_name", "to": "new_name" }], "confidence": 0.98, "evidence": [{ "source": "error", "quote": "new_name is required" }], "provider": "gemini", "model": "gemini-2.5-flash" }
+  },
+  "metricsDimensions": ["tokensByRole", "tokensByTier", "tier2Outcomes"],
+  "note": "Flat SSE envelope: event type lives inside data. No `payload` wrapper. Ring buffer (last 500 events), monotonically increasing `id`, replay via `Last-Event-ID` (\u00a74.6, \u00a75.2). `call.started` carries only argKeys/argCount, never raw argument values (\u00a7G18). Tier 2 patch proposals expose validated ops, provider/model, credential slot index, normalized usage, latencyMs and sanitized evidence only. Flagged halt events may include needsOperator and a read-only proposal."
 }

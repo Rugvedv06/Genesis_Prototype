@@ -2,7 +2,72 @@
 // Returns { status, body, headers } for a request against the active mutation,
 // or null when the request fully satisfies the mutated contract (200 path).
 // Pydantic-v1 style error records (§11).
-export function validateRequest(mutation, body, headers) {
+const ERROR_STYLES = new Set(['pydantic-v1', 'pydantic-v2', 'problem-json']);
+
+function styledValidationFailure(failure, style) {
+  if (!ERROR_STYLES.has(style)) throw new TypeError(`unsupported mock error style: ${style}`);
+  if (style === 'pydantic-v1') return failure;
+
+  if (failure.body?.error === 'missing_auth') {
+    const auth = {
+      error: failure.body?.error ?? 'missing_auth',
+      scheme: failure.body?.scheme ?? 'Bearer',
+      header: failure.body?.header ?? 'Authorization',
+    };
+    if (style === 'pydantic-v2') {
+      return { ...failure, body: { detail: 'Not authenticated', ...auth } };
+    }
+    return {
+      ...failure,
+      body: {
+        type: 'https://api.example/problems/authentication-error',
+        title: 'Unauthorized',
+        status: 401,
+        detail: 'Authentication required',
+        errors: [],
+        ...auth,
+      },
+    };
+  }
+
+  const canonical = failure.body?.error === 'missing_header'
+    ? [{
+        loc: ['header', failure.body.header.toLowerCase()],
+        msg: 'Field required', type: 'missing',
+        ctx: Array.isArray(failure.body.allowed) ? { allowed_values: failure.body.allowed } : {},
+      }]
+    : (failure.body?.detail ?? []);
+  const errors = canonical.map((error) => {
+    const type = style === 'pydantic-v2'
+      ? ({
+          'value_error.missing': 'missing',
+          'value_error.extra': 'extra_forbidden',
+          'type_error.integer': 'int_type',
+          'type_error.enum': 'enum',
+        }[error.type] ?? error.type)
+      : error.type;
+    return {
+      loc: error.loc,
+      msg: error.msg,
+      type,
+      ...(error.ctx ? { ctx: error.ctx } : {}),
+    };
+  });
+
+  if (style === 'pydantic-v2') return { ...failure, body: { detail: errors } };
+  return {
+    ...failure,
+    body: {
+      type: 'https://api.example/problems/validation-error',
+      title: failure.status === 400 ? 'Bad Request' : 'Unprocessable Entity',
+      status: failure.status,
+      detail: 'Request validation failed',
+      errors,
+    },
+  };
+}
+
+export function validateRequest(mutation, body, headers, errorStyle = 'pydantic-v1') {
   if (!mutation) return null;
 
   // 1. Required header check first (realistic order: header before body).
@@ -11,7 +76,7 @@ export function validateRequest(mutation, body, headers) {
   for (const k of Object.keys(headers ?? {})) present[String(k).toLowerCase()] = true;
   for (const h of mutation.headers ?? []) {
     if (h.required && !present[h.name.toLowerCase()]) {
-      return { status: 400, body: h.error, headers: {} };
+      return styledValidationFailure({ status: h.status ?? 400, body: h.error, headers: {} }, errorStyle);
     }
   }
 
@@ -19,7 +84,7 @@ export function validateRequest(mutation, body, headers) {
   for (const layer of mutation.body?.layers ?? []) {
     if (!layer.when(body)) continue;
     if (!layer.check(body)) {
-      return { status: 422, body: { detail: layer.errors() }, headers: {} };
+      return styledValidationFailure({ status: 422, body: { detail: layer.errors(body) }, headers: {} }, errorStyle);
     }
   }
 

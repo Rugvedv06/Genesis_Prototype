@@ -21,7 +21,7 @@ Build plan: `PS01_BUILD_PLAN.md` (frozen contract). Phase exit gates define done
 | Core dashboard | Next.js (JS) | 3000 |
 | Drift Control stage UI | Next.js (JS) | 3001 |
 
-LLM: Gemini via REST `generateContent` (baseline agent, `demo-server-and-client/server/src/baseline-agent/llm.js`). Provider abstraction for healed agent lands in Phase 4. Tests: built-in `node:test`.
+LLM: Gemini via REST `generateContent` through the shared `@healr/llm` package. The core agent and raw-tool baseline share the same provider, system prompt, task prompt, and logical tool declarations. Tests use built-in `node:test`.
 
 ## Repo layout (plan §3)
 
@@ -44,7 +44,7 @@ root/
 1. **Copy env** (never commit `.env`):
    ```bash
    cp .env.example .env
-   # edit .env: set GEMINI_API_KEY (needed from Phase 4 onward; not required for Phase 0/1),
+   # edit .env: set GEMINI_API_KEYS (four comma-separated Gemini keys recommended; one key is also supported),
    # TENANT_ID (required for Phase 1 heal — X-Tenant header value)
    ```
 
@@ -76,7 +76,13 @@ root/
 ## Ports & env (fixed by plan, never re-discussed)
 
 - core 8000, mock 5001, dashboards 3000 and 3001
-- Env: `GEMINI_API_KEY`, `AGENT_LLM`, `DIAGNOSER_LLM`, `CORE_URL`, `MOCK_URL`, `TENANT_ID`, `ENABLE_DEV_ROUTES`, `NEXT_PUBLIC_CORE_URL`, `NEXT_PUBLIC_MOCK_URL`, `HEALR_DATA_DIR`, `MAX_HEAL_ROUNDS`, `HEAL_TIMEOUT_MS`
+- Env: `GEMINI_API_KEYS`, legacy `GEMINI_API_KEY`, `AGENT_LLM`, `DIAGNOSER_LLM`, `BASELINE_MODE`, `LLM_MAX_CONCURRENCY`, `TIER2_TIMEOUT_MS`, `TIER2_MAX_CALLS_PER_HEAL`, `AGENT_MAX_STEPS`, `AGENT_RUN_TIMEOUT_MS`, `AGENT_MAX_CONCURRENT_RUNS`, `OPENAPI_IMPORT_TIMEOUT_MS`, `CORE_URL`, `MOCK_URL`, `TENANT_ID`, `ENABLE_DEV_ROUTES`, `NEXT_PUBLIC_CORE_URL`, `NEXT_PUBLIC_MOCK_URL`, `HEALR_DATA_DIR`, `MAX_HEAL_ROUNDS`, `HEAL_TIMEOUT_MS`
+
+## Milestone 5: Gemini, Tier 2, and agent comparison
+
+Configure `GEMINI_API_KEYS` as four comma-separated keys to rotate requests round robin. If it is unset, the legacy `GEMINI_API_KEY` is used. Rotation does not multiply quota: keys belonging to one Google Cloud project share that project's limits. Health and UI surfaces expose only pool size, healthy count, slot index, and slot state. `AGENT_LLM` and `DIAGNOSER_LLM` use the `gemini:model` format. `BASELINE_MODE=llm` is the default; set it to `scripted` only to explicitly compare the no-LLM backup.
+
+Run `npm run verify:m5:live` to execute the real-key checks and write machine-readable and readable results. It exits successfully with a clear skipped message when Gemini credentials are absent. Live results are environment-specific; Milestone 5 remains incomplete until real-key verification and the manual browser checklist are recorded in `docs/M5_EVIDENCE.md`.
 
 ## Phase 0 exit gate (from `PS01_BUILD_PLAN.md` §6)
 

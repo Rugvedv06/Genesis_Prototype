@@ -1,7 +1,30 @@
-// Phase 3 (Track B): conventions + exact op reuse, replay-verified (§9). Stub safe to import.
-export function learn() {
-  throw new Error('patch cache not implemented yet (Phase 3, Track B)');
+// PostgreSQL owns candidate state. Redis is maintained by the repository
+// service as a bounded mirror and is never sufficient to authorize a hit.
+import { getPool } from '../../db/pool.js';
+import { listPatchCandidates } from '../../db/patch-candidate-repository.js';
+import {
+  findVerifiedPatchCandidate,
+  invalidateVerifiedPatchCandidate,
+  invalidateAllVerifiedPatchCandidates,
+  saveVerifiedPatchCandidate,
+} from '../../db/registry-service.js';
+
+export function learn(candidate) {
+  return saveVerifiedPatchCandidate(candidate);
 }
-export function candidates() {
-  throw new Error('not implemented yet');
+
+export function find(input) {
+  return findVerifiedPatchCandidate(input);
+}
+
+export function invalidate(cacheKey) {
+  return invalidateVerifiedPatchCandidate(cacheKey);
+}
+
+export function invalidateAll() {
+  return invalidateAllVerifiedPatchCandidates();
+}
+
+export function candidates(options) {
+  return listPatchCandidates(getPool(), options);
 }

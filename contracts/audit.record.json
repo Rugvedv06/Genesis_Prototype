@@ -7,13 +7,39 @@
   "tool": "get_user",
   "versionBefore": 2,
   "versionAfter": 3,
-  "tier": 1,
-  "ops": ["move_field user_id -> target.user_id", "rename_field target.user_id -> target.id", "coerce_type target.id string->integer", "add_header X-Tenant credential:X-Tenant"],
-  "confidence": 0.95,
-  "evidence": ["body.target missing", "body.target.id missing", "not a valid integer", "header X-Tenant required"],
-  "verification": { "status": 200, "ok": true },
+  "tier": 2,
+  "ops": [
+    {
+      "op": "rename_field",
+      "from": "user_id",
+      "to": "subscriber_ref"
+    }
+  ],
+  "confidence": 0.98,
+  "evidence": [
+    {
+      "kind": "llm_quote",
+      "source": "error",
+      "quote": "subscriber_ref is required"
+    }
+  ],
+  "verification": {
+    "status": 200,
+    "ok": true
+  },
   "latencyMs": 388,
-  "tokens": { "input": 0, "output": 0 },
-  "hash": "…sha256(stableStringify(body))…",
-  "note": "Append-only hash chain. Credentials stored as source refs only (`{type:'credential', ref:'X-Tenant'}`), never values (§4.7, §7.1)."
+  "provider": "gemini",
+  "model": "gemini-2.5-flash",
+  "keySlot": 2,
+  "tokens": {
+    "input": 42,
+    "output": 18
+  },
+  "hash": "\u2026sha256(stableStringify(body))\u2026",
+  "note": "Append-only hash chain. Credentials stored as source refs only (`{type:'credential', ref:'X-Tenant'}`), never values (\u00a74.7, \u00a77.1). Tier 2 records only validated typed ops, verbatim evidence, provider/model, keySlot and normalized usage. Never persist prompts, raw model output, or key material.",
+  "usage": {
+    "inputTokens": 42,
+    "outputTokens": 18,
+    "totalTokens": 60
+  }
 }

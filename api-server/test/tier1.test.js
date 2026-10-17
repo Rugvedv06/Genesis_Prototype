@@ -41,6 +41,15 @@ test('rename rule: rename inside target after wrap (M5 round 2)', () => {
   assert.deepStrictEqual(prop.ops, [{ op: 'rename_field', path: 'target', from: 'user_id', to: 'id' }]);
 });
 
+test('root rename omits an empty path while nested rename retains its parent', () => {
+  const errors = [
+    { kind: 'missing', path: ['user_id'], raw: {} },
+    { kind: 'extra', path: ['userId'], raw: {} },
+  ];
+  const proposal = renameRule({ errors, request: { userId: '123' } });
+  assert.deepStrictEqual(proposal.ops, [{ op: 'rename_field', from: 'userId', to: 'user_id' }]);
+});
+
 test('type rule: lossless coerce string->integer (M5 round 3)', () => {
   const g = loadGolden('pydantic-v1', 'm5');
   // Round 3: target.id type error (synthesised from golden context)
@@ -70,8 +79,36 @@ test('header rule: add_header from missing_header (M5 round 0 header)', () => {
     op: 'add_header',
     name: 'X-Tenant',
     source: { type: 'credential', ref: 'X-Tenant' },
-    evidence: { kind: 'error', ref: 'header X-Tenant required' },
   }]);
+  assert.deepStrictEqual(prop.evidence, [g.header]);
+  assert.equal(Object.hasOwn(prop.ops[0], 'evidence'), false);
+});
+
+test('header rule uses an explicitly documented singleton value without guessing', () => {
+  const errors = parseErrors({ error: 'missing_header', header: 'X-API-Version', allowed: ['2'] }, 400);
+  const proposal = headerRule({ errors, request: baseReq });
+  assert.deepStrictEqual(proposal.ops[0].source, { type: 'error_enum', value: '2' });
+  assert.deepStrictEqual(proposal.evidence[0].allowed, ['2']);
+  assert.equal(Object.hasOwn(proposal.ops[0], 'evidence'), false);
+});
+
+test('header rule does not choose between multiple allowed values', () => {
+  const errors = parseErrors({ error: 'missing_header', header: 'X-API-Version', allowed: ['2', '3'] }, 400);
+  const proposal = headerRule({ errors, request: baseReq });
+  assert.deepStrictEqual(proposal.ops[0].source, { type: 'credential', ref: 'X-API-Version' });
+});
+
+test('enum rule maps a unique lossless case variant from the allowed list', () => {
+  const errors = parseErrors({ detail: [{
+    loc: ['body', 'status'], msg: 'Input should be ENABLED or DISABLED',
+    type: 'enum', ctx: { allowed_values: ['ENABLED', 'DISABLED'] },
+  }] }, 422);
+  assert.equal(errors[0].kind, 'enum');
+  const proposal = enumRule({ errors, request: { status: 'active' } });
+  // Semantic changes are not guessed: active -> ENABLED must remain unresolved.
+  assert.equal(proposal, null);
+  const caseOnly = enumRule({ errors, request: { status: 'enabled' } });
+  assert.deepStrictEqual(caseOnly.ops, [{ op: 'set_enum_map', path: 'status', map: { enabled: 'ENABLED' } }]);
 });
 
 test('header rule uses an explicitly documented singleton value without guessing', () => {
@@ -117,4 +154,14 @@ test('rename rule singleton pairing by elimination (one missing, one extra)', ()
   const prop = renameRule({ errors, request: { target: { user_id: '123' } } });
   assert.ok(prop);
   assert.deepStrictEqual(prop.ops, [{ op: 'rename_field', path: 'target', from: 'user_id', to: 'login' }]);
+});
+
+test('wrap rule leaves multiple unmatched missing and extra fields for Tier 2', () => {
+  const errors = [
+    { kind: 'missing', path: ['subscriber_ref'], raw: { path: 'subscriber_ref' } },
+    { kind: 'missing', path: ['contact_address'], raw: { path: 'contact_address' } },
+    { kind: 'extra', path: ['user_id'], raw: { path: 'user_id' } },
+    { kind: 'extra', path: ['email'], raw: { path: 'email' } },
+  ];
+  assert.equal(wrapRule({ errors, request: { user_id: '123', email: 'x' } }), null);
 });

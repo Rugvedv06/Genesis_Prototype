@@ -2,6 +2,10 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+<<<<<<< HEAD
+import { useRouter } from 'next/navigation';
+=======
+>>>>>>> origin/main
 import { ArrowUpRight, Boxes, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,8 +15,15 @@ import { demoRegistration } from '@/lib/demo-registration';
 import { api } from '@/lib/core';
 import { refreshState, useStore } from '@/lib/store';
 import { toolHealth } from '@/lib/derive';
+<<<<<<< HEAD
+import { toast } from 'sonner';
 
 export default function APIsPage() {
+  const router = useRouter();
+=======
+
+export default function APIsPage() {
+>>>>>>> origin/main
   const { apis, calls: callMap, order, bootstrapped, error } = useStore();
   const [open, setOpen] = useState(false);
   const [json, setJson] = useState(() => JSON.stringify(demoRegistration(), null, 2));
@@ -20,15 +31,82 @@ export default function APIsPage() {
   const [busy, setBusy] = useState(false);
   const [removeTarget, setRemoveTarget] = useState(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
+<<<<<<< HEAD
+  const [registrationTab, setRegistrationTab] = useState('manual');
+  const [importSource, setImportSource] = useState('url');
+  const [specUrl, setSpecUrl] = useState('');
+  const [specText, setSpecText] = useState('');
+  const [preview, setPreview] = useState(null);
+  const [selectedTools, setSelectedTools] = useState([]);
+  const [identitySuggestions, setIdentitySuggestions] = useState([]);
+  const [importApiId, setImportApiId] = useState('');
+  const [baseUrl, setBaseUrl] = useState('');
+  const [credentialHeader, setCredentialHeader] = useState('');
+  const [credentialEnv, setCredentialEnv] = useState('');
+  const [defaultIdempotencyHeader, setDefaultIdempotencyHeader] = useState('');
+  const [customDefaultIdempotencyHeader, setCustomDefaultIdempotencyHeader] = useState('');
+=======
+>>>>>>> origin/main
   const calls = order.map((id) => callMap.get(id)).filter(Boolean);
   const health = toolHealth(apis, calls);
 
   const registerPayload = async (payload) => {
     setBusy(true); setMessage('');
+<<<<<<< HEAD
+    try {
+      await api.register(payload);
+      await refreshState(); setOpen(false); toast.success(`Registered ${payload.apiId}`);
+      if (payload.tools?.[0]?.name) router.push(`/apis/${encodeURIComponent(payload.apiId)}/tools/${encodeURIComponent(payload.tools[0].name)}`);
+    }
+    catch (err) { setMessage(err.message); }
+    finally { setBusy(false); }
+  };
+  const resetRegistration = () => {
+    setMessage(''); setJson(JSON.stringify(demoRegistration(), null, 2)); setRegistrationTab('manual');
+    setImportSource('url'); setSpecUrl(''); setSpecText(''); setPreview(null); setSelectedTools([]); setIdentitySuggestions([]);
+    setImportApiId(''); setBaseUrl(''); setCredentialHeader(''); setCredentialEnv('');
+    setDefaultIdempotencyHeader(''); setCustomDefaultIdempotencyHeader('');
+  };
+  const loadPreview = async () => {
+    setBusy(true); setMessage(''); setPreview(null);
+    try {
+      const result = await api.previewOpenApi(importSource === 'url' ? { url: specUrl } : { spec: specText });
+      setPreview(result); setSelectedTools(result.tools.map((tool) => tool.name)); setIdentitySuggestions([]);
+      setDefaultIdempotencyHeader(''); setCustomDefaultIdempotencyHeader('');
+      setBaseUrl(result.baseUrlSuggestion ?? '');
+      setImportApiId(String(result.title ?? 'imported-api').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''));
+    } catch (err) { setMessage(err.message); }
+    finally { setBusy(false); }
+  };
+  const registerImported = async () => {
+    if (defaultIdempotencyHeader === 'custom' && !customDefaultIdempotencyHeader.trim()) {
+      setMessage('Enter the custom idempotency header name or choose a preset.');
+      return;
+    }
+    const tools = (preview?.tools ?? []).filter((tool) => selectedTools.includes(tool.name)).map(({ identitySuggestion, idempotencyKeyHeader, idempotencyHeaderChoice, ...tool }) => {
+      const header = idempotencyHeaderChoice !== undefined
+        ? idempotencyKeyHeader
+        : idempotencyKeyHeader || (defaultIdempotencyHeader === 'custom' ? customDefaultIdempotencyHeader : defaultIdempotencyHeader);
+      return {
+        ...tool,
+        ...(tool.sideEffects === 'write' && header?.trim() ? { idempotencyKeyHeader: header.trim() } : {}),
+        ...(identitySuggestion && identitySuggestions.includes(tool.name) ? { identity: identitySuggestion } : {}),
+      };
+    });
+    if (!importApiId.trim() || !baseUrl.trim() || !tools.length) { setMessage('Enter an API id and base URL, and select at least one operation.'); return; }
+    let credentials;
+    if (credentialHeader.trim() || credentialEnv.trim()) {
+      if (!credentialHeader.trim() || !credentialEnv.trim()) { setMessage('Complete both credential mapping fields or leave them blank.'); return; }
+      credentials = { [credentialHeader.trim()]: { env: credentialEnv.trim() } };
+    }
+    await registerPayload({ apiId: importApiId.trim(), baseUrl: baseUrl.trim(), ...(preview.sourceUrl ? { specUrl: preview.sourceUrl } : {}), ...(credentials ? { credentials } : {}), tools });
+  };
+=======
     try { await api.register(payload); await refreshState(); setOpen(false); }
     catch (err) { setMessage(err.message); }
     finally { setBusy(false); }
   };
+>>>>>>> origin/main
   const register = async (event) => {
     event.preventDefault(); setMessage('');
     let payload;
@@ -46,7 +124,11 @@ export default function APIsPage() {
   };
 
   return <>
+<<<<<<< HEAD
+    <PageHeader title="APIs" purpose="Manage the upstream services and tool contracts registered with healr." actions={<Button onClick={() => { resetRegistration(); setOpen(true); }}><Plus />Register API</Button>} />
+=======
     <PageHeader title="APIs" purpose="Manage the upstream services and tool contracts registered with healr." actions={<Button onClick={() => { setMessage(''); setJson(JSON.stringify(demoRegistration(), null, 2)); setOpen(true); }}><Plus />Register API</Button>} />
+>>>>>>> origin/main
     {message && <div className="page-error" role="alert"><p>{message}</p></div>}
     {!bootstrapped ? <PageLoading label="Loading registered APIs" /> : error && !apis.length ? <PageError error={{ message: error }} label="Could not load APIs" /> : apis.length === 0 ? <Card><CardContent><EmptyState icon={Boxes} title="No APIs registered">Register your contract to route tool calls through healr. For a working local example, register the demo-users API against the mock service.</EmptyState><div className="empty-actions"><Button disabled={busy} onClick={() => registerPayload(demoRegistration())}>{busy ? 'Registering demo API…' : 'Register demo API'}</Button><Button variant="outline" onClick={() => { setMessage(''); setOpen(true); }}>Use my registration JSON</Button></div></CardContent></Card> : <div className="api-card-list">{apis.map((item) => {
       const tools = item.tools ?? [];
@@ -60,11 +142,54 @@ export default function APIsPage() {
       </Card>;
     })}</div>}
 
+<<<<<<< HEAD
+    <Modal open={open} onClose={() => setOpen(false)} title="Register an API" actions={<><Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>{registrationTab === 'manual' ? <Button disabled={busy} onClick={register}>{busy ? 'Registering…' : 'Register API'}</Button> : preview && <Button disabled={busy} onClick={registerImported}>{busy ? 'Registering…' : 'Register reviewed API'}</Button>}</>}>
+      <div className="segmented-tabs" role="tablist" aria-label="Registration method">
+        <button type="button" role="tab" aria-selected={registrationTab === 'manual'} className={registrationTab === 'manual' ? 'selected' : ''} onClick={() => { setRegistrationTab('manual'); setMessage(''); }}>Manual JSON</button>
+        <button type="button" role="tab" aria-selected={registrationTab === 'import'} className={registrationTab === 'import' ? 'selected' : ''} onClick={() => { setRegistrationTab('import'); setMessage(''); }}>Import OpenAPI</button>
+      </div>
+      {registrationTab === 'manual' ? <>
+        <p className="dialog-copy">Provide the registration payload used by <code>POST /apis</code>. Credentials should reference environment variables, not contain secret values.</p>
+        <Textarea className="json-editor" value={json} onChange={(event) => setJson(event.target.value)} spellCheck="false" aria-label="API registration JSON" />
+        <details className="mt-2 text-sm">
+          <summary className="cursor-pointer">Configure safe write retries</summary>
+          <p className="my-2 text-muted-foreground">Add this optional field inside a write tool only when the upstream documents support for that header. Healr manages the key value automatically.</p>
+          <pre className="code">{`"sideEffects": "write",
+"idempotencyKeyHeader": "Idempotency-Key"`}</pre>
+        </details>
+        <div className="modal-tools"><Button variant="link" size="sm" onClick={() => setJson(JSON.stringify(demoRegistration(), null, 2))}>Load demo registration</Button><Link href="/settings">Check core and mock connection details <ArrowUpRight size={13} /></Link></div>
+      </> : <div className="space-y-3">
+        {!preview ? <>
+          <p className="dialog-copy">Preview a JSON OpenAPI 3.0 or 3.1 document. Preview does not register or change any tools.</p>
+          <div className="segmented-tabs" role="tablist" aria-label="OpenAPI source"><button type="button" role="tab" aria-selected={importSource === 'url'} className={importSource === 'url' ? 'selected' : ''} onClick={() => setImportSource('url')}>URL</button><button type="button" role="tab" aria-selected={importSource === 'paste'} className={importSource === 'paste' ? 'selected' : ''} onClick={() => setImportSource('paste')}>Paste JSON</button></div>
+          {importSource === 'url' ? <label className="form-field"><span>OpenAPI URL</span><input className="field-control" type="url" value={specUrl} onChange={(event) => setSpecUrl(event.target.value)} placeholder="https://api.example.com/openapi.json" /></label> : <Textarea className="json-editor" value={specText} onChange={(event) => setSpecText(event.target.value)} spellCheck="false" aria-label="OpenAPI JSON document" />}
+          <Button disabled={busy || (importSource === 'url' ? !specUrl.trim() : !specText.trim())} onClick={loadPreview}>{busy ? 'Loading preview…' : 'Preview OpenAPI'}</Button>
+        </> : <>
+          <p className="dialog-copy">Review the selected operations, base URL and API id before registering.</p>
+          <div className="grid gap-3 sm:grid-cols-2"><label className="form-field"><span>API id</span><input className="field-control" value={importApiId} onChange={(event) => setImportApiId(event.target.value)} /></label><label className="form-field"><span>Base URL <strong aria-hidden="true">*</strong></span><input className="field-control" type="url" value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} required /></label></div>
+          <div className="table-scroll max-h-64 overflow-auto"><table className="native-table"><thead><tr><th>Import</th><th>Operation</th><th>Risk</th><th>Side effects</th><th>Idempotency header</th></tr></thead><tbody>{preview.tools.map((tool) => {
+            const currentHeader = tool.idempotencyKeyHeader ?? '';
+            const presetHeader = ['', 'Idempotency-Key', 'X-Idempotency-Key'].includes(currentHeader);
+            const choice = tool.idempotencyHeaderChoice ?? (presetHeader ? currentHeader : currentHeader ? 'custom' : '');
+            return <tr key={tool.name}><td><input type="checkbox" checked={selectedTools.includes(tool.name)} aria-label={`Import ${tool.name}`} onChange={(event) => setSelectedTools((current) => event.target.checked ? [...current, tool.name] : current.filter((name) => name !== tool.name))} /></td><td><strong>{tool.name}</strong><br /><span className="faint mono">{tool.method} {tool.path}</span>{tool.identitySuggestion && <label className="mt-1 flex items-center gap-1 text-xs"><input type="checkbox" checked={identitySuggestions.includes(tool.name)} aria-label={`Use suggested identity mapping for ${tool.name}`} onChange={(event) => setIdentitySuggestions((current) => event.target.checked ? [...current, tool.name] : current.filter((name) => name !== tool.name))} />Suggestion: identity {Object.entries(tool.identitySuggestion).map(([from, to]) => `${from} → ${to}`).join(', ')}</label>}</td><td><select className="field-control" value={tool.risk} onChange={(event) => setPreview((current) => ({ ...current, tools: current.tools.map((item) => item.name === tool.name ? { ...item, risk: event.target.value } : item) }))}><option value="low">low</option><option value="medium">medium</option><option value="high">high</option></select></td><td><select className="field-control" value={tool.sideEffects} onChange={(event) => setPreview((current) => ({ ...current, tools: current.tools.map((item) => item.name === tool.name ? { ...item, sideEffects: event.target.value } : item) }))}><option value="none">none</option><option value="write">write</option></select></td><td>{tool.sideEffects === 'write' ? <><select className="field-control min-w-40" value={choice} aria-label={`Idempotency header for ${tool.name}`} onChange={(event) => setPreview((current) => ({ ...current, tools: current.tools.map((item) => item.name === tool.name ? { ...item, idempotencyHeaderChoice: event.target.value, idempotencyKeyHeader: event.target.value === 'custom' ? (item.idempotencyHeaderChoice === 'custom' ? item.idempotencyKeyHeader : '') : event.target.value } : item) }))}><option value="">None</option><option value="Idempotency-Key">Idempotency-Key</option><option value="X-Idempotency-Key">X-Idempotency-Key</option><option value="custom">Custom header…</option></select>{choice === 'custom' && <input className="field-control mt-1 min-w-40" value={tool.idempotencyKeyHeader ?? ''} onChange={(event) => setPreview((current) => ({ ...current, tools: current.tools.map((item) => item.name === tool.name ? { ...item, idempotencyKeyHeader: event.target.value } : item) }))} placeholder="Your documented header" aria-label={`Custom idempotency header for ${tool.name}`} />}</> : <span className="faint">Not needed</span>}</td></tr>;
+          })}</tbody></table></div>
+          <p className="faint">Choose a header only if the upstream API documents idempotency support. Healr creates and reuses the key for retries.</p>
+          {preview.warnings.map((warning) => <p className="faint" key={warning} role="status">Warning: {warning}</p>)}
+          {preview.skipped.length > 0 && <details><summary>{preview.skipped.length} skipped operations</summary><ul>{preview.skipped.map((item, index) => <li key={`${item.method}:${item.path}:${index}`}><code>{item.method} {item.path}</code>: {item.reason}</li>)}</ul></details>}
+          <div className="grid gap-3 sm:grid-cols-2"><label className="form-field"><span>Credential header (optional)</span><input className="field-control" value={credentialHeader} onChange={(event) => setCredentialHeader(event.target.value)} placeholder="X-Tenant" /></label><label className="form-field"><span>Environment variable name</span><input className="field-control" value={credentialEnv} onChange={(event) => setCredentialEnv(event.target.value)} placeholder="TENANT_ID" /></label></div>
+          <div className="grid gap-3 sm:grid-cols-2"><label className="form-field"><span>Default idempotency header (optional)</span><select className="field-control" value={defaultIdempotencyHeader} onChange={(event) => setDefaultIdempotencyHeader(event.target.value)}><option value="">None</option><option value="Idempotency-Key">Idempotency-Key</option><option value="X-Idempotency-Key">X-Idempotency-Key</option><option value="custom">Custom header…</option></select></label>{defaultIdempotencyHeader === 'custom' && <label className="form-field"><span>Custom idempotency header</span><input className="field-control" value={customDefaultIdempotencyHeader} onChange={(event) => setCustomDefaultIdempotencyHeader(event.target.value)} placeholder="Your documented header" /></label>}</div>
+          <p className="faint">This default applies to write operations without a per-operation header. Use it only when the upstream documents idempotency support.</p>
+          <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => setPreview(null)}>Back to source</Button><span className="faint">{preview.title} · {preview.tools.length} supported operations</span></div>
+        </>}
+      </div>}
+      {message && <p className="form-error" role="alert">{message}</p>}
+=======
     <Modal open={open} onClose={() => setOpen(false)} title="Register an API" actions={<><Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button><Button disabled={busy} onClick={register}>{busy ? 'Registering…' : 'Register API'}</Button></>}>
       <p className="dialog-copy">Provide the registration payload used by <code>POST /apis</code>. Credentials should reference environment variables, not contain secret values.</p>
       <Textarea className="json-editor" value={json} onChange={(event) => setJson(event.target.value)} spellCheck="false" aria-label="API registration JSON" />
       {message && <p className="form-error" role="alert">{message}</p>}
       <div className="modal-tools"><Button variant="link" size="sm" onClick={() => setJson(JSON.stringify(demoRegistration(), null, 2))}>Load demo registration</Button><Link href="/settings">Check core and mock connection details <ArrowUpRight size={13} /></Link></div>
+>>>>>>> origin/main
     </Modal>
 
     <Modal open={!!removeTarget} onClose={() => setRemoveTarget(null)} title={`Remove ${removeTarget?.apiId ?? 'API'}?`} actions={<><Button variant="outline" onClick={() => setRemoveTarget(null)}>Cancel</Button><Button variant="destructive" disabled={confirmBusy} onClick={remove}>{confirmBusy ? 'Removing…' : 'Remove API'}</Button></>}>

@@ -3,10 +3,22 @@
 // Expects 4 committed ops: add_header, move_field, rename_field, coerce_type.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { invoke } from '../src/features/executor/invoke.js';
-import { registryStore } from '../src/features/registry/store.js';
-import { emit, clear as clearBus } from '../src/features/events/bus.js';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { loadGolden, goldenBody } from './helpers/golden.js';
+
+const previousDataDir = process.env.HEALR_DATA_DIR;
+const dataDir = mkdtempSync(join(tmpdir(), 'healr-m5-golden-'));
+process.env.HEALR_DATA_DIR = dataDir;
+const [{ invoke }, { registryStore }, { clear: clearBus }] = await Promise.all([
+  import('../src/features/executor/invoke.js'),
+  import('../src/features/registry/store.js'),
+  import('../src/features/events/bus.js'),
+]);
+if (previousDataDir === undefined) delete process.env.HEALR_DATA_DIR;
+else process.env.HEALR_DATA_DIR = previousDataDir;
+test.after(() => rmSync(dataDir, { recursive: true, force: true }));
 
 const API_ID = 'demo-users';
 const TOOL = 'get_user';
@@ -67,6 +79,7 @@ test('M5 heals in 4 rounds, commits 4 ops, succeeds under 3s', async (t) => {
   const origFetch = globalThis.fetch;
   callCount = 0;
   globalThis.fetch = async (url, init) => {
+    if (String(url).endsWith('/openapi.json') || String(url).endsWith('/swagger.json')) return new Response('', { status: 404 });
     callCount += 1;
     const r = responses[Math.min(callCount - 1, responses.length - 1)];
     return new Response(r.text, { status: r.status, headers: { 'content-type': 'application/json' } });

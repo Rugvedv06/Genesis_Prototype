@@ -39,6 +39,46 @@ export function get(callId) {
   return trace ? structuredClone(trace) : null;
 }
 
+<<<<<<< HEAD
+export function traceFromEvents(callId, events, { cursor = 0, hasMore = false, nextCursor = null } = {}) {
+  if (!events.length) return null;
+  const first = events.find((event) => event.type === 'call.started');
+  const start = Number(first?.ts ?? Date.now());
+  const terminal = events.some((event) => ['call.succeeded', 'call.failed'].includes(event.type));
+  const orderedSequences = events.map((event) => event.sequenceInCall).filter(Number.isSafeInteger).sort((a, b) => a - b);
+  const firstSequence = orderedSequences[0];
+  const sequenceGap = (Number.isSafeInteger(firstSequence) && firstSequence > cursor)
+    || orderedSequences.some((sequence, index) => sequence !== firstSequence + index);
+  const spans = events
+    .filter((event) => ['upstream.request', 'diagnosis.started', 'diagnosis.finished', 'patch.proposed', 'patch.verified', 'patch.committed', 'halt', 'call.succeeded', 'call.failed'].includes(event.type))
+    .map((event) => ({
+      type: event.type, round: event.round, tier: event.tier, ms: event.ms, status: event.status,
+      startOffsetMs: Math.max(0, Number(event.ts ?? start) - start),
+    }));
+  const retentionBoundary = cursor === 0 && Number.isSafeInteger(firstSequence) && firstSequence > 0;
+  const complete = Boolean(cursor === 0 && first && terminal && !sequenceGap && !hasMore && !retentionBoundary);
+  const incompleteReason = retentionBoundary || (cursor > 0 && Number.isSafeInteger(firstSequence) && firstSequence > cursor)
+    ? 'retention_boundary'
+    : sequenceGap ? 'event_sequence_gap'
+      : hasMore ? 'page_truncated'
+        : cursor > 0 ? 'page_continues'
+          : !first ? 'start_event_missing'
+            : !terminal ? 'terminal_event_missing' : undefined;
+  return {
+    callId,
+    startedAt: start,
+    updatedAt: Number(events.at(-1)?.ts ?? start),
+    spans,
+    complete,
+    incomplete: !complete,
+    cursor: String(cursor),
+    nextCursor,
+    ...(incompleteReason ? { incompleteReason } : {}),
+  };
+}
+
+=======
+>>>>>>> origin/main
 export function clear() {
   traces.clear();
 }

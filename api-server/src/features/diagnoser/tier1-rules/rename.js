@@ -54,10 +54,16 @@ export function renameRule({ errors, request }) {
   if (!confident) return null; // ambiguous -> Tier 2
 
   const parent = best.m.path.slice(0, -1).join('.');
+  const operation = {
+    op: 'rename_field',
+    ...(parent ? { path: parent } : {}),
+    from: best.x.path.at(-1),
+    to: best.m.path.at(-1),
+  };
   return {
     tier: 1,
     confidence: Math.min(confident, 0.95),
-    ops: [{ op: 'rename_field', path: parent, from: best.x.path.at(-1), to: best.m.path.at(-1) }],
+    ops: [operation],
     evidence: [best.m.raw, best.x.raw],
   };
 }

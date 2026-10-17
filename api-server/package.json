@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "version": "0.1.0",
-  "description": "healr core healing gateway — port 8000 (PS01_BUILD_PLAN.md section 3)",
+  "description": "healr core healing gateway \u2014 port 8000 (PS01_BUILD_PLAN.md section 3)",
   "main": "src/server.js",
   "scripts": {
     "dev": "node --watch src/server.js",
@@ -16,6 +16,12 @@
     "ajv-formats": "^3.0.1",
     "cors": "^2.8.5",
     "express": "^5.0.1",
+<<<<<<< HEAD
+    "pg": "^8.23.1",
+    "redis": "^6.3.0",
+    "@healr/llm": "*"
+=======
     "pg": "^8.23.1"
+>>>>>>> origin/main
   }
 }

@@ -161,5 +161,9 @@ export async function exportAuditNdjson(queryable) {
   const { rows } = await queryable.query(
     'SELECT canonical_record FROM audit_entries WHERE workspace_id = $1 ORDER BY sequence', [workspaceId],
   );
+<<<<<<< HEAD
+  return rows.map((row) => JSON.stringify(row.canonical_record)).join('\n') + (rows.length ? '\n' : '');
+=======
   return rows.map((row) => JSON.stringify(row.canonical_record)).join('') + (rows.length ? '\n' : '');
+>>>>>>> origin/main
 }
