@@ -201,16 +201,19 @@ function matchesLogicalResponse(tool, response) {
   return response.ok && validateResponse(tool, response).ok;
 }
 
-function matchesIdentity(tool, args, response) {
+function matchesIdentityData(tool, args, data) {
   const identity = tool.versionObj?.meta?.identity ?? {};
-  const extracted = tool.compiled.extract(response.json ?? {});
   return Object.entries(identity).every(([arg, field]) => {
     const expected = args?.[arg];
-    const actual = extracted[field];
+    const actual = data?.[field];
     const scalar = (value) => value !== null && value !== undefined
       && ['string', 'number', 'boolean'].includes(typeof value);
     return scalar(expected) && scalar(actual) && String(actual) === String(expected);
   });
+}
+
+function matchesIdentity(tool, args, response) {
+  return matchesIdentityData(tool, args, tool.compiled.extract(response.json ?? {}));
 }
 
 export function matchesWriteEcho(tool, args, response, tier = 2, resolveCredential) {
@@ -894,6 +897,34 @@ async function invokeCore({ apiId, toolName, args, runId, callId = newId('c'), t
       });
       const fingerprint = structuralFingerprint(first.json);
       if (variantResult.kind === 'known_variant') {
+        if (!matchesIdentityData(tool, args, variantResult.data)) {
+          const reason = 'response_identity_mismatch';
+          const details = {
+            reason,
+            classification: 'verification_failed',
+            variantId: variantResult.variant.id,
+            fingerprint,
+            status: first.status,
+            retryCount,
+          };
+          emitCall('upstream.classified', {
+            classification: 'verification_failed',
+            variantId: variantResult.variant.id,
+            fingerprint,
+            status: first.status,
+            schemaDiagnosisAttempted: false,
+            patchProposed: false,
+            patchCommitted: false,
+            retryCount,
+            elapsedMs: Date.now() - t0,
+            reason,
+          });
+          emitCall('call.failed', { code: 'tool_unavailable', ...details });
+          emit({ type: 'halt', callId, runId, apiId, tool: toolName, reason, retryable: false });
+          emit({ type: 'heal.finished', callId, runId, healId: callId, apiId, tool: toolName, outcome: 'halted', rounds: 0, ms: Date.now() - t0, tier: 0, tokens: { input: 0, output: 0 } });
+          await appendAudit({ decision: 'halt', apiId, tool: toolName, versionBefore: tool.version, reason, responseOnly: true, variantId: variantResult.variant.id, callId });
+          return halt(reason, details);
+        }
         emitCall('upstream.classified', {
           classification: 'known_variant',
           variantId: variantResult.variant.id,

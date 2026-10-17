@@ -76,6 +76,7 @@ test('known variants normalize without creating a new adapter version', async ()
       },
     }],
   });
+
   globalThis.fetch = async () => new Response(JSON.stringify({ data: { userId: '123', fullName: 'Asha' } }), {
     status: 200, headers: { 'content-type': 'application/json' },
   });
@@ -86,6 +87,50 @@ test('known variants normalize without creating a new adapter version', async ()
     assert.equal(result.meta.classification, 'known_variant');
     assert.equal(result.meta.variantId, 'nested-user');
     assert.equal(registryStore.current('variant-runtime', 'get_user').version, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('known variants cannot bypass response identity validation', async () => {
+  const originalFetch = globalThis.fetch;
+  registryStore.reset();
+  registryStore.registerApi('variant-identity', {
+    baseUrl: 'https://api.example.test',
+    healing: { enabled: true, mode: 'enforce' },
+    tools: [{
+      name: 'get_user',
+      method: 'GET',
+      path: '/user',
+      sideEffects: 'none',
+      identity: { requestedId: 'userId' },
+      parameters: {
+        type: 'object',
+        properties: { requestedId: { type: 'string' } },
+        required: ['requestedId'],
+      },
+      response: {
+        fields: {
+          userId: { path: 'userId', type: 'string', required: true },
+          name: { path: 'name', type: 'string', required: true },
+        },
+        variants: [{
+          id: 'nested-user',
+          status: 'verified',
+          map: { userId: { from: 'data.userId', type: 'string' }, name: { from: 'data.fullName', type: 'string' } },
+        }],
+      },
+    }],
+  });
+  globalThis.fetch = async () => new Response(JSON.stringify({ data: { userId: '999', fullName: 'Other User' } }), {
+    status: 200, headers: { 'content-type': 'application/json' },
+  });
+  try {
+    const result = await invoke({ apiId: 'variant-identity', toolName: 'get_user', args: { requestedId: '123' } });
+    assert.equal(result.ok, false);
+    assert.equal(result.error.details.reason, 'response_identity_mismatch');
+    assert.equal(result.error.details.classification, 'verification_failed');
+    assert.equal(registryStore.current('variant-identity', 'get_user').version, 1);
   } finally {
     globalThis.fetch = originalFetch;
   }
