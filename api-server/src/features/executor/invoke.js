@@ -125,7 +125,7 @@ function credentialResolver(apiId) {
   };
 }
 
-async function send(tool, args, resolveCredential) {
+async function send(tool, args, resolveCredential, parentSignal) {
   const config = registryStore.config(tool.apiId) ?? {};
   const baseUrl = config.baseUrl;
   if (!baseUrl) throw new ConfigError(`no baseUrl configured for API ${tool.apiId}`);
@@ -155,7 +155,10 @@ async function send(tool, args, resolveCredential) {
     }
   }
   const ctrl = new AbortController();
-  const timeout = setTimeout(() => ctrl.abort(), 10000);
+  const onParentAbort = () => ctrl.abort(parentSignal?.reason);
+  if (parentSignal?.aborted) onParentAbort();
+  else parentSignal?.addEventListener('abort', onParentAbort, { once: true });
+  const timeout = setTimeout(() => ctrl.abort(new Error('upstream_timeout')), 10000);
   try {
     const resp = await fetch(url, {
       method,
@@ -164,11 +167,13 @@ async function send(tool, args, resolveCredential) {
       signal: ctrl.signal,
     });
     clearTimeout(timeout);
+    parentSignal?.removeEventListener('abort', onParentAbort);
     let json;
     try { json = await resp.json(); } catch { json = null; }
-    return { ok: resp.ok, status: resp.status, json, text: resp.status === 204 ? '' : JSON.stringify(json ?? null) };
+    return { ok: resp.ok, status: resp.status, json, headers: { link: resp.headers.get('link') ?? '' }, text: resp.status === 204 ? '' : JSON.stringify(json ?? null) };
   } catch (err) {
     clearTimeout(timeout);
+    parentSignal?.removeEventListener('abort', onParentAbort);
     // Re-throw domain errors (provenance, credential, config) so the caller can map them.
     if (err instanceof ProvenanceError || err instanceof NotLossless || err instanceof MissingCredential || err instanceof ConfigError) throw err;
     return { ok: false, status: 0, json: null, text: err.message, error: err };
@@ -189,6 +194,26 @@ function matchesIdentity(tool, args, response) {
       && ['string', 'number', 'boolean'].includes(typeof value);
     return scalar(expected) && scalar(actual) && String(actual) === String(expected);
   });
+}
+
+export function matchesWriteEcho(tool, args, response, tier = 2, resolveCredential) {
+  const method = String(tool.versionObj?.meta?.method ?? 'POST').toUpperCase();
+  const sideEffects = tool.versionObj?.meta?.sideEffects ?? tool.versionObj?.adapter?.sideEffects ?? 'write';
+  if (tier !== 2 || !['POST', 'PUT', 'PATCH'].includes(method) || sideEffects === 'none' || sideEffects === 'read') return true;
+  const responseMap = tool.versionObj?.adapter?.response?.map ?? {};
+  const extracted = tool.compiled.extract(response.json ?? {});
+  let sentBody = args ?? {};
+  try { sentBody = tool.compiled.buildRequest(args, resolveCredential).body; } catch {}
+  for (const [argName, expected] of Object.entries(args ?? {})) {
+    if (!Object.hasOwn(responseMap, argName)) continue;
+    const actual = extracted[argName];
+    const sent = sentBody[argName] ?? expected;
+    if (expected === null || expected === undefined || actual === null || actual === undefined
+      || !['string', 'number', 'boolean'].includes(typeof expected)
+      || !['string', 'number', 'boolean'].includes(typeof actual)
+      || String(actual) !== String(sent)) return false;
+  }
+  return true;
 }
 
 function errorSignature(toolName, res) {
@@ -255,11 +280,11 @@ async function reportDomainHalt({ tool, result, callId, runId, t0 }) {
   return result;
 }
 
-async function finishHealHalt({ tool, callId, runId, reason, details, t0, rounds = 0, tier = 0 }) {
+async function finishHealHalt({ tool, callId, runId, reason, details, t0, rounds = 0, tier = 0, tokens = { input: 0, output: 0 } }) {
   const fields = { callId, runId, apiId: tool.apiId, tool: tool.name };
-  emit({ type: 'halt', ...fields, reason, details, retryable: false });
-  emit({ type: 'heal.finished', ...fields, healId: callId, outcome: 'halted', rounds, ms: Date.now() - t0, tier, tokens: { input: 0, output: 0 } });
-  return halt(reason, details);
+  emit({ type: 'halt', ...fields, reason, details, ...(details?.needsOperator ? { needsOperator: true } : {}), retryable: false });
+  emit({ type: 'heal.finished', ...fields, healId: callId, outcome: 'halted', rounds, ms: Date.now() - t0, tier, tokens, tokensByRole: { diagnoser: tokens } });
+  return halt(reason, { ...(details ?? {}), tier, tokens });
 }
 
 // Heal lock (§5.2): only one leader heals per apiId:tool; followers await then
@@ -527,7 +552,7 @@ async function replayVerifiedCandidate({ tool, args, signature, failure, resolve
 }
 
 // Heal loop (§5.3)
-async function healAndRetry({ tool, args, first, kind, callId, runId, t0, resolveCredential, requestKey }) {
+async function healAndRetry({ tool, args, first, kind, callId, runId, t0, resolveCredential, requestKey, tier2Provider }) {
   const apiConfig = registryStore.config(tool.apiId) ?? {};
   const healing = apiConfig.healing ?? {};
   const maxRounds = healing.maxRounds ?? cfg.maxHealRounds;
@@ -538,6 +563,9 @@ async function healAndRetry({ tool, args, first, kind, callId, runId, t0, resolv
   let failure = first;
   const applied = [];
   let rounds = 0;
+  let tier2Calls = 0;
+  const skipTiers = new Set();
+  const healTokens = { input: 0, output: 0 };
 
   while (rounds < maxRounds && Date.now() < deadline) {
     rounds += 1;
@@ -552,19 +580,26 @@ async function healAndRetry({ tool, args, first, kind, callId, runId, t0, resolv
 
     emit({ type: 'diagnosis.started', callId, runId, apiId: tool.apiId, tool: tool.name, round: rounds, kind });
 
-    const proposal = await diagnose({ tool: draft, args, failure, kind });
+    const proposal = await diagnose({ tool: draft, args, failure, kind, apiConfig, tier2Provider, skipTiers: [...skipTiers], tier2CallsRemaining: Math.max(0, Number(process.env.TIER2_MAX_CALLS_PER_HEAL ?? 2) - tier2Calls) });
+    if (proposal?.tier === 2 || proposal?.diagnosisFailure) tier2Calls += 1;
+    if (proposal?.usage) { healTokens.input += Number(proposal.usage.inputTokens ?? 0); healTokens.output += Number(proposal.usage.outputTokens ?? 0); }
+    if (proposal?.diagnosisFailure) return finishHealHalt({ tool, callId, runId, reason: proposal.reason, details: { provider: proposal.provider, model: proposal.model, keySlot: proposal.keySlot, detailReason: proposal.detailReason, needsOperator: proposal.reason === 'tier2_no_proposal' }, t0, rounds, tier: 2, tokens: healTokens, tokensByRole: { diagnoser: healTokens } });
     if (!proposal) {
       if (process.env.DATABASE_URL) await cacheNegativeAsync(requestKey, { reason: 'no_diagnosis', details: { kind } });
       else cacheNegative(requestKey, { reason: 'no_diagnosis', details: { kind } });
-      return finishHealHalt({ tool, callId, runId, reason: 'no_diagnosis', details: { kind }, t0, rounds });
+      return finishHealHalt({ tool, callId, runId, reason: 'no_diagnosis', details: { kind }, t0, rounds, tokens: healTokens, tokensByRole: { diagnoser: healTokens } });
     }
     const gate = safetyCheck({ proposal, tool: draft, mode: healing.mode ?? 'enforce', apiCfg: apiConfig });
     if (!gate.ok) {
-      return finishHealHalt({ tool, callId, runId, reason: gate.reason, details: gate.details, t0, rounds, tier: proposal.tier });
+      const needsOperator = ['requires_approval', 'low_confidence', 'op_not_allowed'].includes(gate.reason);
+      if (proposal.tier === 2 && needsOperator) {
+        await appendAudit({ decision: 'proposed', apiId: tool.apiId, tool: tool.name, versionBefore: tool.version, tier: proposal.tier, ops: proposal.ops, confidence: proposal.confidence, evidence: proposal.evidence, provider: proposal.provider, model: proposal.model, keySlot: proposal.keySlot, usage: proposal.usage, healId: callId });
+      }
+      return finishHealHalt({ tool, callId, runId, reason: gate.reason, details: { ...gate.details, ...(needsOperator ? { needsOperator, proposal: { ops: proposal.ops, confidence: proposal.confidence, evidence: proposal.evidence, provider: proposal.provider, model: proposal.model } } : {}) }, t0, rounds, tier: proposal.tier, tokens: healTokens, tokensByRole: { diagnoser: healTokens } });
     }
     if ((healing.mode ?? 'enforce') === 'log') {
       await appendAudit({ decision: 'proposed', apiId: tool.apiId, tool: tool.name, versionBefore: tool.version, tier: proposal.tier, ops: proposal.ops, confidence: proposal.confidence, evidence: proposal.evidence, healId: callId });
-      return finishHealHalt({ tool, callId, runId, reason: 'drift_unresolved', details: { proposal }, t0, rounds, tier: proposal.tier });
+      return finishHealHalt({ tool, callId, runId, reason: 'drift_unresolved', details: { proposal }, t0, rounds, tier: proposal.tier, tokens: healTokens, tokensByRole: { diagnoser: healTokens } });
     }
 
     const newAdapter = applyPatch(draft.versionObj.adapter, proposal.ops);
@@ -576,7 +611,7 @@ async function healAndRetry({ tool, args, first, kind, callId, runId, t0, resolv
       compiled: newCompiled,
     };
 
-    emit({ type: 'patch.proposed', callId, runId, apiId: tool.apiId, tool: tool.name, round: rounds, tier: proposal.tier, ops: proposal.ops, confidence: proposal.confidence, evidence: proposal.evidence });
+    emit({ type: 'patch.proposed', callId, runId, apiId: tool.apiId, tool: tool.name, round: rounds, tier: proposal.tier, ops: proposal.ops, confidence: proposal.confidence, evidence: proposal.evidence, usage: proposal.usage, ...(proposal.tier === 2 ? { provider: proposal.provider, model: proposal.model, keySlot: proposal.keySlot, latencyMs: proposal.latencyMs } : {}) });
 
     let r;
     try {
@@ -585,23 +620,23 @@ async function healAndRetry({ tool, args, first, kind, callId, runId, t0, resolv
       return reportDomainHalt({ tool: nextDraft, result: mapDomainError(err, nextDraft, args, first), callId, runId, t0 });
     }
 
-    if (r.ok && matchesLogicalResponse(nextDraft, r) && matchesIdentity(nextDraft, args, r)) {
+    if (r.ok && matchesLogicalResponse(nextDraft, r) && matchesIdentity(nextDraft, args, r) && matchesWriteEcho(nextDraft, args, r, proposal.tier, resolveCredential)) {
       const commitOps = applied.concat(proposal.ops);
       const change = {
         ops: commitOps, tier: proposal.tier, confidence: proposal.confidence,
-        evidence: proposal.evidence, rounds, latencyMs: Date.now() - t0, callId, runId,
+        evidence: proposal.evidence, provider: proposal.provider, model: proposal.model, keySlot: proposal.keySlot, usage: proposal.usage, rounds, latencyMs: Date.now() - t0, callId, runId,
       };
       const committed = process.env.DATABASE_URL
         ? (await commitFromCache({ apiId: tool.apiId, toolName: tool.name, adapter: newAdapter, change, origin: 'heal', current: tool })).value
         : registryStore.commit(tool.apiId, tool.name, newAdapter, change);
-      emit({ type: 'patch.committed', callId, runId, apiId: tool.apiId, tool: tool.name, version: committed.version, ops: commitOps });
+      emit({ type: 'patch.committed', callId, runId, apiId: tool.apiId, tool: tool.name, version: committed.version, tier: proposal.tier, ops: commitOps });
       emit({ type: 'patch.verified', callId, runId, apiId: tool.apiId, tool: tool.name, round: rounds, status: r.status });
-      emit({ type: 'heal.finished', callId, runId, healId: callId, apiId: tool.apiId, tool: tool.name, outcome: 'committed', rounds, tier: proposal.tier, ms: Date.now() - t0, tokens: { input: 0, output: 0 } });
+      emit({ type: 'heal.finished', callId, runId, healId: callId, apiId: tool.apiId, tool: tool.name, outcome: 'committed', rounds, tier: proposal.tier, ms: Date.now() - t0, tokens: healTokens, tokensByRole: { diagnoser: healTokens } });
       if (!process.env.DATABASE_URL) await appendAudit({
         decision: 'commit', apiId: tool.apiId, tool: tool.name,
         versionBefore: tool.version, versionAfter: committed.version,
         tier: proposal.tier, ops: commitOps, confidence: proposal.confidence,
-        evidence: proposal.evidence, healId: callId, callId,
+        evidence: proposal.evidence, provider: proposal.provider, model: proposal.model, keySlot: proposal.keySlot, usage: proposal.usage, healId: callId, callId,
         latencyMs: Date.now() - t0,
       });
       if (process.env.DATABASE_URL && rounds === 1 && !applied.length
@@ -637,11 +672,20 @@ async function healAndRetry({ tool, args, first, kind, callId, runId, t0, resolv
       }
       return success(nextDraft, r, {
         healed: true, rounds, tier: proposal.tier, cacheHit: false,
-        latencyMs: Date.now() - t0, healMs: Date.now() - t0, tokens: { input: 0, output: 0 },
+        latencyMs: Date.now() - t0, healMs: Date.now() - t0, tokens: healTokens,
         ops: commitOps, version: committed.version,
       });
     }
-    if (r.ok && matchesLogicalResponse(nextDraft, r)) return finishHealHalt({ tool, callId, runId, reason: 'verification_mismatch', t0, rounds, tier: proposal.tier });
+    if (r.ok && matchesLogicalResponse(nextDraft, r)) return finishHealHalt({ tool, callId, runId, reason: 'verification_mismatch', t0, rounds, tier: proposal.tier, tokens: healTokens, tokensByRole: { diagnoser: healTokens } });
+    if (proposal.tier === 0) {
+      const spec = proposal.evidence?.find((item) => item.spec)?.spec;
+      if (spec) {
+        const { markSpecUntrusted } = await import('../diagnoser/tier0-spec/loader.js');
+        const specUrls = proposal.evidence.find((item) => item.spec === spec)?.specUrls;
+        markSpecUntrusted({ url: spec, urls: specUrls });
+      }
+      skipTiers.add(0);
+    }
     failure = r;
     draft = nextDraft;
     applied.push(...proposal.ops);
@@ -652,7 +696,7 @@ async function healAndRetry({ tool, args, first, kind, callId, runId, t0, resolv
   return result;
 }
 
-async function invokeCore({ apiId, toolName, args, runId, callId = newId('c') }) {
+async function invokeCore({ apiId, toolName, args, runId, callId = newId('c'), tier2Provider, signal }) {
   const t0 = Date.now();
   const emitCall = (type, extra) => emit({ type, callId, runId, apiId, tool: toolName, ...extra });
 
@@ -716,7 +760,7 @@ async function invokeCore({ apiId, toolName, args, runId, callId = newId('c') })
   const resolveCredential = credentialResolver(apiId);
   let first;
   try {
-    first = await send(tool, args, resolveCredential);
+    first = await send(tool, args, resolveCredential, signal);
   } catch (err) {
     const result = mapDomainError(err, tool, args, null);
     if (err instanceof MissingCredential) {
@@ -883,7 +927,7 @@ async function invokeCore({ apiId, toolName, args, runId, callId = newId('c') })
   const healResult = await withHealLock(
     apiId,
     toolName,
-    () => healAndRetry({ tool, args, first, kind, callId, runId, t0, resolveCredential, requestKey }),
+    () => healAndRetry({ tool, args, first, kind, callId, runId, t0, resolveCredential, requestKey, tier2Provider }),
     args,
     { callId, runId, t0 },
   );
@@ -903,8 +947,8 @@ async function invokeCore({ apiId, toolName, args, runId, callId = newId('c') })
   return result;
 }
 
-export async function invoke({ apiId, toolName, args, runId }) {
-  if (!process.env.DATABASE_URL) return invokeCore({ apiId, toolName, args, runId });
+export async function invoke({ apiId, toolName, args, runId, tier2Provider, signal }) {
+  if (!process.env.DATABASE_URL) return invokeCore({ apiId, toolName, args, runId, tier2Provider, signal });
 
   const callId = newId('c');
   const startedAt = new Date();
@@ -925,7 +969,7 @@ export async function invoke({ apiId, toolName, args, runId }) {
 
   let result;
   let thrown;
-  try { result = await invokeCore({ apiId, toolName, args, runId, callId }); }
+  try { result = await invokeCore({ apiId, toolName, args, runId, callId, tier2Provider, signal }); }
   catch (error) {
     thrown = error;
     log({ level: 'error', code: 'invoke_internal_error', apiId, tool: toolName, errorClass: error.name ?? 'Error' });
@@ -950,10 +994,15 @@ export async function invoke({ apiId, toolName, args, runId }) {
         callId, outcome, finalVersion: result.ok ? result.meta?.version : initial?.version,
         errorCode: result.ok ? null : result.error?.code,
         haltReason: result.ok ? null : result.error?.details?.reason,
-        tier: result.meta?.tier, rounds: result.meta?.rounds,
+        tier: result.meta?.tier ?? result.error?.details?.tier, rounds: result.meta?.rounds,
         durationMs: Date.now() - started, cacheHit: result.meta?.cacheHit,
+        inputTokens: result.meta?.tokens?.input ?? result.error?.details?.tokens?.input,
+        outputTokens: result.meta?.tokens?.output ?? result.error?.details?.tokens?.output,
+        tokenUsage: { byRole: result.meta?.tier === 2 ? { diagnoser: { input: result.meta.tokens.input, output: result.meta.tokens.output } } : {}, byTier: (result.meta?.tier ?? result.error?.details?.tier) !== undefined ? { [String(result.meta?.tier ?? result.error.details.tier)]: { input: result.meta?.tokens?.input ?? result.error?.details?.tokens?.input ?? 0, output: result.meta?.tokens?.output ?? result.error?.details?.tokens?.output ?? 0 } } : {} },
         summary: {
           healed: Boolean(result.ok && result.meta?.healed),
+          tier2DetailReason: result.error?.details?.detailReason,
+          tier2Outcome: result.ok ? (result.meta?.tier === 2 ? 'accepted' : undefined) : result.error?.details?.reason === 'tier2_timeout' ? 'timeout' : result.error?.details?.reason === 'tier2_unavailable' ? 'unavailable' : result.error?.details?.reason === 'tier2_no_proposal' ? 'noProposal' : result.error?.details?.reason === 'tier2_invalid_output' ? (result.error?.details?.detailReason === 'evidence_not_quoted' ? 'rejectedQuote' : 'rejectedSchema') : undefined,
           ...(intermediateEventFailure ? { eventPersistenceDegraded: true } : {}),
         },
       });

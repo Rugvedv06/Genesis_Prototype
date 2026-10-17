@@ -54,7 +54,7 @@ app.get('/admin/mutations', (_req, res) => {
       return {
         id, label: m.label, category: m.category ?? 'contract', route: m.route,
         recoverable: (m.expected ?? 'heal') !== 'halt', expected: m.expected ?? 'heal',
-        expectedOps: m.expectedOps ?? [], fixture: m.fixture, specVariants: m.specVariants ?? [],
+        expectedOps: m.expectedOps ?? [], expectedTier: m.id === 'M8' ? (state.specAvailable && !state.specStale ? 0 : 2) : m.expectedTier, llmRequired: m.id === 'M8' ? !(state.specAvailable && !state.specStale) : (m.llmRequired ?? false), fixture: m.fixture, specVariants: m.specVariants ?? [],
       };
     }),
   });
@@ -160,7 +160,7 @@ app.post('/api/users/update-email', (req, res) => {
     recordRequest(req.path, violated.status, startedAt);
     return res.status(violated.status).json(violated.body);
   }
-  const args = req.body ?? {};
+  const args = mutation?.normalizeRequest ? mutation.normalizeRequest(req.body ?? {}) : (req.body ?? {});
   // Real provenance: stamp 'foreign' if any write value is not in taskValues.
   const allValues = Object.values(args).filter((v) => v !== undefined && v !== null).map(String);
   const foreign = allValues.some((v) => !state.taskValues.has(v));

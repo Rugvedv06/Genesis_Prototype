@@ -79,6 +79,7 @@ test('M5 heals in 4 rounds, commits 4 ops, succeeds under 3s', async (t) => {
   const origFetch = globalThis.fetch;
   callCount = 0;
   globalThis.fetch = async (url, init) => {
+    if (String(url).endsWith('/openapi.json') || String(url).endsWith('/swagger.json')) return new Response('', { status: 404 });
     callCount += 1;
     const r = responses[Math.min(callCount - 1, responses.length - 1)];
     return new Response(r.text, { status: r.status, headers: { 'content-type': 'application/json' } });

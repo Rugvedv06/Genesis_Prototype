@@ -129,3 +129,13 @@ test('rename rule singleton pairing by elimination (one missing, one extra)', ()
   assert.ok(prop);
   assert.deepStrictEqual(prop.ops, [{ op: 'rename_field', path: 'target', from: 'user_id', to: 'login' }]);
 });
+
+test('wrap rule leaves multiple unmatched missing and extra fields for Tier 2', () => {
+  const errors = [
+    { kind: 'missing', path: ['subscriber_ref'], raw: { path: 'subscriber_ref' } },
+    { kind: 'missing', path: ['contact_address'], raw: { path: 'contact_address' } },
+    { kind: 'extra', path: ['user_id'], raw: { path: 'user_id' } },
+    { kind: 'extra', path: ['email'], raw: { path: 'email' } },
+  ];
+  assert.equal(wrapRule({ errors, request: { user_id: '123', email: 'x' } }), null);
+});

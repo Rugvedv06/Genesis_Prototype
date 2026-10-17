@@ -104,6 +104,8 @@ export default function MetricsPage() {
         <CardContent className="space-y-3 pt-4">
           {barData.length ? <><StackedBars data={barData} /><Legend /></> : <p className="py-5 text-center text-xs text-muted-foreground">No persisted calls in the selected window.</p>}
           <div className="flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-muted-foreground"><span>{number(metrics?.halted)} halted</span><span>{number(metrics?.rejected)} rejected</span><span>{number(metrics?.failed)} failed</span><span>Tier T0/T1/T2: {number(tiers.T0)}/{number(tiers.T1)}/{number(tiers.T2)}</span></div>
+          <div className="grid gap-2 border-t border-border pt-3 text-[11px] md:grid-cols-2"><div><strong>Tokens by role</strong>{Object.entries(metrics?.tokensByRole ?? {}).map(([role, usage]) => <p key={role}>{role}: {number(usage.input)} in / {number(usage.output)} out</p>)}</div><div><strong>Tokens by tier</strong>{Object.entries(metrics?.tokensByTier ?? {}).map(([tier, usage]) => <p key={tier}>{tier}: {number(usage.input)} in / {number(usage.output)} out</p>)}</div></div>
+          {metrics?.tier2Outcomes && <p className="text-[11px] text-muted-foreground">Tier 2 outcomes · accepted {number(metrics.tier2Outcomes.accepted)} · rejected quote {number(metrics.tier2Outcomes.rejectedQuote)} · rejected schema {number(metrics.tier2Outcomes.rejectedSchema)} · timeout {number(metrics.tier2Outcomes.timeout)} · unavailable {number(metrics.tier2Outcomes.unavailable)}</p>}
           {series.length > 0 && <p className="mb-0 text-[10px] text-muted-foreground">Bucket range: {time(series[0].t)}–{time(series.at(-1).t)} · {series.length} populated buckets</p>}
         </CardContent>
       </Card>

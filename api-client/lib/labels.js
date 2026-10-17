@@ -15,8 +15,16 @@ export const HALT_REASON = {
   low_confidence: 'The proposed fix was below the confidence threshold.',
   max_rounds: 'The heal budget ran out before the call succeeded.',
   circuit_open: 'Too many failed heals. healr paused this tool.',
+  requires_approval: 'A high-risk proposal is waiting for operator review. It was not committed.',
+  tier2_no_proposal: 'Tier 2 could not make a validated proposal. Review the evidence before taking action.',
+  tier2_timeout: 'Tier 2 exceeded its request budget. Deterministic healing remains available.',
+  tier2_unavailable: 'Gemini was unavailable for this diagnosis. Deterministic healing remains available.',
+  tier2_invalid_output: 'Tier 2 output failed validation and was not applied.',
 };
 export const haltReason = (r) => HALT_REASON[r] ?? `Stopped: ${r}`;
+
+export const TIER_LABEL = Object.freeze({ 0: 'Tier 0 · OpenAPI spec', 1: 'Tier 1 · deterministic', 2: 'Tier 2 · Gemini', cache: 'Verified cache' });
+export const tierLabel = (tier) => TIER_LABEL[tier] ?? (tier == null ? 'No diagnosis tier' : `Tier ${tier}`);
 
 export const EVENT_LABEL = {
   'call.started': 'Call started', 'upstream.request': 'Sent to API', 'call.failed': 'API rejected the call',

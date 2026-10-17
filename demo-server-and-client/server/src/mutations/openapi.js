@@ -77,7 +77,9 @@ export function buildOpenApi(mutationId = null) {
     paths: {
       '/api/users/get': { post: getUserOperation(mutation) },
       '/api/users/update-email': { post: {
-        summary: 'Update user email', requestBody: jsonBody(mutation?.id === 'M9'
+        summary: 'Update user email', requestBody: jsonBody(mutation?.id === 'M11'
+          ? { type: 'object', properties: { subscriber_ref: { type: 'string' }, contact_address: { type: 'string', format: 'email' } }, required: ['subscriber_ref', 'contact_address'] }
+          : mutation?.id === 'M9'
           ? {
               type: 'object',
               properties: {

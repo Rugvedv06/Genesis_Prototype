@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "version": "0.1.0",
-  "description": "healr mock API + mutation engine — port 5001 (PS01_BUILD_PLAN.md section 3 / 4.8)",
+  "description": "healr mock API + mutation engine \u2014 port 5001 (PS01_BUILD_PLAN.md section 3 / 4.8)",
   "main": "src/server.js",
   "scripts": {
     "dev": "node --watch src/server.js",
@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "express": "^5.0.1",
-    "cors": "^2.8.5"
+    "cors": "^2.8.5",
+    "@healr/llm": "*"
   }
 }

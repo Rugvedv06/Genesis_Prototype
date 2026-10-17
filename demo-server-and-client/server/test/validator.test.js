@@ -278,3 +278,11 @@ test('unrelated 401 required-header errors preserve their declared meaning in ev
   assert.equal(v2.body.error, undefined, 'a non-auth header failure must not be reformatted as missing_auth');
   assert.equal(problem.body.error, undefined, 'problem response keeps the declared missing-header error shape');
 });
+
+test('M11 reports ambiguous renamed update fields and accepts only both wire names', async () => {
+  const mutation = get('M11');
+  const failure = validateRequest(mutation, { user_id: '123', email: 'a@b.com' }, {});
+  assert.equal(failure.status, 422);
+  assert.deepEqual(failure.body.detail.map((item) => item.loc.at(-1)), ['subscriber_ref', 'contact_address', 'user_id', 'email']);
+  assert.equal(validateRequest(mutation, { subscriber_ref: '123', contact_address: 'a@b.com' }, {}), null);
+});

@@ -59,7 +59,7 @@ if (recoveredInvocations.reconciled) {
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '1100kb' }));
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true, service: 'api-server', port: cfg.port, version: '0.1.0', apis: registryStore.list().length, time: new Date().toISOString() });
@@ -192,9 +192,9 @@ app.delete('/cache/:cacheKey', async (req, res, next) => {
 
 app.get('/provider/health', async (_req, res) => {
   try {
-    const provider = getProvider('diagnoser');
-    const result = await provider.health();
-    res.status(result.ok ? 200 : 503).json(result);
+    const [agent, diagnoser] = await Promise.all([getProvider('agent').health(), getProvider('diagnoser').health()]);
+    const result = { ...diagnoser, roles: { agent, diagnoser } };
+    res.status(agent.ok && diagnoser.ok ? 200 : 503).json(result);
   } catch (error) {
     res.status(503).json({ ok: false, code: 'provider_configuration_error', message: error.message });
   }

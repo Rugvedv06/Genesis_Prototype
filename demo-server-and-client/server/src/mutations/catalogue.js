@@ -192,7 +192,26 @@ export const M10 = {
   expectedOps: [{ op: 'remap_response_path', logical: 'name', from: 'result.name', to: 'result.full_name' }],
 };
 
-export const CATALOGUE = { M1, M2, M3, M4, M5, M6, M7, M8, M9, M10 };
+export const M11 = {
+  id: 'M11', label: 'update-email fields renamed to subscriber_ref and contact_address',
+  category: 'request', expected: 'heal', expectedOps: ['rename_field', 'rename_field'], expectedTier: 2, llmRequired: true,
+  route: { method: 'POST', path: '/api/users/update-email' },
+  fixture: { args: { user_id: '123', email: 'asha+demo@example.com' } }, specVariants: specVariants(), headers: [],
+  body: { layers: [{
+    when: () => true,
+    check: (body) => body?.subscriber_ref !== undefined && body?.contact_address !== undefined,
+    errors: (body) => [
+      ...(body?.subscriber_ref === undefined ? [{ loc: ['body', 'subscriber_ref'], msg: 'field required', type: 'value_error.missing' }] : []),
+      ...(body?.contact_address === undefined ? [{ loc: ['body', 'contact_address'], msg: 'field required', type: 'value_error.missing' }] : []),
+      ...(body?.user_id !== undefined ? [{ loc: ['body', 'user_id'], msg: 'extra fields not permitted', type: 'value_error.extra' }] : []),
+      ...(body?.email !== undefined ? [{ loc: ['body', 'email'], msg: 'extra fields not permitted', type: 'value_error.extra' }] : []),
+    ],
+  }] },
+  normalizeRequest: (body) => ({ user_id: body.subscriber_ref, email: body.contact_address }),
+};
+
+
+export const CATALOGUE = { M1, M2, M3, M4, M5, M6, M7, M8, M9, M10, M11 };
 export function get(id) {
   return CATALOGUE[id];
 }

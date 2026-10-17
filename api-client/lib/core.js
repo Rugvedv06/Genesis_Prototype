@@ -52,6 +52,7 @@ export const api = {
   rollback: (id, tool, toVersion) => strict(CORE, `/apis/${e(id)}/tools/${e(tool)}/rollback`, { method: 'POST', body: { toVersion } }),
   patchConfig: (id, patch) => strict(CORE, `/apis/${e(id)}/config`, { method: 'PATCH', body: patch }),
   register: (payload) => strict(CORE, '/apis', { method: 'POST', body: payload }),
+  previewOpenApi: (source) => strict(CORE, '/apis/import/openapi/preview', { method: 'POST', body: source, timeout: 8000 }),
   remove: (id) => strict(CORE, `/apis/${e(id)}`, { method: 'DELETE' }),
   // invoke returns the body even when ok:false (HTTP 200 or 400). Only network errors throw.
   invoke: async (id, tool, args, runId) => (await raw(CORE, `/apis/${e(id)}/tools/${e(tool)}/invoke`, { method: 'POST', body: { args, runId }, timeout: 15000 })).data,

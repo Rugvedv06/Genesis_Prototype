@@ -45,7 +45,7 @@ function operationSpec(id) {
   const properties = id === 'M8'
     ? { status: { type: 'string', enum: ['ENABLED', 'DISABLED'], 'x-healr-enum-aliases': { active: 'ENABLED' } } }
     : { region: { type: 'string', default: 'IN' } };
-  return { paths: { [id === 'M8' ? '/api/users/set-status' : '/api/users/get']: {
+  return { openapi: '3.0.0', paths: { [id === 'M8' ? '/api/users/set-status' : '/api/users/get']: {
     post: { requestBody: { content: { 'application/json': { schema: { type: 'object', properties } } } } },
   } } };
 }
@@ -54,9 +54,10 @@ function installUpstream(id) {
   const originalFetch = globalThis.fetch;
   const requests = [];
   globalThis.fetch = async (url, init = {}) => {
-    if (String(url) === 'https://spec.example/openapi.json') {
+    if (String(url).startsWith('https://spec.example/')) {
       return new Response(JSON.stringify(operationSpec(id)), { status: 200 });
     }
+    if (String(url).endsWith('/openapi.json') || String(url).endsWith('/swagger.json')) return new Response('', { status: 404 });
     const body = JSON.parse(init.body ?? '{}');
     const headers = Object.fromEntries(Object.entries(init.headers ?? {}).map(([key, value]) => [key.toLowerCase(), value]));
     requests.push({ url: String(url), body, headers });
@@ -95,7 +96,7 @@ for (const scenario of cases) {
       registryStore.reset();
       registryStore.registerApi(apiId, {
         baseUrl: 'https://api.example',
-        ...(scenario.tier === 0 ? { specUrl: 'https://spec.example/openapi.json' } : {}),
+        ...(scenario.tier === 0 ? { specUrl: `https://spec.example/${scenario.id}/openapi.json` } : {}),
         credentials: {}, healing: { enabled: true, mode: 'enforce', maxRounds: 4 },
         tools: [{
           name: 'invoke', method: 'POST', path: scenario.id === 'M8' ? '/api/users/set-status' : '/api/users/get',

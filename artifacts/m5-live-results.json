@@ -1,0 +1,96 @@
+{
+  "createdAt": "2026-10-17T03:25:38.935Z",
+  "status": "failed",
+  "configuredKeyCount": 4,
+  "expectedKeyCount": 4,
+  "checks": [
+    {
+      "name": "agent provider health",
+      "status": "passed",
+      "detail": "gemini-3.8-flash"
+    },
+    {
+      "name": "diagnoser provider health",
+      "status": "passed",
+      "detail": "gemini-3.8-flash"
+    },
+    {
+      "name": "Mock API health",
+      "status": "passed",
+      "detail": "HTTP 200"
+    },
+    {
+      "name": "Tier 2 sample 1",
+      "status": "failed",
+      "detail": "tier2_timeout (timeout)"
+    },
+    {
+      "name": "Tier 2 sample 2",
+      "status": "failed",
+      "detail": "tier2_timeout (timeout)"
+    },
+    {
+      "name": "Tier 2 sample 3",
+      "status": "failed",
+      "detail": "tier2_timeout (timeout)"
+    },
+    {
+      "name": "Tier 2 sample 4",
+      "status": "failed",
+      "detail": "tier2_timeout (timeout)"
+    },
+    {
+      "name": "Tier 2 sample 5",
+      "status": "failed",
+      "detail": "tier2_timeout (timeout)"
+    },
+    {
+      "name": "Four-key round robin",
+      "status": "failed",
+      "detail": "0 slots observed across 4 configured keys"
+    },
+    {
+      "name": "M5 healed agent task",
+      "status": "passed",
+      "detail": "completed"
+    },
+    {
+      "name": "M5 baseline honest outcome",
+      "status": "failed",
+      "detail": "llm:error (provider_request_failed)"
+    },
+    {
+      "name": "M5 same provider and model",
+      "status": "failed",
+      "detail": "gemini:gemini-2.5-flash / gemini:gemini-3.8-flash"
+    },
+    {
+      "name": "M8 Tier 2 with unavailable spec",
+      "status": "passed",
+      "detail": "tier2_timeout"
+    },
+    {
+      "name": "M11 Tier 2 update",
+      "status": "passed",
+      "detail": "tier2_timeout"
+    },
+    {
+      "name": "M10 baseline wrong data",
+      "status": "failed",
+      "detail": "completed with data that differs from canonical truth"
+    },
+    {
+      "name": "M10 healed correct data",
+      "status": "failed",
+      "detail": "healed data did not match truth"
+    },
+    {
+      "name": "Audit chain verification",
+      "status": "passed",
+      "detail": "valid"
+    }
+  ],
+  "slotCalls": {},
+  "tier2LatencyMs": [],
+  "outputFile": "/Users/samanpandey/inCoding/hacks/Genesis_Prototype/artifacts/m5-live-results.json"
+}

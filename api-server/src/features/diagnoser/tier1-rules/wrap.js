@@ -8,7 +8,9 @@ import { nameScore } from './rename.js';
 export function wrapRule({ errors, request }) {
   const missing = errors.filter((e) => e.kind === 'missing');
   const extra = errors.filter((e) => e.kind === 'extra');
-  if (!missing.length || !extra.length) return null;
+  // A wrapper can be inferred only for a single missing container and a single
+  // extra source. Multiple candidates are ambiguous and belong to Tier 2.
+  if (missing.length !== 1 || extra.length !== 1) return null;
 
   for (const m of missing) {
     // P must be a single top-level key (the object to nest into)

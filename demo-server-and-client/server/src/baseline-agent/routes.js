@@ -1,18 +1,19 @@
-// Phase 1 Track C: POST /demo/run — run the baseline task with raw HTTP (no healing).
 import { runTask, MAX_ITERATIONS } from './index.js';
 
-export function baselineRoutes(app) {
+export function baselineRoutes(app, dependencies = {}) {
   app.post('/demo/run', async (req, res) => {
-    const { apiId, tool, args, baseUrl, runId } = req.body ?? {};
-    if (!apiId || !tool || !baseUrl) {
-      return res.status(400).json({ ok: false, error: 'apiId, tool and baseUrl are required' });
-    }
-    let result;
+    const { apiId, prompt, args, runId } = req.body ?? {};
+    if (!apiId) return res.status(400).json({ ok: false, outcome: 'error', error: 'apiId is required' });
     try {
-      result = await runTask({ apiId, tool, args: args ?? {}, baseUrl, runId: runId ?? `b_${Date.now()}` });
-    } catch (err) {
-      return res.status(500).json({ ok: false, outcome: 'error', iterations: 0, error: String(err?.message ?? err), maxIterations: MAX_ITERATIONS });
+      const result = await (dependencies.runTask ?? runTask)({ apiId, prompt, args: args ?? {}, runId: runId ?? `b_${Date.now()}` });
+      return res.json({
+        ok: result.ok, runId: result.runId, apiId: result.apiId, answer: result.answer,
+        outcome: result.outcome, iterations: result.iterations, steps: result.steps,
+        tokens: result.tokens, provider: result.provider, model: result.model, mode: result.mode,
+        data: result.data, error: result.error, trace: result.trace, maxIterations: MAX_ITERATIONS,
+      });
+    } catch (error) {
+      return res.status(500).json({ ok: false, outcome: 'error', iterations: 0, error: { code: 'baseline_error', message: String(error?.message ?? error).slice(0, 500) }, maxIterations: MAX_ITERATIONS });
     }
-    res.json({ ok: result.ok, outcome: result.outcome, iterations: result.iterations, data: result.data, error: result.error, maxIterations: MAX_ITERATIONS });
   });
 }

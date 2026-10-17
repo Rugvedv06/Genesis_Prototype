@@ -56,17 +56,17 @@ test('M4.3 durable metrics expose persisted rounds, tiers and time-bucket token 
     const stepSeconds = 3600;
     const currentBucket = Math.floor(now / (stepSeconds * 1000)) * stepSeconds;
     const samples = [
-      { suffix: 'a', offset: 0, outcome: 'healed', tier: 'T1', rounds: 2, duration: 120, cache: true, input: 11, output: 7 },
-      { suffix: 'b', offset: 0, outcome: 'halted', tier: null, rounds: 1, duration: 80, cache: false, input: 5, output: 3 },
+      { suffix: 'a', offset: 0, outcome: 'healed', tier: 'T1', rounds: 2, duration: 120, cache: true, input: 11, output: 7, tokenUsage: { byRole: { diagnoser: { input: 11, output: 7 } }, byTier: { '1': { input: 11, output: 7 } } } },
+      { suffix: 'b', offset: 0, outcome: 'halted', tier: null, rounds: 1, duration: 80, cache: false, input: 5, output: 3, summary: { tier2Outcome: 'timeout' } },
       { suffix: 'c', offset: -3600, outcome: 'succeeded', tier: 'T0', rounds: 0, duration: 40, cache: false, input: 2, output: 1 },
     ];
     for (const sample of samples) {
       const startedAt = new Date((currentBucket + sample.offset) * 1000 + 1000).toISOString();
       await seedPool.query(
         `INSERT INTO invocations
-          (call_id, workspace_id, started_at, finished_at, outcome, tier, rounds, duration_ms, cache_hit, input_tokens, output_tokens)
-         VALUES ($1, $2, $3, $3::timestamptz + interval '1 second', $4, $5, $6, $7, $8, $9, $10)`,
-        [`m43-aggregate-${sample.suffix}`, workspaceId, startedAt, sample.outcome, sample.tier, sample.rounds, sample.duration, sample.cache, sample.input, sample.output],
+          (call_id, workspace_id, started_at, finished_at, outcome, tier, rounds, duration_ms, cache_hit, input_tokens, output_tokens, token_usage, summary)
+         VALUES ($1, $2, $3, $3::timestamptz + interval '1 second', $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb)`,
+        [`m43-aggregate-${sample.suffix}`, workspaceId, startedAt, sample.outcome, sample.tier, sample.rounds, sample.duration, sample.cache, sample.input, sample.output, JSON.stringify(sample.tokenUsage ?? {}), JSON.stringify(sample.summary ?? {})],
       );
     }
     const { rows: sqlTruth } = await seedPool.query(
@@ -92,7 +92,7 @@ test('M4.3 durable metrics expose persisted rounds, tiers and time-bucket token 
     await waitReady(baseUrl, child);
 
     const snapshotResponse = await fetch(`${baseUrl}/metrics`);
-    assert.equal(snapshotResponse.status, 200);
+    assert.equal(snapshotResponse.status, 200, await snapshotResponse.clone().text());
     const snapshot = await snapshotResponse.json();
     assert.equal(snapshot.calls, 3);
     assert.equal(snapshot.rounds, sqlTruth[0].rounds, 'snapshot rounds should match persisted invocation rows');
@@ -101,6 +101,9 @@ test('M4.3 durable metrics expose persisted rounds, tiers and time-bucket token 
     assert.equal(snapshot.averageRounds, 1);
     assert.equal(snapshot.averageDurationMs, 80);
     assert.deepEqual(snapshot.tierCounts, { T0: 1, T1: 1, T2: 0, unknown: 1, other: 0 });
+    assert.deepEqual(snapshot.tokensByRole.diagnoser, { input: 11, output: 7 });
+    assert.deepEqual(snapshot.tokensByTier['1'], { input: 11, output: 7 });
+    assert.equal(snapshot.tier2Outcomes.timeout, 1);
 
     await stopServer(child);
     child = spawnApi();
@@ -118,7 +121,7 @@ test('M4.3 durable metrics expose persisted rounds, tiers and time-bucket token 
     );
 
     const seriesResponse = await fetch(`${baseUrl}/metrics/timeseries?window=86400&step=${stepSeconds}`);
-    assert.equal(seriesResponse.status, 200);
+    assert.equal(seriesResponse.status, 200, await seriesResponse.clone().text());
     const seriesPayload = await seriesResponse.json();
     const current = seriesPayload.series.find((bucket) => bucket.t === currentBucket);
     const previous = seriesPayload.series.find((bucket) => bucket.t === currentBucket - stepSeconds);
@@ -131,6 +134,9 @@ test('M4.3 durable metrics expose persisted rounds, tiers and time-bucket token 
     assert.equal(current.tokensIn, 16);
     assert.equal(current.tokensOut, 10);
     assert.deepEqual(current.tierCounts, { T0: 0, T1: 1, T2: 0, unknown: 1, other: 0 });
+    assert.deepEqual(current.tokensByRole.diagnoser, { input: 11, output: 7 });
+    assert.deepEqual(current.tokensByTier['1'], { input: 11, output: 7 });
+    assert.equal(current.tier2Outcomes.timeout, 1);
     assert.equal(previous.calls, 1);
     assert.equal(previous.rounds, 0);
     assert.equal(previous.averageRounds, 0);

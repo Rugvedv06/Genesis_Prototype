@@ -44,7 +44,7 @@ async function stop(child) {
   ]);
 }
 
-test('GET /admin/mutations exposes the ordered M1-M10 catalogue contract', async (t) => {
+test('GET /admin/mutations exposes the ordered M1-M11 catalogue contract', async (t) => {
   const port = await freePort();
   const child = spawn(process.execPath, [SERVER_ENTRY], {
     cwd: SERVER_CWD,
@@ -59,7 +59,7 @@ test('GET /admin/mutations exposes the ordered M1-M10 catalogue contract', async
   assert.equal(response.status, 200);
   const payload = await response.json();
   assert.deepEqual(payload.mutations.map(({ id }) => id), [
-    'M1', 'M2', 'M3', 'M4', 'M5', 'M6', 'M7', 'M8', 'M9', 'M10',
+    'M1', 'M2', 'M3', 'M4', 'M5', 'M6', 'M7', 'M8', 'M9', 'M10', 'M11',
   ]);
 
   const expected = {
@@ -73,6 +73,7 @@ test('GET /admin/mutations exposes the ordered M1-M10 catalogue contract', async
     M8: { category: 'request', method: 'POST', path: '/api/users/set-status', recoverable: true, expected: 'heal', expectedOps: ['set_enum_map'], args: { user_id: '123', status: 'active' } },
     M9: { category: 'unrecoverable', method: 'POST', path: '/api/users/update-email', recoverable: false, expected: 'halt', expectedOps: [], args: { user_id: '123', email: 'asha+demo@example.com' } },
     M10: { category: 'response', method: 'POST', path: '/api/users/get', recoverable: true, expected: 'heal', expectedOps: [{ op: 'remap_response_path', logical: 'name', from: 'result.name', to: 'result.full_name' }], args: { user_id: '123' } },
+    M11: { category: 'request', method: 'POST', path: '/api/users/update-email', recoverable: true, expected: 'heal', expectedOps: ['rename_field', 'rename_field'], args: { user_id: '123', email: 'asha+demo@example.com' } },
   };
 
   for (const mutation of payload.mutations) {
@@ -92,6 +93,9 @@ test('GET /admin/mutations exposes the ordered M1-M10 catalogue contract', async
     ], `${mutation.id} exact spec variant states`);
   }
   assert.deepEqual(payload.mutations.filter(({ expected: outcome }) => outcome === 'halt').map(({ id }) => id), ['M9']);
+  const m11 = payload.mutations.find(({ id }) => id === 'M11');
+  assert.equal(m11.llmRequired, true);
+  assert.equal(m11.expectedTier, 2);
 
   const postJson = (path, body) => fetch(`${baseUrl}${path}`, {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
@@ -128,6 +132,14 @@ test('GET /admin/mutations exposes the ordered M1-M10 catalogue contract', async
   const status = activeM8.paths['/api/users/set-status'].post.requestBody.content['application/json'].schema.properties.status;
   assert.deepEqual(status.enum, ['ENABLED', 'DISABLED']);
   assert.deepEqual(status['x-healr-enum-aliases'], { active: 'ENABLED', inactive: 'DISABLED' });
+  let m8Metadata = (await (await fetch(`${baseUrl}/admin/mutations`)).json()).mutations.find(({ id }) => id === 'M8');
+  assert.equal(m8Metadata.expectedTier, 0);
+  assert.equal(m8Metadata.llmRequired, false);
+  await postJson('/admin/config', { specAvailable: false, specStale: false });
+  m8Metadata = (await (await fetch(`${baseUrl}/admin/mutations`)).json()).mutations.find(({ id }) => id === 'M8');
+  assert.equal(m8Metadata.expectedTier, 2);
+  assert.equal(m8Metadata.llmRequired, true);
+  await postJson('/admin/config', { specAvailable: true, specStale: false });
 
   await postJson('/admin/mutate', { id: 'M7' });
   const staleConfig = await postJson('/admin/config', { specStale: true });

@@ -84,7 +84,7 @@ export function validateRequest(mutation, body, headers, errorStyle = 'pydantic-
   for (const layer of mutation.body?.layers ?? []) {
     if (!layer.when(body)) continue;
     if (!layer.check(body)) {
-      return styledValidationFailure({ status: 422, body: { detail: layer.errors() }, headers: {} }, errorStyle);
+      return styledValidationFailure({ status: 422, body: { detail: layer.errors(body) }, headers: {} }, errorStyle);
     }
   }
 

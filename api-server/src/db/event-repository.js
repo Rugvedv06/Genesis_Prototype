@@ -170,6 +170,20 @@ export async function listRecentEvents(queryable, limit = 5000) {
   };
 }
 
+// A run status lookup is indexed by run_id and remains bounded independently
+// of how much unrelated traffic the workspace has generated.
+export async function listRunEvents(queryable, runId, limit = 500) {
+  if (typeof runId !== 'string' || !runId || runId.length > 128) throw new TypeError('runId is invalid');
+  const safeLimit = Number.isInteger(limit) ? Math.max(1, Math.min(limit, 1000)) : 500;
+  const workspaceId = await getLocalWorkspaceId(queryable);
+  const { rows } = await queryable.query(
+    `SELECT payload FROM gateway_events
+     WHERE workspace_id = $1 AND run_id = $2
+     ORDER BY id LIMIT $3`, [workspaceId, runId, safeLimit],
+  );
+  return rows.map((row) => row.payload);
+}
+
 export async function listCallEvents(queryable, callId, { cursor = 0, limit = 100 } = {}) {
   const workspaceId = await getLocalWorkspaceId(queryable);
   const { rows } = await queryable.query(
