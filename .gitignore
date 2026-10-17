@@ -30,4 +30,5 @@ dist-ssr
 data/
 backups/
 .next/
+.next-dev/
 out/

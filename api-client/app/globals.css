@@ -207,6 +207,18 @@ button.chip { cursor: pointer; } button.chip:hover { border-color: var(--border-
 .health-tag.healed { color:var(--healed); border-color:color-mix(in srgb,var(--healed) 45%,var(--border)); }.health-tag.halted { color:var(--bad); border-color:color-mix(in srgb,var(--bad) 45%,var(--border)); }.health-tag.healthy { color:var(--ok); }
 .empty-actions { display:flex; flex-wrap:wrap; justify-content:center; gap:8px; margin:0 auto 20px; }
 .dialog-copy { margin:0 0 8px; }.json-editor { width:100%; min-height:230px; resize:vertical; background:var(--background)!important; color:var(--foreground)!important; font:11px/1.55 var(--font-mono)!important; field-sizing:fixed!important; }
+.openapi-review,.openapi-fields { min-width:0; }
+.openapi-table { min-width:680px; table-layout:fixed; }
+.openapi-table th:first-child,.openapi-table td:first-child { width:72px; }
+.openapi-table th:nth-child(3),.openapi-table td:nth-child(3) { width:130px; }
+.openapi-table th:nth-child(4),.openapi-table td:nth-child(4) { width:150px; }
+.openapi-table td:nth-child(2) { overflow-wrap:anywhere; }
+.openapi-table .field-control { min-width:0; }
+.openapi-table-scroll { min-width:0; max-width:100%; max-height:16rem; overflow:auto; }
+.openapi-warnings { display:grid; gap:8px; margin:0; padding:0; list-style:none; }
+.openapi-warnings li { display:grid; grid-template-columns:auto minmax(0,1fr); gap:8px; padding:9px 10px; border:1px solid var(--border); border-radius:var(--radius); background:var(--surface-2); color:var(--text-dim); font-size:11px; }
+.openapi-warnings li strong { color:var(--drift); white-space:nowrap; }
+.openapi-warnings li span { min-width:0; overflow-wrap:anywhere; }
 .modal-tools { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-top:8px; }.modal-tools a { display:inline-flex; align-items:center; gap:4px; color:var(--link); font-size:11px; }
 .form-error { color:var(--bad); font-size:11px; overflow-wrap:anywhere; }.form-success { display:flex; align-items:center; gap:6px; color:var(--ok); font-size:11px; }
 .playground-grid { display:grid; grid-template-columns:minmax(0,1.25fr) minmax(280px,.75fr); align-items:start; gap:16px; }.playground-form { display:grid; gap:14px; }.form-field { display:grid; gap:6px; min-width:0; color:var(--text); font-size:11px; font-weight:550; }.form-field small { color:var(--text-faint); font-size:10px; font-weight:400; }

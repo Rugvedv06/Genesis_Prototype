@@ -25,8 +25,8 @@ function bin(cwd, name) {
 const APPS = [
   { name: 'api-server', cwd: 'api-server', cmd: 'node', args: ['--watch', 'src/server.js'], env: { PORT: '8000' }, port: 8000 },
   { name: 'demo-server', cwd: 'demo-server-and-client/server', cmd: 'node', args: ['--watch', 'src/server.js'], env: { PORT: '5001' }, port: 5001 },
-  { name: 'api-client', cwd: 'api-client', cmd: bin('api-client', 'next'), args: ['dev', '-p', '3000'], env: { PORT: '3000' }, port: 3000 },
-  { name: 'demo-client', cwd: 'demo-server-and-client/client', cmd: bin('demo-server-and-client/client', 'next'), args: ['dev', '-p', '3001'], env: { PORT: '3001' }, port: 3001 },
+  { name: 'api-client', cwd: 'api-client', cmd: bin('api-client', 'next'), args: ['dev', '-p', '3000'], env: { PORT: '3000', NEXT_DIST_DIR: '.next-dev' }, port: 3000 },
+  { name: 'demo-client', cwd: 'demo-server-and-client/client', cmd: bin('demo-server-and-client/client', 'next'), args: ['dev', '-p', '3001'], env: { PORT: '3001', NEXT_DIST_DIR: '.next-dev' }, port: 3001 },
 ];
 
 function portInUse(port) {
@@ -53,7 +53,7 @@ async function prepareDevRuntime() {
     throw new Error(`development ports are already in use (${occupied.join(', ')}); stop the existing stack before running npm run dev`);
   }
   for (const cwd of ['api-client', 'demo-server-and-client/client']) {
-    const nextDir = join(process.cwd(), cwd, '.next');
+    const nextDir = join(process.cwd(), cwd, '.next-dev');
     if (existsSync(nextDir)) rmSync(nextDir, { recursive: true, force: true });
   }
 }

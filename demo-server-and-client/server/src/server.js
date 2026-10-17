@@ -41,6 +41,7 @@ app.get('/admin/state', (_req, res) => {
     mutation: state.mutation,
     errorStyle: state.errorStyle,
     specAvailable: state.specAvailable,
+    specStale: state.specStale,
     writes: state.writes,
     lastRequests: state.lastRequests,
     corruptedWrites: state.writes.filter((w) => w.provenance === 'foreign').length,

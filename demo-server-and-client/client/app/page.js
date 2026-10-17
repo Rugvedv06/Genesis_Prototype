@@ -13,6 +13,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
+import { runUnmutatedComparison } from '../lib/comparison';
 
 const CORE = process.env.NEXT_PUBLIC_CORE_URL || 'http://localhost:8000';
 const MOCK = process.env.NEXT_PUBLIC_MOCK_URL || 'http://localhost:5001';
@@ -170,10 +171,14 @@ function buildTimeline(events) {
         kind = 'info';
         break;
       case 'agent.final':
-        label = ev.outcome === 'success'
-          ? `Baseline Completed in ${ev.iterations} iterations`
-          : `Baseline Agent Failed: Reached Iteration Limit (${ev.iterations ?? 10}/${ev.iterations ?? 10})`;
-        detail = ev.error?.text ? `Terminal error: ${ev.error.text}` : 'All retry attempts rejected by target API';
+        label = ev.mode === 'direct'
+          ? (ev.outcome === 'success' ? 'Direct baseline request accepted' : 'Direct baseline request failed')
+          : ev.outcome === 'success'
+            ? `Baseline Completed in ${ev.iterations} iterations`
+            : `Baseline Agent Failed: Reached Iteration Limit (${ev.iterations ?? 10}/${ev.iterations ?? 10})`;
+        detail = ev.mode === 'direct'
+          ? `Raw API request · HTTP ${ev.status ?? 0}`
+          : ev.error?.text ? `Terminal error: ${ev.error.text}` : 'All retry attempts rejected by target API';
         kind = ev.outcome === 'success' ? 'ok' : 'err';
         break;
       default:
@@ -657,7 +662,7 @@ function Pane({
       <div style={{ padding: '12px 16px', display: 'flex', gap: 8, flexWrap: 'wrap', borderBottom: `1px solid ${C.border}` }}>
         {side === 'baseline' ? (
           <>
-            <MetricCard label="Iterations" value={iterations > 0 ? `${iterations} / 10` : '—'} />
+            <MetricCard label="Iterations" value={iterations > 0 ? (mode === 'direct' ? `${iterations} direct` : `${iterations} / 10`) : '—'} />
             <MetricCard label="Outcome" value={status === 'ok' ? 'OK' : status === 'review' ? 'NEEDS REVIEW' : status === 'fail' ? 'FAILED' : status === 'running' ? 'RUNNING' : '—'} color={status === 'ok' ? C.green : status === 'review' ? C.amber : status === 'fail' ? C.red : C.textDim} />
             <MetricCard label="Latency" value={elapsed > 0 ? elapsed : '—'} unit={elapsed > 0 ? 'ms' : ''} />
             <MetricCard label="Tokens" value={events.reduce((sum, event) => sum + Number(event.tokens?.totalTokens ?? 0), 0)} />
@@ -875,6 +880,7 @@ export default function DriftControl() {
   const [selectedMutation, setSelectedMutation] = useState('M5');
   const [specMode, setSpecMode] = useState('active');
   const [registered, setRegistered]   = useState(false);
+  const [mockStateReady, setMockStateReady] = useState(false);
   const [coreConn, setCoreConn]       = useState('disconnected');
   const [mockConn, setMockConn]       = useState('disconnected');
 
@@ -898,6 +904,15 @@ export default function DriftControl() {
       .then((response) => response.ok ? response.json() : Promise.reject(new Error('mutation catalogue unavailable')))
       .then((payload) => { if (active) setMutationCatalogue(payload.mutations ?? []); })
       .catch(() => { if (active) setMutationCatalogue([]); });
+    fetch(`${MOCK}/admin/state`)
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error('mock state unavailable')))
+      .then((payload) => {
+        if (!active) return;
+        setMutation(payload.mutation ?? null);
+        setSpecMode(payload.specAvailable ? (payload.specStale ? 'stale' : 'active') : 'unavailable');
+        setMockStateReady(true);
+      })
+      .catch(() => {});
     return () => { active = false; };
   }, []);
 
@@ -977,8 +992,10 @@ export default function DriftControl() {
 
   // ── API Actions ───────────────────────────────────────────────────────────
   const reset = async () => {
-    await fetch(`${MOCK}/admin/reset`, { method: 'POST' });
+    const response = await fetch(`${MOCK}/admin/reset`, { method: 'POST' });
+    if (!response.ok) throw new Error(`Could not reset demo mock state (HTTP ${response.status}).`);
     setMutation(null);
+    setMockStateReady(true);
     setRegistered(false);
     setTruth(null);
     setBaseline({ status: 'idle', iterations: 0, elapsed: 0, events: [], data: null, error: null, mode: 'llm', provider: null, model: null });
@@ -993,7 +1010,9 @@ export default function DriftControl() {
       body: JSON.stringify({ id: selectedMutation }),
     });
     const j = await r.json();
+    if (!r.ok) throw new Error(j.message ?? `Could not activate mutation (HTTP ${r.status}).`);
     setMutation(j.mutation);
+    setMockStateReady(true);
   };
 
   const updateSpecMode = async (value) => {
@@ -1001,9 +1020,9 @@ export default function DriftControl() {
     await fetch(`${MOCK}/admin/config`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ specAvailable: value !== 'unavailable', specStale: value === 'stale' }) });
   };
 
-  const registerApi = useCallback(async () => {
-    if (registered) return;
-    await fetch(`${CORE}/apis`, {
+  const registerApi = useCallback(async (force = false) => {
+    if (registered && !force) return;
+    const response = await fetch(`${CORE}/apis`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1045,21 +1064,75 @@ export default function DriftControl() {
         ],
       }),
     });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null);
+      throw new Error(payload?.message ?? `Could not register demo API (HTTP ${response.status}).`);
+    }
     setRegistered(true);
   }, [registered]);
 
   // ── Run Both with Separate Independent Timers ─────────────────────────────
-  const runBoth = async () => {
-    await registerApi();
-    await fetch(`${MOCK}/admin/task`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ values: Object.values(selectedArgs) }),
-    });
+  const runBoth = async ({ forceHealthy = false } = {}) => {
     setMode('running');
+    try {
+      if (forceHealthy) {
+        const resetResponse = await fetch(`${MOCK}/admin/reset`, { method: 'POST' });
+        if (!resetResponse.ok) throw new Error(`Could not reset demo mock (HTTP ${resetResponse.status}).`);
+        setMutation(null);
+        setMockStateReady(true);
+        setSpecMode('active');
+        await registerApi(true);
+      } else {
+        await registerApi();
+      }
+    } catch (error) {
+      const message = String(error?.message ?? error);
+      setBaseline((b) => ({ ...b, status: 'fail', error: message }));
+      setHealed((h) => ({ ...h, status: 'fail', error: message }));
+      setMode('done');
+      return;
+    }
+    let mockState;
+    try {
+      const stateResponse = await fetch(`${MOCK}/admin/state`);
+      if (!stateResponse.ok) throw new Error(`Could not read demo mock state (HTTP ${stateResponse.status}).`);
+      mockState = await stateResponse.json();
+    } catch (error) {
+      const message = String(error?.message ?? error);
+      setBaseline((b) => ({ ...b, status: 'fail', error: message }));
+      setHealed((h) => ({ ...h, status: 'fail', error: message }));
+      setMode('done');
+      return;
+    }
+    const activeMutation = mockState.mutation ?? null;
+    setMutation(activeMutation);
+    setMockStateReady(true);
     setTruth(null);
-
     setBaseline((b) => ({ ...b, status: 'running', data: null, error: null, events: [], elapsed: 0 }));
     setHealed((h) => ({ ...h, status: 'running', data: null, error: null, ops: [], version: null, events: [], elapsed: 0 }));
+    await fetch(`${MOCK}/admin/task`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ values: [...Object.values(selectedArgs), '123', 'asha.new@example.com'] }),
+    });
+
+    if (!activeMutation) {
+      const bRunId = `b_${Date.now()}`;
+      const hRunId = `h_${Date.now()}`;
+      try {
+        const result = await runUnmutatedComparison({
+          mockUrl: MOCK, coreUrl: CORE, apiId: API_ID, tool: selectedTool,
+          args: selectedArgs, baselineRunId: bRunId, healedRunId: hRunId,
+        });
+        setBaseline((b) => ({ ...b, ...result.baseline }));
+        setHealed((h) => ({ ...h, ...result.healed }));
+      } catch (error) {
+        const message = String(error?.message ?? error);
+        setBaseline((b) => ({ ...b, status: 'fail', error: message }));
+        setHealed((h) => ({ ...h, status: 'fail', error: message }));
+      }
+      setMode('done');
+      return;
+    }
 
     const bRunId = `b_${Date.now()}`;
     const hRunId = `h_${Date.now()}`;
@@ -1132,6 +1205,8 @@ export default function DriftControl() {
     setMode('done');
   };
 
+  const runHealthyDemo = () => runBoth({ forceHealthy: true });
+
   const running = mode === 'running';
   const toggleTheme = () => {
     const nextTheme = theme === 'dark' ? 'light' : 'dark';
@@ -1178,14 +1253,15 @@ export default function DriftControl() {
         <div className="workspace-copy">
           <div className="eyebrow">DEVELOPER SANDBOX <span>/</span> RECOVERY TEST</div>
           <h1>Schema drift recovery</h1>
-          <p>Compare a direct API call with healr’s contract-aware adapter against the same mutated endpoint.</p>
-          <div className="endpoint-line"><span className="method-tag">POST</span><code>{MOCK}{TOOL.path}</code><span className="endpoint-separator">·</span><span>Scenario {mutation ?? selectedMutation}</span></div>
+          <p>Run a healthy request directly, or inject schema drift and compare it with healr’s recovery path.</p>
+          <div className="endpoint-line"><span className="method-tag">{selectedTool.method}</span><code>{MOCK}{selectedTool.path}</code><span className="endpoint-separator">·</span><span>{mutation ? `Active mutation ${mutation}` : `No active mutation · ${selectedMutation} selected`}</span></div>
         </div>
         <div className="workspace-actions">
           {mutation && <div className="mutation-label"><span>Active mutation</span><strong>{mutation}</strong></div>}
           {(selectedMutation === 'M8' || selectedMutation === 'M11') && <span className="scenario-label">Tier 2 scenario</span>}
           <div className="action-buttons">
             <Btn onClick={reset} disabled={running} color={C.teal} outline>Reset</Btn>
+            <Btn onClick={runHealthyDemo} disabled={running || !mockStateReady} color={C.green} outline title="Reset the mock and adapter, then show a successful healthy request">Healthy demo</Btn>
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: C.textDim, fontSize: '0.72rem' }}>
               Mutation
               <select value={selectedMutation} onChange={(event) => setSelectedMutation(event.target.value)} disabled={running || !mutationCatalogue.length} aria-label="Select API mutation">
@@ -1194,7 +1270,7 @@ export default function DriftControl() {
             </label>
             <Btn onClick={mutate} disabled={running} color={C.amber}>Mutate API</Btn>
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: C.textDim, fontSize: '0.72rem' }}>Spec<select value={specMode} onChange={(event) => updateSpecMode(event.target.value)} disabled={running}><option value="active">Active</option><option value="stale">Stale</option><option value="unavailable">Unavailable</option></select></label>
-            <Btn onClick={runBoth} disabled={running} color={C.teal}>{running ? 'Running…' : 'Run comparison'}</Btn>
+            <Btn onClick={runBoth} disabled={running || !mockStateReady} color={C.teal}>{running ? 'Running…' : !mockStateReady ? 'Syncing mock…' : 'Run comparison'}</Btn>
           </div>
         </div>
       </section>
@@ -1204,7 +1280,7 @@ export default function DriftControl() {
           <SummaryCard
             label="Baseline Outcome"
             value={baseline.status === 'idle' ? 'READY' : baseline.status === 'ok' ? 'OK' : baseline.status === 'fail' ? 'FAILED' : 'RUNNING…'}
-            sub={baseline.status === 'fail' ? '10 iterations exhausted without fix' : baseline.status === 'ok' ? 'succeeded unadapted' : ''}
+            sub={baseline.status === 'fail' ? (baseline.mode === 'direct' ? 'direct upstream request failed' : '10 iterations exhausted without fix') : baseline.status === 'ok' ? (baseline.mode === 'direct' ? 'raw request accepted' : 'succeeded unadapted') : ''}
             color={baseline.status === 'ok' ? C.green : baseline.status === 'fail' ? C.red : C.textDim}
           />
           <SummaryCard
@@ -1239,7 +1315,7 @@ export default function DriftControl() {
       <main className="demo-main">
         <Pane
           side="baseline"
-          title={baseline.mode === 'llm' ? 'Baseline (same model, raw tools)' : 'Scripted retry baseline (no LLM)'}
+          title={baseline.mode === 'llm' ? 'Baseline (same model, raw tools)' : baseline.mode === 'direct' ? 'Baseline (direct raw request)' : 'Scripted retry baseline (no LLM)'}
           accentColor={C.red}
           status={baseline.status}
           iterations={baseline.iterations}
@@ -1272,7 +1348,7 @@ export default function DriftControl() {
           tokens={healed.tokens}
         />
       </main>
-      {(baseline.mode !== 'llm' || (baseline.provider && healed.provider && (baseline.provider !== healed.provider || baseline.model !== healed.model))) && <p role="status" className="not-like-for-like">Not like for like: baseline uses {baseline.mode === 'scripted' ? 'scripted calls without an LLM' : `${baseline.provider} ${baseline.model}`}; healed agent uses {healed.provider ?? 'Gemini'} {healed.model ?? 'configured model'}.</p>}
+      {(baseline.mode === 'direct' || baseline.mode === 'scripted' || (baseline.provider && healed.provider && (baseline.provider !== healed.provider || baseline.model !== healed.model))) && <p role="status" className="not-like-for-like">Not like for like: baseline uses {baseline.mode === 'direct' ? 'one direct raw API request because no mutation is active' : baseline.mode === 'scripted' ? 'scripted calls without an LLM' : `${baseline.provider} ${baseline.model}`}; healed path uses {healed.provider ?? 'the core task runner'} {healed.model ?? ''}.</p>}
       {baseline.provider && healed.provider && (baseline.provider !== healed.provider || baseline.model !== healed.model) && <p role="status" className="not-like-for-like">Not like for like: baseline uses {baseline.provider} {baseline.model}; healed agent uses {healed.provider} {healed.model}.</p>}
 
       {/* ── Footer ── */}

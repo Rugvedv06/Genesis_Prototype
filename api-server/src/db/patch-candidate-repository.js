@@ -2,6 +2,7 @@ import { getLocalWorkspaceId } from './workspace.js';
 
 const FINGERPRINT = /^[a-f0-9]{64}$/i;
 const SCOPES = new Set(['exact', 'convention']);
+const ROLLOUT_STATES = new Set(['candidate', 'regression_verified', 'shadow', 'canary', 'promoted', 'rejected', 'rolled_back']);
 
 function requireFingerprint(value, label) {
   if (typeof value !== 'string' || !FINGERPRINT.test(value)) throw new TypeError(`${label} must be a SHA-256 fingerprint`);
@@ -30,7 +31,9 @@ function validateCandidate(candidate) {
     || !Number.isSafeInteger(requirement.apiEpoch) || requirement.apiEpoch < 1
     || !Number.isSafeInteger(requirement.configRevision) || requirement.configRevision < 1
     || !Number.isSafeInteger(requirement.credentialRevision) || requirement.credentialRevision < 1
-    || !['GET', 'HEAD'].includes(requirement.method))) throw new TypeError('candidate provenance requirements are invalid');
+    || !(candidate.rolloutState === 'candidate'
+      ? ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(requirement.method)
+      : ['GET', 'HEAD'].includes(requirement.method)))) throw new TypeError('candidate provenance requirements are invalid');
   if (candidate.operations.some((operation) => {
     if (!operation || typeof operation !== 'object' || Array.isArray(operation)) return true;
     const keys = Object.keys(operation);
@@ -47,6 +50,12 @@ function validateCandidate(candidate) {
       || /(secret|token|password|credential|apikey|authorization|cookie)/i.test(operation.source.ref))) return true;
     return false;
   })) throw new TypeError('candidate operations contain values that are not safe to persist');
+  if (candidate.adapter !== undefined && (!candidate.adapter || typeof candidate.adapter !== 'object' || Array.isArray(candidate.adapter))) {
+    throw new TypeError('candidate adapter is invalid');
+  }
+  if (candidate.rolloutState !== undefined && !ROLLOUT_STATES.has(candidate.rolloutState)) {
+    throw new TypeError('candidate rollout state is invalid');
+  }
   return {
     ...candidate,
     cacheKey: candidate.cacheKey.toLowerCase(),
@@ -62,8 +71,8 @@ export async function putVerifiedCandidateInTransaction(client, input) {
     `INSERT INTO patch_candidates
       (workspace_id, cache_key, scope, source_api_id, source_tool_name, source_version,
        adapter_fingerprint, schema_fingerprint, operation_signature, operations,
-       evidence_class, evidence_summary, provenance_requirements, state, verified_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$12::jsonb,$13::jsonb,'verified',now())
+       evidence_class, evidence_summary, provenance_requirements, state, verified_at, adapter, rollout_state)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$12::jsonb,$13::jsonb,'verified',now(),$14::jsonb,$15)
      ON CONFLICT (workspace_id, cache_key) DO UPDATE SET
        scope = EXCLUDED.scope, source_api_id = EXCLUDED.source_api_id,
        source_tool_name = EXCLUDED.source_tool_name, source_version = EXCLUDED.source_version,
@@ -71,14 +80,18 @@ export async function putVerifiedCandidateInTransaction(client, input) {
        operation_signature = EXCLUDED.operation_signature, operations = EXCLUDED.operations,
        evidence_class = EXCLUDED.evidence_class, evidence_summary = EXCLUDED.evidence_summary,
        provenance_requirements = EXCLUDED.provenance_requirements, state = 'verified',
-       verified_at = now(), invalidated_at = NULL, updated_at = now()
+       verified_at = now(), invalidated_at = NULL, adapter = EXCLUDED.adapter,
+       rollout_state = EXCLUDED.rollout_state, rollout_reason = NULL,
+       rollout_metrics = '{}'::jsonb, rejected_at = NULL, updated_at = now()
      RETURNING id, cache_key, scope, source_api_id, source_tool_name, source_version,
        adapter_fingerprint, schema_fingerprint, operation_signature, operations,
-       evidence_class, evidence_summary, provenance_requirements, state, verified_at`,
+       evidence_class, evidence_summary, provenance_requirements, state, verified_at,
+       adapter, rollout_state, rollout_reason, rollout_metrics, promoted_at, rejected_at`,
     [workspaceId, candidate.cacheKey, candidate.scope, candidate.sourceApiId, candidate.sourceToolName,
       candidate.sourceVersion, candidate.adapterFingerprint, candidate.schemaFingerprint,
       candidate.operationSignature, JSON.stringify(candidate.operations), candidate.evidenceClass,
-      JSON.stringify(candidate.evidenceSummary ?? {}), JSON.stringify(candidate.provenanceRequirements)],
+      JSON.stringify(candidate.evidenceSummary ?? {}), JSON.stringify(candidate.provenanceRequirements),
+      candidate.adapter === undefined ? null : JSON.stringify(candidate.adapter), candidate.rolloutState ?? 'promoted'],
   );
   return rows[0] ?? null;
 }
@@ -108,12 +121,45 @@ export async function listPatchCandidates(queryable, { limit = 100, cursor = nul
     `SELECT id, cache_key, scope, source_api_id, source_tool_name, source_version,
        adapter_fingerprint, schema_fingerprint, operation_signature, operations,
        evidence_class, evidence_summary, provenance_requirements, state, verified_at,
+       adapter, rollout_state, rollout_reason, rollout_metrics, promoted_at, rejected_at,
        invalidated_at, use_count, last_used_at, created_at
      FROM patch_candidates WHERE workspace_id = $1 AND ($2::uuid IS NULL OR id > $2::uuid)
      ORDER BY id LIMIT $3`,
     [workspaceId, cursor, safeLimit],
   );
   return rows;
+}
+
+export async function getPatchCandidate(queryable, id) {
+  const workspaceId = await getLocalWorkspaceId(queryable);
+  const { rows } = await queryable.query(
+    `SELECT id, cache_key, scope, source_api_id, source_tool_name, source_version,
+       adapter_fingerprint, schema_fingerprint, operation_signature, operations,
+       evidence_class, evidence_summary, provenance_requirements, state, verified_at,
+       adapter, rollout_state, rollout_reason, rollout_metrics, promoted_at, rejected_at,
+       invalidated_at, use_count, last_used_at, created_at
+     FROM patch_candidates WHERE workspace_id = $1 AND id = $2`,
+    [workspaceId, id],
+  );
+  return rows[0] ?? null;
+}
+
+export async function transitionPatchCandidateInTransaction(client, { id, state, reason, metrics = {} }) {
+  if (!ROLLOUT_STATES.has(state)) throw new TypeError('invalid rollout state');
+  const workspaceId = await getLocalWorkspaceId(client);
+  const { rows } = await client.query(
+    `UPDATE patch_candidates
+     SET rollout_state = $3, rollout_reason = $4,
+         rollout_metrics = $5::jsonb,
+         promoted_at = CASE WHEN $3 = 'promoted' THEN now() ELSE promoted_at END,
+         rejected_at = CASE WHEN $3 IN ('rejected', 'rolled_back') THEN now() ELSE rejected_at END,
+         updated_at = now()
+     WHERE workspace_id = $1 AND id = $2 AND state = 'verified'
+     RETURNING id, cache_key, source_api_id, source_tool_name, source_version,
+       adapter, rollout_state, rollout_reason, rollout_metrics, promoted_at, rejected_at`,
+    [workspaceId, id, state, reason ?? null, JSON.stringify(metrics ?? {})],
+  );
+  return rows[0] ?? null;
 }
 
 export async function invalidatePatchCandidatesInTransaction(client, { cacheKey } = {}) {

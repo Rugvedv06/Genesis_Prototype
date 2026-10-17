@@ -20,14 +20,14 @@ import { snapshot as circuitSnapshot } from './features/safety/circuit.js';
 import { getProvider } from './features/llm/provider.js';
 import { closePool, databaseStatus, getPool, poolStatus } from './db/pool.js';
 import { migrationStatus } from './db/migrate.js';
-import { refreshRegistryCache } from './db/registry-service.js';
+import { refreshRegistryCache, promotePatchCandidate, updatePatchCandidateRollout } from './db/registry-service.js';
 import { withTransaction } from './db/transaction.js';
 import { appendGatewayEventInTransaction } from './db/event-repository.js';
 import { listCallEvents, getEventCursor, listRecentEvents } from './db/event-repository.js';
 import { getAuditHead } from './db/audit-repository.js';
 import { snapshotMetrics, metricsTimeseries as readMetricsTimeseries } from './db/metrics-repository.js';
 import { closeRedisMirror, redisMirrorStatus, probeRedisMirror } from './features/patch-cache/redis-mirror.js';
-import { candidates as listPatchCacheCandidates, invalidate as invalidatePatchCacheCandidate, invalidateAll as invalidateAllPatchCacheCandidates } from './features/patch-cache/index.js';
+import { candidates as listPatchCacheCandidates, candidate as getPatchCacheCandidate, invalidate as invalidatePatchCacheCandidate, invalidateAll as invalidateAllPatchCacheCandidates } from './features/patch-cache/index.js';
 import { flushDurableEvents } from './features/events/bus.js';
 import { appendServiceLog, searchServiceLogs } from './db/service-log-repository.js';
 import { getInvocation } from './db/invocation-repository.js';
@@ -63,6 +63,39 @@ app.use(express.json({ limit: '1100kb' }));
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true, service: 'api-server', port: cfg.port, version: '0.1.0', apis: registryStore.list().length, time: new Date().toISOString() });
+});
+
+app.get('/patch-candidates/:id', async (req, res, next) => {
+  try {
+    const candidate = await getPatchCacheCandidate(req.params.id);
+    if (!candidate) return res.status(404).json({ ok: false, error: 'not_found' });
+    res.json({ candidate });
+  } catch (error) { next(error); }
+});
+
+app.post('/patch-candidates/:id/rollout', async (req, res, next) => {
+  const { state, reason, metrics } = req.body ?? {};
+  if (!['regression_verified', 'shadow', 'canary', 'rejected', 'rolled_back'].includes(state)) {
+    return res.status(400).json({ ok: false, error: 'invalid_rollout_state' });
+  }
+  try {
+    const candidate = await updatePatchCandidateRollout(req.params.id, state, reason, metrics);
+    if (!candidate) return res.status(404).json({ ok: false, error: 'not_found' });
+    res.json({ ok: true, candidate });
+  } catch (error) { next(error); }
+});
+
+app.post('/patch-candidates/:id/promote', async (req, res, next) => {
+  try {
+    const result = await promotePatchCandidate(req.params.id);
+    if (!result) return res.status(404).json({ ok: false, error: 'not_found' });
+    res.json({ ok: true, version: result.committed.version, candidate: result.rollout });
+  } catch (error) {
+    if (['candidate_not_promotable', 'candidate_adapter_missing', 'stale_candidate_source'].includes(error.code)) {
+      return res.status(409).json({ ok: false, error: error.code, message: error.message });
+    }
+    next(error);
+  }
 });
 
 app.get('/ready', async (_req, res) => {

@@ -665,6 +665,41 @@ async function healAndRetry({ tool, args, first, kind, callId, runId, t0, resolv
         },
         provenance: { observedNames: proposal.tier === 2 },
       });
+      if (cfg.patchRolloutMode === 'candidate' && process.env.DATABASE_URL) {
+        const candidateIdentityValue = candidateIdentity(tool, sig);
+        const candidate = await saveVerifiedPatchCandidate({
+          ...candidateIdentityValue,
+          scope: 'exact',
+          sourceApiId: tool.apiId,
+          sourceToolName: tool.name,
+          sourceVersion: tool.version,
+          adapterFingerprint: candidateIdentityValue.adapterFingerprint,
+          schemaFingerprint: candidateIdentityValue.schemaFingerprint,
+          operationSignature: sha256(stableStringify(commitOps)),
+          operations: commitOps,
+          adapter: newAdapter,
+          evidenceClass: `tier${proposal.tier}`,
+          evidenceSummary: { tier: proposal.tier, confidence: proposal.confidence, kind, replayVerified: true },
+          provenanceRequirements: [{
+            apiEpoch: tool.epoch, configRevision: tool.configRevision,
+            credentialRevision: tool.credentialRevision,
+            method: String(tool.versionObj.meta?.method ?? 'POST').toUpperCase(),
+          }],
+          rolloutState: 'candidate',
+        });
+        await appendAudit({
+          decision: 'proposed', apiId: tool.apiId, tool: tool.name,
+          versionBefore: tool.version, tier: proposal.tier, ops: commitOps,
+          confidence: proposal.confidence, evidence: proposal.evidence,
+          candidateId: candidate?.id, rolloutState: 'candidate', explanation: change.explanation,
+        });
+        emit({ type: 'patch.candidate', callId, runId, apiId: tool.apiId, tool: tool.name, candidateId: candidate?.id, ops: commitOps });
+        return finishHealHalt({
+          tool, callId, runId, reason: 'patch_pending_promotion',
+          details: { candidateId: candidate?.id, needsOperator: true, proposal: { ops: commitOps, confidence: proposal.confidence } },
+          t0, rounds, tier: proposal.tier, tokens: healTokens, tokensByRole: { diagnoser: healTokens },
+        });
+      }
       const committed = process.env.DATABASE_URL
         ? (await commitFromCache({ apiId: tool.apiId, toolName: tool.name, adapter: newAdapter, change, origin: 'heal', current: tool })).value
         : registryStore.commit(tool.apiId, tool.name, newAdapter, change);

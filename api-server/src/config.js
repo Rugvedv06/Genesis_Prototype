@@ -26,6 +26,7 @@ export function config(env = process.env) {
     confidenceThreshold: Number(env.CONFIDENCE_THRESHOLD ?? 0.85),
     dataDir: env.HEALR_DATA_DIR,
     allowLocalUpstreams: env.ALLOW_LOCAL_UPSTREAMS !== '0',
+    patchRolloutMode: env.PATCH_ROLLOUT_MODE ?? 'immediate',
   };
 }
 
